@@ -1,11 +1,35 @@
 name: v3
 engine: winws
+kind: base
 args:
-  - --wf-tcp=80,443,8080,8443
-  - --wf-udp=53,443,5353,1900
-winws_params:
-  - --hostlist-exclude
-  - localhost
-  - 127.0.0.1
-description: "Максимальная стратегия (максимум портов)"
+  - --filter-tcp=443
+  - --hostlist={LISTS}\google.txt
+  - --ip-id=zero
+  - --dpi-desync=multisplit
+  - --dpi-desync-split-seqovl=681
+  - --dpi-desync-split-pos=1
+  - --dpi-desync-split-seqovl-pattern={FAKE}\tls_clienthello_www_google_com.bin
+  - --new
+  - --filter-tcp=443
+  - --hostlist-exclude={LISTS}\exclude.txt
+  - --dpi-desync=fake,fakeddisorder
+  - --dpi-desync-split-pos=10,midsld
+  - --dpi-desync-fake-tls={FAKE}\t2.bin
+  - --dpi-desync-fake-tls-mod=rnd,dupsid,sni=m.ok.ru
+  - --dpi-desync-fake-tls=0x0F0F0F0F
+  - --dpi-desync-fake-tls-mod=none
+  - --dpi-desync-fakedsplit-pattern={FAKE}\tls_clienthello_vk_com.bin
+  - --dpi-desync-split-seqovl=336
+  - --dpi-desync-split-seqovl-pattern={FAKE}\tls_clienthello_gosuslugi_ru.bin
+  - --dpi-desync-fooling=badseq,badsum
+  - --dpi-desync-badseq-increment=0
+  - --new
+  - --filter-udp=443
+  - --hostlist-exclude={LISTS}\exclude.txt
+  - --dpi-desync=fake
+  - --dpi-desync-repeats=6
+  - --dpi-desync-fake-quic={FAKE}\quic_initial_www_google_com.bin
+winws_params: []
+description: "v3 — Yv01 multisplit + fake+fakeddisorder + UDP"
 category: general
+upstream: stressozz

@@ -1,14 +1,29 @@
 name: v7
-kind: base
 engine: winws
+kind: base
 args:
-  - --wf-tcp=80,443,8080,8443
-  - --wf-udp=53,443,5353,1900
-  - --dpi-desync=fake
-  - --dpi-desync-tls=fake
-winws_params:
-  - --hostlist-exclude
-  - localhost
-  - 127.0.0.1
-description: "Комплексная стратегия (все включено)"
+  - --filter-tcp=443
+  - --hostlist={LISTS}\google.txt
+  - --dpi-desync=fake,multisplit
+  - --dpi-desync-split-pos=2,sld
+  - --dpi-desync-fake-tls=0x0F0F0F0F
+  - --dpi-desync-fake-tls={FAKE}\tls_clienthello_www_google_com.bin
+  - --dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com
+  - --dpi-desync-split-seqovl=620
+  - --dpi-desync-split-seqovl-pattern={FAKE}\tls_clienthello_www_google_com.bin
+  - --dpi-desync-fooling=badsum,badseq
+  - --new
+  - --filter-tcp=443
+  - --hostlist-exclude={LISTS}\exclude.txt
+  - --dpi-desync=fake,multisplit
+  - --dpi-desync-split-seqovl=654
+  - --dpi-desync-split-pos=1
+  - --dpi-desync-fooling=badseq,badsum
+  - --dpi-desync-repeats=8
+  - --dpi-desync-split-seqovl-pattern={FAKE}\stun.bin
+  - --dpi-desync-fake-tls={FAKE}\stun.bin
+  - --dpi-desync-badseq-increment=0
+winws_params: []
+description: "v7 — Yv03 fake+multisplit + fake+multisplit(stun)"
 category: general
+upstream: stressozz

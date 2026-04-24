@@ -1,13 +1,31 @@
 name: v4
 engine: winws
+kind: base
 args:
-  - --wf-tcp=80,443
-  - --wf-udp=53,443
+  - --filter-tcp=443
+  - --hostlist={LISTS}\google.txt
+  - --dpi-desync=fake,multisplit
+  - --dpi-desync-split-pos=2,sld
+  - --dpi-desync-fake-tls=0x0F0F0F0F
+  - --dpi-desync-fake-tls={FAKE}\tls_clienthello_www_google_com.bin
+  - --dpi-desync-fake-tls-mod=rnd,dupsid,sni=google.com
+  - --dpi-desync-split-seqovl=2108
+  - --dpi-desync-split-seqovl-pattern={FAKE}\tls_clienthello_www_google_com.bin
+  - --dpi-desync-fooling=badseq
+  - --new
+  - --filter-tcp=443
+  - --hostlist-exclude={LISTS}\exclude.txt
+  - --dpi-desync=multisplit
+  - --dpi-desync-split-seqovl=582
+  - --dpi-desync-split-pos=1
+  - --dpi-desync-split-seqovl-pattern={FAKE}\stun.bin
+  - --new
+  - --filter-udp=443
+  - --hostlist-exclude={LISTS}\exclude.txt
   - --dpi-desync=fake
-  - --dpi-desync-tls=fake
-winws_params:
-  - --hostlist-exclude
-  - localhost
-  - 127.0.0.1
-description: "Стратегия с fake-файлами"
+  - --dpi-desync-repeats=6
+  - --dpi-desync-fake-quic={FAKE}\quic_initial_www_google_com.bin
+winws_params: []
+description: "v4 — Yv15 fake+multisplit + multisplit + UDP"
 category: general
+upstream: stressozz

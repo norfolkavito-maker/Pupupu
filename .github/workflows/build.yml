@@ -34,24 +34,23 @@ jobs:
 
       - name: Build exe
         run: |
-          pyinstaller --noconfirm --clean --onefile --name ZapretManager --paths app app\\zapret_manager\\__main__.py
+          pyinstaller --noconfirm --clean --onefile --name wowManager --paths app app\zapret_manager\__main__.py
 
       - name: Prepare portable bundle
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path bundle | Out-Null
-          Copy-Item -Force dist\\ZapretManager.exe bundle\\
-          Copy-Item -Force run.bat bundle\\
-          Copy-Item -Force config.yaml bundle\\
-          Copy-Item -Force sources.yaml bundle\\
-          Copy-Item -Force README.md bundle\\
-          if (Test-Path data\\strategies\\builtin) {
-            Copy-Item -Recurse -Force data\\strategies\\builtin bundle\\data\\strategies\\builtin
+          Copy-Item -Force dist\wowManager.exe bundle\
+          Copy-Item -Force run.bat bundle\
+          Copy-Item -Force config.yaml bundle\
+          Copy-Item -Force sources.yaml bundle\
+          Copy-Item -Force README.md bundle\
+          if (Test-Path data\strategies\builtin) {
+            Copy-Item -Recurse -Force data\strategies\builtin bundle\data\strategies\builtin
           }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZapretManager-portable
+          name: wowManager-portable
           path: bundle
-

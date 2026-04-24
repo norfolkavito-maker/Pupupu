@@ -153,17 +153,43 @@ class WinwsRunner:
         }
         
     def _build_command(self, strategy: Strategy) -> list[str]:
-        """Строит команду запуска для winws."""
+        """Строит команду запуска для winws с учётом compose/оверлеев."""
         winws_path = self.ctx.config.zapret.winws_path
         lists_dir = self.ctx.config.paths.lists_dir
         fake_files_dir = self.ctx.config.paths.fake_files_dir
         
-        # Применяем оверлеи к аргументам стратегии
-        args = apply_overlays(
-            strategy.args,
-            discord_profile=self.ctx.state.zapret.discord_profile,
-            games_profile=self.ctx.state.zapret.games_profile,
-        )
+        state = self.ctx.state.zapret
+        # Если есть активные слои/оверлеи — используем compose
+        if (
+            state.youtube_layer
+            or state.discord_layer
+            or state.discord_script
+            or state.games_profile
+            or state.rkn_enabled
+            or state.wssize_enabled
+        ):
+            from zapret_manager.features.selection import find_strategy
+            from zapret_manager.strategies.composer import compose
+            
+            youtube = find_strategy(self.ctx, state.youtube_layer, kind="youtube") if state.youtube_layer else None
+            discord = find_strategy(self.ctx, state.discord_layer, kind="discord") if state.discord_layer else None
+            
+            composed = compose(
+                base=strategy,
+                youtube=youtube,
+                discord=discord,
+                discord_script=state.discord_script,
+                games_profile=state.games_profile,
+                rkn_enabled=state.rkn_enabled,
+                wssize_enabled=state.wssize_enabled,
+            )
+            args = composed.args
+        else:
+            args = apply_overlays(
+                strategy.args,
+                discord_profile=state.discord_profile,
+                games_profile=state.games_profile,
+            )
         
         # Заменяем пути
         resolved_args = []

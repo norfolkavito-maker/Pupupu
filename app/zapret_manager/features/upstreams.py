@@ -6,7 +6,11 @@ from pathlib import Path
 from zapret_manager.core.app_context import AppContext
 from zapret_manager.core.state import save_state
 from zapret_manager.strategies.flowseal_import import import_flowseal_strategies
-from zapret_manager.strategies.stressozz_import import import_liststryou, import_v_strategies_from_script
+from zapret_manager.strategies.stressozz_import import (
+    import_dv_strategies_from_script,
+    import_liststryou,
+    import_v_strategies_from_script,
+)
 from zapret_manager.upstreams.http import download
 from zapret_manager.upstreams.sources import RawUrlSource, RepoZipSource, load_sources
 from zapret_manager.upstreams.sync import check_update, sync_repo_zip
@@ -81,6 +85,11 @@ def sync_stressozz_strategies(ctx: AppContext) -> int:
     )
     count += import_liststryou(
         list_text=script_text,
+        generated_dir=ctx.paths.strategies_generated_dir,
+        upstream_name="stressozz",
+    )
+    count += import_dv_strategies_from_script(
+        script_text=script_text,
         generated_dir=ctx.paths.strategies_generated_dir,
         upstream_name="stressozz",
     )

@@ -55,6 +55,16 @@ from zapret_manager.features.zapret_runtime import start_zapret_interactive, sto
 from zapret_manager.features.test_urls import prepare_urls
 from zapret_manager.utils.console import C, ask, clear, pause
 
+from zapret_manager.features.doh import PROFILES, start_doh, stop_doh
+from zapret_manager.features.game_launcher import (
+    add_profile,
+    generate_bat,
+    generate_shortcut,
+    list_profiles,
+    remove_profile,
+    run_profile,
+)
+
 
 log = logging.getLogger(__name__)
 
@@ -697,4 +707,98 @@ def _restart_if_running(ctx: AppContext) -> None:
     discord = find_strategy(ctx, ctx.state.zapret.discord_layer, kind="discord")
     stop_zapret(ctx)
     start_zapret_interactive(ctx, base, youtube=youtube, discord=discord)
+
+
+def game_launcher_menu(ctx: AppContext) -> None:
+    """Меню запуска игр/программ с автозапуском winws."""
+    while True:
+        clear()
+        profiles = list_profiles(ctx)
+        print(f"{C.MAGENTA}Меню запуска игр / программ{C.RESET}\n")
+        if not profiles:
+            print(f"{C.YELLOW}Нет сохранённых профилей.{C.RESET}\n")
+        else:
+            for i, p in enumerate(profiles, start=1):
+                print(f"{C.CYAN}{i}){C.RESET} {p.name} {C.DIM}({p.exe_path}) → {p.strategy_name}{C.RESET}")
+        print(f"\n{C.CYAN}A){C.RESET} {C.GREEN}Добавить профиль{C.RESET}")
+        print(f"{C.CYAN}D){C.RESET} {C.GREEN}Удалить профиль{C.RESET}")
+        print(f"{C.CYAN}B){C.RESET} {C.GREEN}Сгенерировать .bat{C.RESET}")
+        print(f"{C.CYAN}S){C.RESET} {C.GREEN}Сгенерировать ярлык .lnk{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        try:
+            if c.lower() == "a":
+                name = ask("Имя профиля: ").strip()
+                exe = ask("Путь к .exe: ").strip()
+                strat = ask("Имя стратегии (например v7): ").strip()
+                if name and exe and strat:
+                    add_profile(ctx, name, exe, strat)
+                    print(f"\n{C.GREEN}Профиль добавлен.{C.RESET}\n")
+                    pause()
+            elif c.lower() == "d" and profiles:
+                num = ask("Номер профиля для удаления: ").strip()
+                if num.isdigit() and 1 <= int(num) <= len(profiles):
+                    remove_profile(ctx, profiles[int(num) - 1].name)
+                    print(f"\n{C.GREEN}Профиль удалён.{C.RESET}\n")
+                    pause()
+            elif c.lower() == "b" and profiles:
+                num = ask("Номер профиля: ").strip()
+                if num.isdigit() and 1 <= int(num) <= len(profiles):
+                    p = profiles[int(num) - 1]
+                    out = Path(ctx.paths.data_dir / f"{p.name}_launcher.bat")
+                    generate_bat(ctx, p, out)
+                    print(f"\n{C.GREEN}.bat создан:{C.RESET} {out}\n")
+                    pause()
+            elif c.lower() == "s" and profiles:
+                num = ask("Номер профиля: ").strip()
+                if num.isdigit() and 1 <= int(num) <= len(profiles):
+                    p = profiles[int(num) - 1]
+                    out = Path(ctx.paths.data_dir / f"{p.name}_launcher.lnk")
+                    generate_shortcut(ctx, p, out)
+                    print(f"\n{C.GREEN}Ярлык создан:{C.RESET} {out}\n")
+                    pause()
+            elif c.isdigit() and profiles:
+                idx = int(c)
+                if 1 <= idx <= len(profiles):
+                    p = profiles[idx - 1]
+                    print(f"\n{C.CYAN}Запуск {p.name}...{C.RESET}\n")
+                    run_profile(ctx, p)
+        except Exception as e:
+            log.exception("game_launcher_menu failed")
+            print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
+
+
+def doh_menu(ctx: AppContext) -> None:
+    """Меню DNS over HTTPS."""
+    while True:
+        clear()
+        print(f"{C.MAGENTA}Меню DNS over HTTPS{C.RESET}\n")
+        print(f"{C.YELLOW}Статус:{C.RESET} {'ON' if ctx.state.doh.enabled else 'OFF'} ({ctx.state.doh.profile})\n")
+        for i, (name, url) in enumerate(PROFILES.items(), start=1):
+            mark = "*" if ctx.state.doh.profile == name and ctx.state.doh.enabled else " "
+            print(f"{mark} {C.CYAN}{i}){C.RESET} {name} {C.DIM}({url}){C.RESET}")
+        print(f"\n{C.CYAN}0){C.RESET} {C.GREEN}Сбросить DNS на DHCP{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите профиль (1-{len(PROFILES)}) или 0 для сброса:{C.RESET} ").strip()
+        if not c:
+            return
+        try:
+            if c == "0":
+                stop_doh(ctx)
+                print(f"\n{C.GREEN}DNS сброшен на DHCP.{C.RESET}\n")
+                pause()
+            elif c.isdigit():
+                idx = int(c)
+                if 1 <= idx <= len(PROFILES):
+                    profile_name = list(PROFILES.keys())[idx - 1]
+                    if ctx.state.doh.enabled:
+                        stop_doh(ctx)
+                    start_doh(ctx, profile_name)
+                    print(f"\n{C.GREEN}DoH запущен: {profile_name}{C.RESET}\n")
+                    pause()
+        except Exception as e:
+            log.exception("doh_menu failed")
+            print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
 

@@ -7,7 +7,7 @@ app:
 
 zapret:
   mode: interactive  # interactive | task (autostart via schtasks)
-  service_name: ZapretManagerAutostart
+  service_name: wowManagerAutostart
   runtime_dir: data/runtime/zapret
   selected_strategy: ""   # имя стратегии без расширения
   discord_profile: ""     # Dv1..DvN (опционально)

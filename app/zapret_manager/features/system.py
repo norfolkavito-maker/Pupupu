@@ -49,7 +49,7 @@ class FirewallManager:
                     "firewall",
                     "add",
                     "rule",
-                    'name=ZapretManager (winws)',
+                    'name=wowManager (winws)',
                     "dir=in",
                     "action=allow",
                     f'program={winws_path}',
@@ -76,7 +76,7 @@ class FirewallManager:
                     "firewall",
                     "add",
                     "rule",
-                    'name=ZapretManager (Block QUIC)',
+                    'name=wowManager (Block QUIC)',
                     "dir=in",
                     "action=block",
                     "protocol=UDP",
@@ -91,13 +91,13 @@ class FirewallManager:
             return False
             
     def show_rules(self) -> List[str]:
-        """Показывает правила брандмауэра, связанные с ZapretManager."""
+        """Показывает правила брандмауэра, связанные с wowManager."""
         if not is_windows():
             return []
             
         try:
             result = subprocess.run(
-                ["netsh", "advfirewall", "firewall", "show", "rule", 'name=ZapretManager*'],
+                ["netsh", "advfirewall", "firewall", "show", "rule", 'name=wowManager*'],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -110,13 +110,13 @@ class FirewallManager:
             return []
             
     def remove_zapret_rules(self) -> bool:
-        """Удаляет все правила ZapretManager из брандмауэра."""
+        """Удаляет все правила wowManager из брандмауэра."""
         if not is_windows() or not is_admin():
             return False
             
         try:
-            _run_text_command(["netsh", "advfirewall", "firewall", "delete", "rule", 'name=ZapretManager*'])
-            log.info("Правила ZapretManager удалены из брандмауэра")
+            _run_text_command(["netsh", "advfirewall", "firewall", "delete", "rule", 'name=wowManager*'])
+            log.info("Правила wowManager удалены из брандмауэра")
             return True
             
         except Exception as e:
@@ -399,7 +399,7 @@ def quic_rule_exists() -> bool:
     if not is_windows():
         return False
     result = subprocess.run(
-        ["netsh", "advfirewall", "firewall", "show", "rule", 'name=ZapretManager (Block QUIC)'],
+        ["netsh", "advfirewall", "firewall", "show", "rule", 'name=wowManager (Block QUIC)'],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -418,7 +418,7 @@ def quic_block_enable() -> bool:
             "firewall",
             "add",
             "rule",
-            'name=ZapretManager (Block QUIC)',
+            'name=wowManager (Block QUIC)',
             "dir=in",
             "action=block",
             "protocol=UDP",
@@ -432,7 +432,7 @@ def quic_block_disable() -> bool:
     if not is_windows() or not is_admin():
         return False
     return subprocess.run(
-        ["netsh", "advfirewall", "firewall", "delete", "rule", 'name=ZapretManager (Block QUIC)'],
+        ["netsh", "advfirewall", "firewall", "delete", "rule", 'name=wowManager (Block QUIC)'],
         capture_output=True,
     ).returncode == 0
 

@@ -23,7 +23,7 @@ class AppSection:
 @dataclass(frozen=True)
 class ZapretSection:
     mode: str = "interactive"  # interactive|task
-    service_name: str = "ZapretManagerAutostart"
+    service_name: str = "wowManagerAutostart"
     runtime_dir: str = "data/runtime/zapret"
     selected_strategy: str = ""
     discord_profile: str = ""
@@ -55,9 +55,17 @@ class NetworkSection:
 
 
 @dataclass(frozen=True)
+class GameLauncherProfile:
+    name: str = ""
+    exe_path: str = ""
+    strategy_name: str = ""
+
+
+@dataclass(frozen=True)
 class GameLauncherSection:
     enabled: bool = True
     auto_stop_zapret_on_game_exit: bool = True
+    program_profiles: list[GameLauncherProfile] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -107,7 +115,7 @@ def load_config(path: Path) -> AppConfig:
     )
     zapret = ZapretSection(
         mode=str(_get(data, ["zapret", "mode"], "interactive")),
-        service_name=str(_get(data, ["zapret", "service_name"], "ZapretManagerAutostart")),
+        service_name=str(_get(data, ["zapret", "service_name"], "wowManagerAutostart")),
         runtime_dir=str(_get(data, ["zapret", "runtime_dir"], "data/runtime/zapret")),
         selected_strategy=str(_get(data, ["zapret", "selected_strategy"], "")),
         discord_profile=str(_get(data, ["zapret", "discord_profile"], "")),
@@ -135,11 +143,24 @@ def load_config(path: Path) -> AppConfig:
         flush_dns_after_hosts_change=bool(_get(data, ["network", "flush_dns_after_hosts_change"], True)),
         enable_tcp_timestamps_if_needed=bool(_get(data, ["network", "enable_tcp_timestamps_if_needed"], False)),
     )
+    _profiles_raw = _get(data, ["game_launcher", "program_profiles"], [])
+    profiles: list[GameLauncherProfile] = []
+    if isinstance(_profiles_raw, list):
+        for p in _profiles_raw:
+            if isinstance(p, dict):
+                profiles.append(
+                    GameLauncherProfile(
+                        name=str(p.get("name", "")),
+                        exe_path=str(p.get("exe_path", "")),
+                        strategy_name=str(p.get("strategy_name", "")),
+                    )
+                )
     game_launcher = GameLauncherSection(
         enabled=bool(_get(data, ["game_launcher", "enabled"], True)),
         auto_stop_zapret_on_game_exit=bool(
             _get(data, ["game_launcher", "auto_stop_zapret_on_game_exit"], True)
         ),
+        program_profiles=profiles,
     )
     doh = DoHSection(
         enabled=bool(_get(data, ["doh", "enabled"], False)),

@@ -1,34 +1,6 @@
 from __future__ import annotations
 
 
-def discord_profile_args(profile: str) -> list[str]:
-    """
-    Профили Discord (best-effort перенос из Zapret-Manager.sh).
-    Возвращает список аргументов, которые добавляются к текущей стратегии.
-    """
-    profile = (profile or "").strip()
-    if not profile:
-        return []
-
-    # Сейчас поддержан минимум: Dv1. Остальные можно добавить аналогично.
-    if profile.lower() == "dv1":
-        return [
-            "--new",
-            "--filter-udp=19294-19344,50000-50100",
-            "--filter-l7=discord,stun",
-            "--dpi-desync=fake",
-            "--dpi-desync-repeats=6",
-            "--new",
-            "--filter-tcp=2053,2083,2087,2096,8443",
-            "--hostlist-domains=discord.media",
-            "--dpi-desync=multisplit",
-            "--dpi-desync-split-seqovl=652",
-            "--dpi-desync-split-pos=2",
-            "--dpi-desync-split-seqovl-pattern={FAKE:tls_clienthello_www_google_com.bin}",
-        ]
-    return []
-
-
 def games_profile_args(profile: str) -> list[str]:
     """
     Профили игр Gv1..Gv4 (best-effort перенос из Zapret-Manager.sh).
@@ -71,8 +43,9 @@ def _compact_args(args: list[str]) -> list[str]:
 
 
 def apply_overlays(base_args: list[str], *, discord_profile: str, games_profile: str) -> list[str]:
+    """Применяет оверлеи к базовым аргументам (games only; discord теперь через compose)."""
     out = list(base_args)
-    out.extend(discord_profile_args(discord_profile))
+    # discord_profile больше не используется здесь — Dv стратегии применяются через composer.py
     out.extend(games_profile_args(games_profile))
     return _compact_args(out)
 

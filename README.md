@@ -1,11 +1,13 @@
-# Zapret-Manager for Windows (portable)
+# wow Manager for Windows (portable)
 
 Консольный менеджер для Windows 10/11 x64 с меню, похожим на `Zapret-Manager.sh`, который:
 
-- умеет подтягивать upstream (в первую очередь `bol-van/zapret-win-bundle` и `Flowseal/zapret-discord-youtube`);
+- умеет подтягивать upstream (`bol-van/zapret-win-bundle`, `Flowseal/zapret-discord-youtube`, `stressOzz/zapret-discord-youtube`);
 - генерирует стратегии в `data/strategies/generated/` (не редактировать руками);
 - хранит пользовательские стратегии отдельно в `data/strategies/custom/`;
-- запускается из `run.bat` (dev-режим) или из `ZapretManager.exe` (релиз).
+- поддерживает Discord стратегии **Dv1–Dv17**, YouTube **Yv1–Yv4**, игры **Gv1–Gv4**;
+- запускает игры/программы с автозапуском `winws` и генерацией `.bat`/`.lnk`;
+- запускается из `run.bat` (dev-режим) или из `wowManager.exe` (релиз).
 
 ## Запуск (dev)
 

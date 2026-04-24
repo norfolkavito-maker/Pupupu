@@ -1,13 +1,27 @@
 name: v6
-kind: base
 engine: winws
+kind: base
 args:
-  - --wf-tcp=80,443,8080,8443
-  - --wf-udp=53,443,5353,1900
-  - --dpi-desync=fake
-winws_params:
-  - --hostlist-exclude
-  - localhost
-  - 127.0.0.1
-description: "Максимальная стратегия с fake-файлами"
+  - --filter-tcp=443
+  - --hostlist={LISTS}\google.txt
+  - --dpi-desync=fake,multisplit
+  - --dpi-desync-split-pos=2,sld
+  - --dpi-desync-fake-tls=0x0F0F0F0F
+  - --dpi-desync-fake-tls={FAKE}\tls_clienthello_www_google_com.bin
+  - --dpi-desync-fake-tls-mod=rnd,dupsid,sni=ggpht.com
+  - --dpi-desync-split-seqovl=620
+  - --dpi-desync-split-seqovl-pattern={FAKE}\tls_clienthello_www_google_com.bin
+  - --dpi-desync-fooling=badsum,badseq
+  - --new
+  - --filter-tcp=443
+  - --hostlist-exclude={LISTS}\exclude.txt
+  - --dpi-desync=hostfakesplit
+  - --dpi-desync-hostfakesplit-mod=host=i2.photo.2gis.com
+  - --dpi-desync-hostfakesplit-midhost=host-2
+  - --dpi-desync-split-seqovl=726
+  - --dpi-desync-fooling=badsum,badseq
+  - --dpi-desync-badseq-increment=0
+winws_params: []
+description: "v6 — Yv03 fake+multisplit + hostfakesplit"
 category: general
+upstream: stressozz

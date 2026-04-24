@@ -105,12 +105,12 @@ def _replace_discord_block(args: list[str], dv_args: list[str]) -> list[str]:
         if _is_discord_block(b):
             idx = i
             break
-    if idx is None:
-        raise RuntimeError("Стратегия не подходит для замены Discord-блока (не найден discord.media/порты).")
-
     replacement = list(dv_args)
     if not replacement or replacement[0] != "--new":
         replacement = ["--new"] + replacement
+    if idx is None:
+        # fallback: добавить новый Discord-блок в конец
+        return list(args) + replacement
     blocks[idx] = replacement
     return [a for b in blocks for a in b]
 

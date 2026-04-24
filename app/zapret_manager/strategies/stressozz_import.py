@@ -7,6 +7,17 @@ from zapret_manager.strategies.model import Strategy
 from zapret_manager.strategies.store import save_strategy
 
 
+def _map_linux_paths(args: list[str]) -> list[str]:
+    """Заменяет Linux-пути из Zapret-Manager.sh на плейсхолдеры."""
+    out = []
+    for a in args:
+        a = a.replace("/opt/zapret/files/fake/", "{FAKE:")
+        a = re.sub(r"\{FAKE:([^ ]+)\.bin", r"{FAKE:\1.bin}", a)
+        a = a.replace("/opt/zapret/ipset/", "{LISTS}")
+        out.append(a)
+    return out
+
+
 def import_liststryou(
     *,
     list_text: str,
@@ -29,10 +40,8 @@ def import_liststryou(
             ln = ln.strip()
             if not ln or ln.startswith("#"):
                 continue
-            # map linux paths to placeholders
-            ln = ln.replace("/opt/zapret/files/fake/", "{FAKE:").replace(".bin", ".bin}")
-            ln = ln.replace("/opt/zapret/ipset/", "{LISTS}")
             args.append(ln)
+        args = _map_linux_paths(args)
         st = Strategy(
             name=current_name,
             engine="winws",
@@ -68,33 +77,57 @@ def import_v_strategies_from_script(
     и делает стратегии vN.
     """
     count = 0
-    # best-effort: find function blocks starting with strategy_vN()
     for m in re.finditer(r"\bstrategy_(v\d+)\s*\(\)\s*\{", script_text):
         name = m.group(1)
         start = m.start()
-        # take a window until next "}\n" after start
         end = script_text.find("}", m.end())
         if end == -1:
             continue
         body = script_text[m.end() : end]
-        # collect quoted args that look like --something or --new
         args = re.findall(r"\"(--[^\"]+)\"", body)
         if not args:
             continue
-        # map linux paths to placeholders
-        args2 = []
-        for a in args:
-            a = a.replace("/opt/zapret/files/fake/", "{FAKE:")
-            a = re.sub(r"\{FAKE:([^ ]+)\.bin", r"{FAKE:\1.bin}", a)
-            a = a.replace("/opt/zapret/ipset/", "{LISTS}")
-            args2.append(a)
+        args = _map_linux_paths(args)
         st = Strategy(
             name=name,
             engine="winws",
-            args=args2,
+            args=args,
             source_file="Zapret-Manager.sh",
             upstream=upstream_name,
             kind="base",
+        )
+        save_strategy(generated_dir, st)
+        count += 1
+    return count
+
+
+def import_dv_strategies_from_script(
+    *,
+    script_text: str,
+    generated_dir: Path,
+    upstream_name: str = "stressozz",
+) -> int:
+    """
+    Извлекает Dv1..Dv17 из Zapret-Manager.sh (формат DvN=$'...\n...').
+    """
+    count = 0
+    # Pattern: Dv1=$'--filter-tcp=...\n--hostlist-domains=...'
+    pattern = re.compile(r"^Dv(\d+)=[\$\']*'([\s\S]*?)'(?:\s*$)", re.MULTILINE)
+    for m in pattern.finditer(script_text):
+        num = m.group(1)
+        body = m.group(2)
+        name = f"Dv{num}"
+        args = [ln.strip() for ln in body.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+        if not args:
+            continue
+        args = _map_linux_paths(args)
+        st = Strategy(
+            name=name,
+            engine="winws",
+            args=args,
+            source_file="Zapret-Manager.sh",
+            upstream=upstream_name,
+            kind="discord",
         )
         save_strategy(generated_dir, st)
         count += 1
