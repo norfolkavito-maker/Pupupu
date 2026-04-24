@@ -1,0 +1,21 @@
+# Источники для синка/обновлений. Можно отключать/менять URL вручную.
+sources:
+  zapret_win_bundle:
+    kind: repo_zip
+    owner: bol-van
+    repo: zapret-win-bundle
+    ref: master
+    # Какая папка внутри архива считается runtime-ом
+    select_subdir: zapret-winws
+
+  flowseal:
+    kind: repo_zip
+    owner: Flowseal
+    repo: zapret-discord-youtube
+    ref: main
+
+  # Опционально: список/шаблоны из StressOzz (используется только как доп. справочник)
+  stress_ozz_manager:
+    kind: raw_url
+    url: https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/Zapret-Manager.sh
+

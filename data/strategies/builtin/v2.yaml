@@ -1,0 +1,11 @@
+name: v2
+engine: winws
+args:
+  - --wf-tcp=80,443,8080
+  - --wf-udp=53,443,5353
+winws_params:
+  - --hostlist-exclude
+  - localhost
+  - 127.0.0.1
+description: "Расширенная стратегия (больше портов)"
+category: general

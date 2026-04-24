@@ -1,0 +1,13 @@
+name: v8
+kind: base
+engine: winws
+args:
+  - --wf-tcp=80,443
+  - --wf-udp=53,443
+  - --hostlist=rkn.txt
+winws_params:
+  - --hostlist-exclude
+  - localhost
+  - 127.0.0.1
+description: "Стратегия с RKN списком"
+category: general

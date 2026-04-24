@@ -1,0 +1,14 @@
+name: v7
+kind: base
+engine: winws
+args:
+  - --wf-tcp=80,443,8080,8443
+  - --wf-udp=53,443,5353,1900
+  - --dpi-desync=fake
+  - --dpi-desync-tls=fake
+winws_params:
+  - --hostlist-exclude
+  - localhost
+  - 127.0.0.1
+description: "Комплексная стратегия (все включено)"
+category: general

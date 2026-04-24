@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+data/
+!data/
+data/*
+!data/strategies/
+data/strategies/*
+!data/strategies/builtin/
+!data/strategies/builtin/**
+dist/
+build/
+

@@ -1,0 +1,44 @@
+# Основные настройки (не удаляй файл; лучше меняй значения).
+app:
+  language: ru
+  updates:
+    check_on_start: true
+    apply_mode: ask   # ask | auto | manual
+
+zapret:
+  mode: interactive  # interactive | task (autostart via schtasks)
+  service_name: ZapretManagerAutostart
+  runtime_dir: data/runtime/zapret
+  selected_strategy: ""   # имя стратегии без расширения
+  discord_profile: ""     # Dv1..DvN (опционально)
+  games_profile: ""       # Gv1..Gv4 (опционально)
+  bundle_path: ".\\zapret-win-bundle"
+  winws_path: ".\\zapret-win-bundle\\winws.exe"
+  blockcheck_path: ".\\zapret-win-bundle\\blockcheck\\blockcheck.cmd"
+  active_strategy: "v7"
+  run_mode: "process"
+  autostart: false
+  require_admin: true
+
+paths:
+  hosts_file: "C:\\Windows\\System32\\drivers\\etc\\hosts"
+  fake_files_dir: ".\\zapret-win-bundle\\files\\fake"
+  lists_dir: ".\\zapret-win-bundle\\lists"
+  strategies_dir: ".\\data\\strategies"
+  logs_dir: ".\\data\\logs"
+  backup_dir: ".\\data\\backup"
+
+network:
+  adapter_name: ""        # если пусто — попытаться определить автоматически (Windows)
+  flush_dns_after_hosts_change: true
+  enable_tcp_timestamps_if_needed: false
+
+game_launcher:
+  enabled: true
+  auto_stop_zapret_on_game_exit: true
+
+doh:
+  enabled: false
+  profile: default
+  listen_addr: 127.0.0.1
+  listen_port: 5053

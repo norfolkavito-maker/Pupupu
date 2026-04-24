@@ -1,0 +1,11 @@
+name: v3
+engine: winws
+args:
+  - --wf-tcp=80,443,8080,8443
+  - --wf-udp=53,443,5353,1900
+winws_params:
+  - --hostlist-exclude
+  - localhost
+  - 127.0.0.1
+description: "Максимальная стратегия (максимум портов)"
+category: general

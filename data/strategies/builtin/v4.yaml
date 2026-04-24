@@ -1,0 +1,13 @@
+name: v4
+engine: winws
+args:
+  - --wf-tcp=80,443
+  - --wf-udp=53,443
+  - --dpi-desync=fake
+  - --dpi-desync-tls=fake
+winws_params:
+  - --hostlist-exclude
+  - localhost
+  - 127.0.0.1
+description: "Стратегия с fake-файлами"
+category: general
