@@ -28,14 +28,17 @@ def runtime_health(ctx: "AppContext") -> dict[str, object]:
     missing, user should re-download/re-extract the release.
     """
     rt = _runtime_root(ctx)
-    # common root for zapret-win-bundle layout is runtime/zapret
-    # but we search for exe recursively to be robust.
-    winws = _find_first(rt, ["winws.exe"])
-    winws2 = _find_first(rt, ["winws2.exe"])
-    windivert_dll = (rt / "WinDivert.dll")
-    windivert_sys = (rt / "WinDivert64.sys")
-    blockcheck_cmd = _find_first(rt, ["blockcheck.cmd"])
-    fake_dir = ctx.paths.runtime_dir / "zapret" / "files" / "fake"
+    zr = zapret_root(ctx)
+
+    # We search for exe recursively to be robust.
+    winws = _find_first(zr, ["winws.exe"]) if zr.exists() else None
+    winws2 = _find_first(zr, ["winws2.exe"]) if zr.exists() else None
+
+    windivert_dll = zr / "WinDivert.dll"
+    windivert_sys = zr / "WinDivert64.sys"
+    blockcheck_cmd = _find_first(zr, ["blockcheck.cmd"]) if zr.exists() else None
+    fake_dir = zr / "files" / "fake"
+    lists_dir = zr / "lists"
 
     ok = True
     problems: list[str] = []
@@ -43,6 +46,9 @@ def runtime_health(ctx: "AppContext") -> dict[str, object]:
     if not rt.exists():
         ok = False
         problems.append(f"runtime dir not found: {rt}")
+    if not zr.exists():
+        ok = False
+        problems.append(f"zapret dir not found: {zr}")
     if not winws:
         ok = False
         problems.append("winws.exe not found")
@@ -57,14 +63,72 @@ def runtime_health(ctx: "AppContext") -> dict[str, object]:
         problems.append("blockcheck.cmd not found")
     if not fake_dir.exists():
         problems.append(f"fake files dir not found: {fake_dir}")
+    if not lists_dir.exists():
+        problems.append(f"lists dir not found: {lists_dir}")
 
     return {
         "ok": ok,
         "runtime_dir": str(rt),
+        "zapret_dir": str(zr),
         "winws": str(winws) if winws else "",
         "winws2": str(winws2) if winws2 else "",
+        "windivert_dll": str(windivert_dll),
+        "windivert_sys": str(windivert_sys),
+        "fake_dir": str(fake_dir),
+        "lists_dir": str(lists_dir),
+        "blockcheck": str(blockcheck_cmd) if blockcheck_cmd else "",
         "problems": problems,
     }
+
+
+def zapret_root(ctx: "AppContext") -> Path:
+    """Runtime root for zapret-win-bundle content."""
+    return (_runtime_root(ctx) / "zapret").resolve()
+
+
+def runtime_diagnostics_text(ctx: "AppContext") -> str:
+    """Human-friendly runtime diagnostics with actionable instructions."""
+    h = runtime_health(ctx)
+    rt = Path(str(h.get("runtime_dir", "")))
+    zr = Path(str(h.get("zapret_dir", "")))
+
+    def okflag(p: Path) -> str:
+        return "OK" if p.exists() else "MISSING"
+
+    lines: list[str] = []
+    lines.append("Runtime diagnostics")
+    lines.append("-----------------")
+    lines.append(f"config path: {ctx.paths.config_file} ({okflag(ctx.paths.config_file)})")
+    lines.append(f"sources path: {ctx.paths.sources_file} ({okflag(ctx.paths.sources_file)})")
+    lines.append(f"runtime root: {rt} ({okflag(rt)})")
+    lines.append(f"zapret root:  {zr} ({okflag(zr)})")
+    lines.append("")
+    # Key files
+    winws = Path(str(h.get("winws") or "")) if h.get("winws") else (zr / "winws.exe")
+    lines.append(f"winws.exe:        {winws} ({okflag(winws)})")
+    wdd = Path(str(h.get("windivert_dll") or (zr / 'WinDivert.dll')))
+    wds = Path(str(h.get("windivert_sys") or (zr / 'WinDivert64.sys')))
+    lines.append(f"WinDivert.dll:    {wdd} ({okflag(wdd)})")
+    lines.append(f"WinDivert64.sys:  {wds} ({okflag(wds)})")
+    fake_dir = Path(str(h.get("fake_dir") or (zr / 'files' / 'fake')))
+    lists_dir = Path(str(h.get("lists_dir") or (zr / 'lists')))
+    lines.append(f"fake dir:         {fake_dir} ({okflag(fake_dir)})")
+    lines.append(f"lists dir:        {lists_dir} ({okflag(lists_dir)})")
+    bc = Path(str(h.get("blockcheck") or (zr / 'blockcheck' / 'blockcheck.cmd')))
+    lines.append(f"blockcheck.cmd:   {bc} ({okflag(bc)})")
+
+    problems = h.get("problems") or []
+    if problems:
+        lines.append("\nProblems:")
+        for p in problems:
+            lines.append(f"- {p}")
+
+        lines.append("\nWhat to do:")
+        lines.append("- Your portable bundle must contain: DedZapretData\\runtime\\zapret\\...")
+        lines.append("- Re-download/re-extract the release, or copy zapret-win-bundle files into:")
+        lines.append(f"  {zr}")
+
+    return "\n".join(lines)
 
 
 def require_runtime_ok(ctx: "AppContext") -> None:
@@ -85,8 +149,9 @@ def _runtime_root(ctx: "AppContext") -> Path:
 
 def detect_runtime_files(ctx: "AppContext") -> None:
     rt = _runtime_root(ctx)
-    winws = _find_first(rt, ["winws.exe"])
-    winws2 = _find_first(rt, ["winws2.exe"])
+    zr = zapret_root(ctx)
+    winws = _find_first(zr, ["winws.exe"]) if zr.exists() else None
+    winws2 = _find_first(zr, ["winws2.exe"]) if zr.exists() else None
     ctx.state.runtime.installed = bool(winws)
     ctx.state.runtime.runtime_path = str(rt)
     ctx.state.runtime.winws_path = str(winws or "")
@@ -110,7 +175,7 @@ def build_command(
     args_override: list[str] | None = None,
     engine_override: str | None = None,
 ) -> list[str]:
-    rt = _runtime_root(ctx)
+    rt = zapret_root(ctx)
     winws = Path(ctx.state.runtime.winws_path) if ctx.state.runtime.winws_path else None
     winws2 = Path(ctx.state.runtime.winws2_path) if ctx.state.runtime.winws2_path else None
 
@@ -135,11 +200,11 @@ def build_command(
     for a in args:
         a = a.replace("{BIN}", str(exe.parent) + "\\")
         # {LISTS} -> runtime-provided lists (usually runtime/zapret/lists)
-        a = a.replace("{LISTS}", str((ctx.paths.runtime_dir / "zapret" / "lists").resolve()) + "\\")
+        a = a.replace("{LISTS}", str((zapret_root(ctx) / "lists").resolve()) + "\\")
         # {MGR_LISTS} -> manager-owned lists (data/lists)
         a = a.replace("{MGR_LISTS}", str(ctx.paths.lists_dir.resolve()) + "\\")
         # Support both {FAKE:filename.bin} and legacy {FAKE} prefix.
-        a = a.replace("{FAKE}", str((ctx.paths.runtime_dir / "zapret" / "files" / "fake").resolve()) + "\\")
+        a = a.replace("{FAKE}", str((zapret_root(ctx) / "files" / "fake").resolve()) + "\\")
         a = _resolve_fake(ctx, a)
         resolved.append(a)
     return [str(exe)] + resolved
@@ -188,7 +253,7 @@ def start_zapret_interactive(
         warnings = list(composed.warnings)
 
     cmd = build_command(ctx, strategy, args_override=args_override, engine_override=engine_override)
-    p = popen_detached(cmd, cwd=str(_runtime_root(ctx)))
+    p = popen_detached(cmd, cwd=str(zapret_root(ctx)))
     ctx.state.zapret.running = True
     ctx.state.zapret.mode = "interactive"
     ctx.state.zapret.pid = int(p.pid)

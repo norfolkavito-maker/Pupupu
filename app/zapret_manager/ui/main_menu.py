@@ -26,6 +26,7 @@ from zapret_manager.ui.menus import (
 )
 from zapret_manager.features.key_setup import key_setup
 from zapret_manager.utils.console import C, ask, clear, pause
+from zapret_manager import __version__
 
 
 log = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def run_main_menu(ctx: AppContext) -> int:
             "╔═══════════════════════════════╗\n"
             f"║ {C.BLUE}DEDZAPRET (Windows){C.RESET}            ║\n"
             "╚═══════════════════════════════╝\n"
-            f" {C.DIM}v0.3.1{C.RESET} {C.DIM}inspired by bol-van / StressOzz / Flowseal{C.RESET}\n"
+            f" {C.DIM}v{__version__}{C.RESET} {C.DIM}inspired by bol-van / StressOzz / Flowseal{C.RESET}\n"
         )
         for ln in _status_lines(ctx):
             print(ln)
@@ -79,11 +80,11 @@ def run_main_menu(ctx: AppContext) -> int:
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Меню стратегий{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Меню тестирования стратегий{C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Меню{C.RESET} TG WS Proxy")
-        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Меню{C_RESET} DNS over HTTPS")
-        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Меню настройки{C_RESET} Discord")
-        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Меню управления доменами в{C_RESET} hosts")
-        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Запустить игру / программу{C_RESET}")
-        print(f"{C.CYAN}0){C.RESET} {C.GREEN}Системное меню{C_RESET}")
+        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Меню{C.RESET} DNS over HTTPS")
+        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Меню настройки{C.RESET} Discord")
+        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Меню управления доменами в{C.RESET} hosts")
+        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Запустить игру / программу{C.RESET}")
+        print(f"{C.CYAN}0){C.RESET} {C.GREEN}Системное меню{C.RESET}")
         choice = ask(f"\n{C.CYAN}Enter){C.RESET} выход\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not choice:
             return 0

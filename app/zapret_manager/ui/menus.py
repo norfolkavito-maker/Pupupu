@@ -51,7 +51,12 @@ from zapret_manager.features.hosts import (
     has_block,
     clear_all_manager_blocks,
 )
-from zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret
+from zapret_manager.features.zapret_runtime import (
+    runtime_diagnostics_text,
+    runtime_health,
+    start_zapret_interactive,
+    stop_zapret,
+)
 from zapret_manager.features.test_urls import prepare_urls
 from zapret_manager.utils.console import C, ask, clear, pause
 
@@ -642,6 +647,7 @@ def system_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}11){C.RESET} {C.GREEN}Восстановить из бэкапа (zip){C.RESET}")
         print(f"{C.CYAN}12){C.RESET} {C.GREEN}Обновить exclude + RKN list{C.RESET}")
         print(f"{C.CYAN}13){C.RESET} {C.GREEN}Автонастройка «под ключ» (без переустановки){C.RESET}")
+        print(f"{C.CYAN}14){C.RESET} {C.GREEN}Проверить runtime{C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -704,6 +710,17 @@ def system_menu(ctx: AppContext) -> None:
                 for ln in lines:
                     print(ln)
                 print()
+                pause()
+            elif c == "14":
+                clear()
+                print(runtime_diagnostics_text(ctx))
+                h = runtime_health(ctx)
+                if not h.get("ok"):
+                    print(
+                        f"\n{C.YELLOW}Runtime не готов.{C.RESET} "
+                        "Если вы используете portable-архив — распакуйте его полностью, "
+                        "внутри должна быть папка DedZapretData\\runtime\\zapret\\ с winws/WinDivert.\n"
+                    )
                 pause()
         except Exception as e:
             log.exception("system_menu failed")

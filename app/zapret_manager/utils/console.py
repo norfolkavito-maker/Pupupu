@@ -3,21 +3,7 @@ from __future__ import annotations
 import os
 import sys
 
-from colorama import Fore, Style, init as colorama_init
-
-
-colorama_init()
-
-
-class C:
-    GREEN = Fore.LIGHTGREEN_EX
-    RED = Fore.LIGHTRED_EX
-    CYAN = Fore.LIGHTCYAN_EX
-    YELLOW = Fore.LIGHTYELLOW_EX
-    MAGENTA = Fore.LIGHTMAGENTA_EX
-    BLUE = Fore.LIGHTBLUE_EX
-    DIM = Style.DIM
-    RESET = Style.RESET_ALL
+from zapret_manager.ui.colors import C
 
 
 def clear() -> None:
