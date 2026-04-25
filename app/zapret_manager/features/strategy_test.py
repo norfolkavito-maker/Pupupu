@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
-from dataclasses import dataclass
-from typing import Iterable
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
@@ -16,14 +17,6 @@ from zapret_manager.features.zapret_runtime import start_zapret_interactive, sto
 from zapret_manager.strategies.model import Strategy
 from zapret_manager.strategies.store import list_strategies, save_strategy
 from zapret_manager.utils.timex import now_utc_iso
-
-
-def _fetch_one(url: str, *, timeout_s: float) -> bool:
-    try:
-        r = requests.get(url, timeout=timeout_s)
-        return 200 <= r.status_code < 500
-    except Exception:
-        return False
 
 
 log = logging.getLogger(__name__)
@@ -38,10 +31,33 @@ DEFAULT_TEST_DOMAINS = [
 
 
 @dataclass(frozen=True)
+class DomainCheck:
+    """One user-facing domain probe result.
+
+    This is intentionally small and readable: UI should show these rows, while
+    raw subprocess/winws commands stay in logs.
+    """
+
+    domain: str
+    url: str
+    ok: bool
+    elapsed_ms: int
+    error: str = ""
+    status_code: int | None = None
+
+    @property
+    def status_text(self) -> str:
+        if self.ok:
+            return "OK"
+        return "FAIL"
+
+
+@dataclass(frozen=True)
 class TestResult:
     strategy: str
     ok: int
     total: int
+    checks: list[DomainCheck] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -51,40 +67,108 @@ class TestSessionSummary:
     results_file: Path
 
 
-def check_domains(domains: list[str], *, timeout_s: float = 3.0, parallel: int | None = None) -> tuple[int, int]:
-    cleaned: list[str] = []
-    for d in domains:
-        d = d.strip()
-        if not d:
-            continue
-        url = d if d.startswith("http://") or d.startswith("https://") else f"https://{d}"
-        cleaned.append(url)
+def _normalize_url(raw: str) -> str:
+    raw = raw.strip()
+    if not raw:
+        return ""
+    return raw if raw.startswith("http://") or raw.startswith("https://") else f"https://{raw}"
 
+
+def _display_domain(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.netloc:
+        return parsed.netloc
+    return url.replace("https://", "").replace("http://", "").strip("/")
+
+
+def _fetch_one_detail(url: str, *, timeout_s: float) -> DomainCheck:
+    display = _display_domain(url)
+    start = time.perf_counter()
+    try:
+        # A normal GET is closer to real browser behavior than just opening TCP.
+        # We intentionally treat HTTP 4xx as network OK: domain is reachable, even
+        # if the server rejects the exact path.
+        r = requests.get(url, timeout=timeout_s, allow_redirects=True)
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        ok = 200 <= r.status_code < 500
+        return DomainCheck(
+            domain=display,
+            url=url,
+            ok=ok,
+            elapsed_ms=elapsed_ms,
+            status_code=r.status_code,
+            error="" if ok else f"http {r.status_code}",
+        )
+    except requests.exceptions.Timeout:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error="timeout")
+    except requests.exceptions.SSLError:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error="tls error")
+    except requests.exceptions.ConnectionError:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error="connection error")
+    except Exception as e:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error=type(e).__name__)
+
+
+def _format_domain_row(index: int, total: int, check: DomainCheck) -> str:
+    status = "OK" if check.ok else "FAIL"
+    extra = f"{check.elapsed_ms} ms"
+    if check.status_code is not None:
+        extra += f", HTTP {check.status_code}"
+    if check.error:
+        extra += f", {check.error}"
+    return f"[{index:02d}/{total:02d}] {check.domain:<42} {status:<5} {extra}"
+
+
+def check_domains_detailed(
+    domains: list[str],
+    *,
+    timeout_s: float = 3.0,
+    parallel: int | None = None,
+    progress: bool = False,
+) -> list[DomainCheck]:
+    cleaned = [_normalize_url(d) for d in domains if d.strip()]
+    cleaned = [u for u in cleaned if u]
     if not cleaned:
-        return 0, 0
+        return []
 
-    # If parallel not requested, keep simple deterministic behavior.
-    if not parallel or parallel <= 1:
-        ok = 0
-        for url in cleaned:
-            if _fetch_one(url, timeout_s=timeout_s):
-                ok += 1
-        return ok, len(cleaned)
+    # If progress is requested, keep sequential order so the user sees exactly
+    # which domain is being tested now. This is slower but much more readable.
+    if progress or not parallel or parallel <= 1:
+        checks: list[DomainCheck] = []
+        total = len(cleaned)
+        for i, url in enumerate(cleaned, start=1):
+            domain = _display_domain(url)
+            if progress:
+                print(f"[{i:02d}/{total:02d}] Проверяю {domain:<42} ... ", end="", flush=True)
+            check = _fetch_one_detail(url, timeout_s=timeout_s)
+            checks.append(check)
+            if progress:
+                suffix = f"{check.elapsed_ms} ms"
+                if check.error:
+                    suffix += f", {check.error}"
+                print(f"{check.status_text:<5} {suffix}")
+        return checks
 
-    # Parallel fetch: speeds up multi-domain test suites.
     from concurrent.futures import ThreadPoolExecutor
 
-    ok = 0
     with ThreadPoolExecutor(max_workers=int(parallel)) as ex:
-        for is_ok in ex.map(lambda u: _fetch_one(u, timeout_s=timeout_s), cleaned):
-            ok += 1 if is_ok else 0
-    return ok, len(cleaned)
+        return list(ex.map(lambda u: _fetch_one_detail(u, timeout_s=timeout_s), cleaned))
+
+
+def check_domains(domains: list[str], *, timeout_s: float = 3.0, parallel: int | None = None) -> tuple[int, int]:
+    checks = check_domains_detailed(domains, timeout_s=timeout_s, parallel=parallel, progress=False)
+    return sum(1 for c in checks if c.ok), len(checks)
 
 
 def control_test(domains: list[str], *, parallel: int | None = None) -> TestResult:
     """Legacy helper used by UI: baseline check without any strategy running."""
-    ok, total = check_domains(domains, parallel=parallel)
-    return TestResult(strategy="control", ok=ok, total=total)
+    checks = check_domains_detailed(domains, parallel=parallel, progress=False)
+    ok = sum(1 for c in checks if c.ok)
+    return TestResult(strategy="control", ok=ok, total=len(checks), checks=checks)
 
 
 def _runtime_ready(ctx: AppContext) -> bool:
@@ -130,7 +214,6 @@ def _tmp_dir(ctx: AppContext, name: str) -> Path:
 
 
 def _list_tmp_strategies(ctx: AppContext, tmp_dir: Path, *, kind: str | None = None) -> list[Strategy]:
-    # by construction temp dir stores json/yaml strategies
     return list_strategies(tmp_dir, kind=kind)
 
 
@@ -149,7 +232,6 @@ def _pin_top_results(ctx: AppContext, results: list[TestResult], tmp_dir: Path, 
         )
         if not st:
             continue
-        # save as JSON into custom
         p = save_strategy(ctx.paths.strategies_custom_dir, st)
         pinned.append(p)
     return pinned
@@ -160,6 +242,25 @@ def _cleanup_tmp(tmp_dir: Path) -> None:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def _print_strategy_header(strategy: Strategy, domains: list[str]) -> None:
+    print()
+    print(f"Тест стратегии: {strategy.name}")
+    print(f"Проверок: {len([d for d in domains if d.strip()])}")
+    print("Формат: HTTP(S) GET; HTTP 2xx-4xx = доступен, timeout/connection/tls = FAIL")
+    print("-" * 78)
+
+
+def _print_strategy_footer(result: TestResult) -> None:
+    print("-" * 78)
+    print(f"Итог {result.strategy}: {result.ok}/{result.total} OK")
+    failed = [c for c in result.checks if not c.ok]
+    if failed:
+        print("Провалились:")
+        for c in failed:
+            print(f"- {c.domain}: {c.error or 'unknown'}")
+    print()
+
+
 def test_strategy(
     ctx: AppContext,
     strategy: Strategy,
@@ -167,9 +268,8 @@ def test_strategy(
     *,
     settle_s: float = 1.5,
     parallel: int | None = None,
+    show_progress: bool = True,
 ) -> TestResult:
-    import time
-
     was_running = ctx.state.zapret.running
     prev_base = ctx.state.zapret.base_strategy
     prev_selected = ctx.state.zapret.selected_strategy
@@ -177,10 +277,16 @@ def test_strategy(
     prev_discord = ctx.state.zapret.discord_layer
     try:
         stop_zapret(ctx)
+        if show_progress:
+            _print_strategy_header(strategy, domains)
         start_zapret_interactive(ctx, strategy)
         time.sleep(settle_s)
-        ok, total = check_domains(domains, parallel=parallel)
-        return TestResult(strategy=strategy.name, ok=ok, total=total)
+        checks = check_domains_detailed(domains, parallel=parallel, progress=show_progress)
+        ok = sum(1 for c in checks if c.ok)
+        result = TestResult(strategy=strategy.name, ok=ok, total=len(checks), checks=checks)
+        if show_progress:
+            _print_strategy_footer(result)
+        return result
     finally:
         stop_zapret(ctx)
         ctx.state.zapret.base_strategy = prev_base
@@ -201,7 +307,6 @@ def test_strategy(
 def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
     from zapret_manager.features.selection import list_bases, list_layers
 
-    # include temp pack dirs in selection (if they exist)
     tmp_flowseal = ctx.paths.strategies_generated_dir / "_tmp" / "packs" / "flowseal"
     tmp_stressozz = ctx.paths.strategies_generated_dir / "_tmp" / "packs" / "stressozz"
     tmp_bases = list_strategies(tmp_flowseal, kind="base") + list_strategies(tmp_stressozz, kind="base")
@@ -211,11 +316,9 @@ def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
     if group == "v":
         bases = list_bases(ctx)
         out = [b for b in bases if b.name.lower().startswith("v") and b.name[1:].isdigit()]
-        # also include temp stressozz v-strategies (same naming)
         for st in tmp_bases:
             if st.name.lower().startswith("v") and st.name[1:].isdigit():
                 out.append(st)
-        # de-dup by name
         seen: set[str] = set()
         uniq: list[Strategy] = []
         for st in out:
@@ -229,7 +332,6 @@ def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
         out.extend([b for b in tmp_bases if (b.upstream or "").lower() == "flowseal"])
         return out
     if group == "all":
-        # v + flowseal bases
         out: list[Strategy] = []
         seen: set[str] = set()
         for st in _select_candidates(ctx, "v") + _select_candidates(ctx, "flowseal"):
@@ -241,7 +343,6 @@ def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
     if group == "youtube":
         out = [s for s in list_layers(ctx, "youtube") if s.name.lower().startswith("yv")]
         out.extend([s for s in tmp_yv if s.name.lower().startswith("yv")])
-        # de-dup
         seen: set[str] = set()
         uniq: list[Strategy] = []
         for st in out:
@@ -253,7 +354,6 @@ def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
     if group == "discord":
         out = [s for s in list_layers(ctx, "discord") if s.name.lower().startswith("dv")]
         out.extend([s for s in tmp_dv if s.name.lower().startswith("dv")])
-        # de-dup
         seen: set[str] = set()
         uniq: list[Strategy] = []
         for st in out:
@@ -266,14 +366,28 @@ def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
 
 
 def _select_top5_wide(results: list[TestResult]) -> list[TestResult]:
-    """Select up to 5 results with preference for high coverage.
-
-    Heuristic:
-    - sort by ok desc, then total desc
-    - take top 5
-    """
     ranked = sorted(results, key=lambda r: (r.ok, r.total, r.strategy), reverse=True)
     return [r for r in ranked if r.total > 0][:5]
+
+
+def _print_session_table(results: list[TestResult]) -> None:
+    print()
+    print("Сводка тестирования")
+    print("-" * 78)
+    print(f"{'Стратегия':<18} {'OK/ALL':<10} {'FAIL':<6} Провалившиеся домены")
+    print("-" * 78)
+    for r in sorted(results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True):
+        failed = [c.domain for c in r.checks if not c.ok]
+        failed_text = ", ".join(failed[:3])
+        if len(failed) > 3:
+            failed_text += f" +{len(failed) - 3}"
+        print(f"{r.strategy:<18} {f'{r.ok}/{r.total}':<10} {len(failed):<6} {failed_text or '-'}")
+    print("-" * 78)
+    best_ok = max((r.ok for r in results), default=0)
+    best = [r.strategy for r in results if r.ok == best_ok and r.total > 0]
+    if best:
+        print("Лучшие стратегии: " + ", ".join(best[:10]))
+    print()
 
 
 def test_session(
@@ -290,12 +404,7 @@ def test_session(
     ensure_flowseal: bool = False,
     ensure_stressozz: bool = False,
 ) -> TestSessionSummary:
-    """Runs a test session.
-
-    - Can auto-sync runtime/packs.
-    - Can work with a temporary pool of strategies.
-    - Pins top-N to custom strategies.
-    """
+    """Runs a human-readable strategy test session."""
     if ensure_runtime:
         _ensure_runtime(ctx)
     _ensure_pack_strategies(ctx, need_flowseal=ensure_flowseal, need_stressozz=ensure_stressozz)
@@ -308,12 +417,9 @@ def test_session(
     if not candidates:
         raise RuntimeError("No strategies found for test session (after ensure).")
 
-    # Build a temp pool from current builtin/generated/custom after sync.
     tmp_name = f"session_{now_utc_iso().replace(':','-').replace('T','_')}_{next(tempfile._get_candidate_names())}"
     tmp_dir = _tmp_dir(ctx, tmp_name)
     try:
-        # copy candidates by name only to keep session stable
-        # If a candidate is from builtin/generated/custom, we store it into tmp.
         for st in candidates:
             save_strategy(tmp_dir, st)
 
@@ -321,17 +427,23 @@ def test_session(
         if not session_strategies:
             raise RuntimeError("No strategies to test.")
 
+        print()
+        print(f"Стратегий в тесте: {len(session_strategies)}")
+        print(f"Доменов в тесте: {len([d for d in domains if d.strip()])}")
+        print("Формат: HTTP(S) GET; HTTP 2xx-4xx = OK, timeout/connection/tls = FAIL")
+        print()
+
         results: list[TestResult] = []
         for st in session_strategies:
             log.info("testing strategy %s", st.name)
-            results.append(test_strategy(ctx, st, domains, settle_s=settle_s, parallel=parallel))
+            results.append(test_strategy(ctx, st, domains, settle_s=settle_s, parallel=parallel, show_progress=True))
 
+        _print_session_table(results)
         results_file = write_results(ctx, results, out_name)
         pinned = _pin_top_results(ctx, results, tmp_dir, top_n=top_n)
         return TestSessionSummary(results=results, pinned=pinned, results_file=results_file)
     finally:
         _cleanup_tmp(tmp_dir)
-        # cleanup temp packs as well
         if ensure_flowseal:
             _cleanup_tmp(_tmp_pack_dir(ctx, "flowseal"))
         if ensure_stressozz:
@@ -340,9 +452,18 @@ def test_session(
 
 def write_results(ctx: AppContext, results: list[TestResult], file_name: str) -> Path:
     out = ctx.paths.results_dir / file_name
-    lines = [f"# {now_utc_iso()}"]
-    for r in sorted(results, key=lambda x: x.ok, reverse=True):
+    lines = [f"# {now_utc_iso()}", ""]
+    lines.append("Summary")
+    lines.append("-------")
+    for r in sorted(results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True):
         lines.append(f"{r.strategy} -> {r.ok}/{r.total}")
+    lines.append("")
+    lines.append("Details")
+    lines.append("-------")
+    for r in sorted(results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True):
+        lines.append("")
+        lines.append(f"[{r.strategy}] {r.ok}/{r.total}")
+        for i, c in enumerate(r.checks, start=1):
+            lines.append(_format_domain_row(i, r.total, c))
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
-
