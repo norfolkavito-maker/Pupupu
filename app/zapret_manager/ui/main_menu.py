@@ -69,7 +69,7 @@ def run_main_menu(ctx: AppContext) -> int:
             "╔═══════════════════════════════╗\n"
             f"║ {C.BLUE}DEDZAPRET (Windows){C.RESET}            ║\n"
             "╚═══════════════════════════════╝\n"
-            f" {C.DIM}v0.3.0{C.RESET} {C.DIM}inspired by bol-van / StressOzz / Flowseal{C.RESET}\n"
+            f" {C.DIM}v0.3.1{C.RESET} {C.DIM}inspired by bol-van / StressOzz / Flowseal{C.RESET}\n"
         )
         for ln in _status_lines(ctx):
             print(ln)

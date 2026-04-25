@@ -40,7 +40,7 @@ def create_dump(ctx: AppContext) -> Path:
     }
 
     runtime_manifest = []
-    runtime_root = (ctx.root / ctx.config.zapret.runtime_dir).resolve()
+    runtime_root = ctx.paths.runtime_dir.resolve()
     if runtime_root.exists():
         for p in sorted(runtime_root.rglob("*")):
             if p.is_file():

@@ -89,20 +89,10 @@ def generate_bat(ctx: AppContext, profile: GameLauncherProfile, output_path: Pat
     if not strategy:
         raise RuntimeError(f"Стратегия не найдена: {profile.strategy_name}")
 
-    # Получаем полные аргументы
-    args = strategy.get_full_args()
+    from zapret_manager.features.zapret_runtime import build_command
 
-    # Заменяем плейсхолдеры путей (как в zapret_runtime._build_command)
-    winws_path = ctx.config.zapret.winws_path
-    lists_dir = ctx.config.paths.lists_dir
-    fake_files_dir = ctx.config.paths.fake_files_dir
-    resolved_args = []
-    for arg in args:
-        arg = arg.replace("{LISTS}", lists_dir)
-        arg = arg.replace("{FAKE}", fake_files_dir)
-        resolved_args.append(arg)
-
-    cmd = f'"{winws_path}" ' + " ".join(f'"{a}"' if " " in a else a for a in resolved_args)
+    cmd_list = build_command(ctx, strategy)
+    cmd = " ".join(f'"{x}"' if " " in x else x for x in cmd_list)
 
     bat_lines = [
         "@echo off",

@@ -54,17 +54,32 @@ jobs:
       - name: Prepare portable bundle
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path bundle | Out-Null
-          Copy-Item -Force dist\DedZapret.exe bundle\
-          Copy-Item -Force run.bat bundle\
-          Copy-Item -Force config.yaml bundle\
-          Copy-Item -Force sources.yaml bundle\
-          Copy-Item -Force README.md bundle\
+          Remove-Item -Recurse -Force bundle -ErrorAction SilentlyContinue | Out-Null
+
+          # User portable layout
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\runtime\zapret | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\strategies\builtin | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\strategies\custom | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\strategies\generated | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\logs | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\state | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\backups | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\profiles | Out-Null
+
+          Copy-Item -Force dist\DedZapret.exe bundle\DedZapret\
+          Copy-Item -Force README_FIRST.txt bundle\DedZapret\
+
+          # configs go inside DedZapretData
+          Copy-Item -Force config.yaml bundle\DedZapret\DedZapretData\config.yaml
+          Copy-Item -Force sources.yaml bundle\DedZapret\DedZapretData\sources.yaml
+
           if (Test-Path runtime\zapret) {
-            Copy-Item -Recurse -Force runtime\zapret bundle\runtime\zapret
+            Copy-Item -Recurse -Force runtime\zapret\* bundle\DedZapret\DedZapretData\runtime\zapret\
           }
           if (Test-Path data\strategies\builtin) {
-            Copy-Item -Recurse -Force data\strategies\builtin bundle\data\strategies\builtin
+            Copy-Item -Recurse -Force data\strategies\builtin\* bundle\DedZapret\DedZapretData\data\strategies\builtin\
           }
 
       - name: Upload artifact
@@ -77,10 +92,18 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path DedZapret-portable.zip) { Remove-Item -Force DedZapret-portable.zip }
-          Compress-Archive -Path bundle\* -DestinationPath DedZapret-portable.zip
+          Compress-Archive -Path bundle\DedZapret -DestinationPath DedZapret-portable.zip
+
+      - name: Make dev/source zip
+        shell: pwsh
+        run: |
+          if (Test-Path DedZapret-dev-source.zip) { Remove-Item -Force DedZapret-dev-source.zip }
+          Compress-Archive -Path app,tests,requirements.txt,run.bat,config.yaml,sources.yaml,README.md -DestinationPath DedZapret-dev-source.zip
 
       - name: Publish GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: DedZapret-portable.zip
+          files: |
+            DedZapret-portable.zip
+            DedZapret-dev-source.zip

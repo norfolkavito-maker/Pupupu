@@ -1,5 +1,41 @@
+from __future__ import annotations
+
+import traceback
+from pathlib import Path
+
 from zapret_manager.main import main
 
+
+def _write_crash_log(text: str) -> Path | None:
+    try:
+        from zapret_manager.core.paths import Paths
+
+        root = Paths.detect_root()
+        paths = Paths.from_root(root)
+        # ensure dirs enough for logs
+        paths.ensure_dirs()
+        crash = paths.logs_dir / "crash.log"
+        crash.write_text(text, encoding="utf-8", errors="replace")
+        return crash
+    except Exception:
+        return None
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except Exception:
+        tb = traceback.format_exc()
+        crash_path = _write_crash_log(tb)
+        print("\nDEDZAPRET crashed on startup.\n")
+        if crash_path:
+            print(f"Crash log written to: {crash_path}")
+        print(tb)
+        try:
+            input("\nPress Enter to exit...")
+        except Exception:
+            pass
+        raise
 

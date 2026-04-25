@@ -9,7 +9,7 @@ from zapret_manager.utils.subprocessx import run
 
 
 def _blockcheck_dir(ctx: AppContext) -> Path:
-    return (ctx.root / ctx.config.zapret.runtime_dir / "blockcheck").resolve()
+    return (ctx.paths.runtime_dir / "zapret" / "blockcheck").resolve()
 
 
 def run_blockcheck(ctx: AppContext, *, variant: str = "1") -> None:
@@ -20,7 +20,7 @@ def run_blockcheck(ctx: AppContext, *, variant: str = "1") -> None:
     if not d.exists():
         raise RuntimeError(
             "blockcheck directory not found in runtime. "
-            "Put runtime into runtime/zapret (or install/update runtime in menu)."
+            "Bundled runtime is missing. Re-download/re-extract the release."
         )
 
     script = d / ("blockcheck2.cmd" if variant == "2" else "blockcheck.cmd")

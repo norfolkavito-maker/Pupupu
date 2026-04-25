@@ -1,13 +1,55 @@
-# DedZapret for Windows (portable)
+# DedZapret (Windows)
 
-Консольный менеджер для Windows 10/11 x64 с меню, похожим на `Zapret-Manager.sh` (StressOzz), который:
+Portable менеджер для **zapret / winws** (DPI-desync) под Windows 10/11 x64.
+Интерфейс — консольное меню в стиле `Zapret-Manager.sh` (StressOzz).
 
-- умеет подтягивать upstream стратегий (`Flowseal/zapret-discord-youtube`, `StressOzz/Zapret-Manager`);
-- генерирует стратегии в `data/strategies/generated/` (не редактировать руками);
-- хранит пользовательские стратегии отдельно в `data/strategies/custom/`;
-- поддерживает Discord стратегии **Dv1–Dv17**, YouTube **Yv1–Yv4**, игры **Gv1–Gv4**;
-- запускает игры/программы с автозапуском `winws` и генерацией `.bat`/`.lnk`;
-- запускается из `run.bat` (dev-режим) или из `DedZapret.exe` (релиз).
+## Скачать
+
+Готовая сборка лежит в **Releases**:
+https://github.com/norfolkavito-maker/Pupupu/releases
+
+Там два архива:
+- **DedZapret-portable.zip** — для обычных пользователей (DedZapret.exe + DedZapretData/)
+- **DedZapret-dev-source.zip** — исходники/скрипты для разработки
+
+## Быстрый старт (portable)
+
+1) Распакуй `DedZapret-portable.zip`.
+2) Запусти `DedZapret.exe` **от имени администратора**.
+3) Не удаляй папку `DedZapretData` рядом с exe — там настройки, логи и runtime.
+
+Если что-то падает при запуске — смотри `DedZapretData\data\logs\crash.log`.
+
+## Где что лежит
+
+```
+DedZapret/
+  DedZapret.exe
+  README_FIRST.txt
+  DedZapretData/
+    config.yaml
+    sources.yaml
+    runtime/
+      zapret/
+    data/
+      strategies/
+        builtin/
+        generated/
+        custom/        <- пользовательские стратегии
+      logs/            <- логи (в т.ч. crash.log)
+      state/           <- state.json
+      backups/
+      profiles/
+```
+
+## Возможности
+
+- Sync стратегий из upstream (`Flowseal/zapret-discord-youtube`, `StressOzz/Zapret-Manager`).
+- Генерация стратегий в `.../strategies/generated/` (не редактировать руками).
+- Пользовательские стратегии — в `.../strategies/custom/`.
+- Поддержка наборов: Discord **Dv1–Dv17**, YouTube **Yv1–Yv4**, игры **Gv1–Gv4**.
+- Тестирование стратегий, pin top5.
+- TG WS Proxy (Go/Rust), DNS-over-HTTPS, hosts-блоки.
 
 ## Credits
 
@@ -35,9 +77,7 @@ Runtime в релизе поставляется **в комплекте** (port
 ## Релиз (.exe)
 
 Сборка делается через GitHub Actions на Windows (PyInstaller). См. `.github/workflows/build.yml`.
-
-Скачать готовую portable-сборку можно во вкладке **Releases**:
-https://github.com/norfolkavito-maker/Pupupu/releases
+В релиз кладутся 2 архива: portable и dev/source.
 
 ## Важно
 

@@ -11,6 +11,7 @@ class Paths:
     root: Path
     config_file: Path
     sources_file: Path
+    data_root: Path
     data_dir: Path
     state_file: Path
     logs_dir: Path
@@ -38,19 +39,21 @@ class Paths:
 
     @staticmethod
     def from_root(root: Path) -> "Paths":
-        data_dir = root / "data"
+        # Portable layout: keep all mutable user data inside DedZapretData.
+        data_root = root / "DedZapretData"
+        data_dir = data_root / "data"
         return Paths(
             root=root,
-            config_file=root / "config.yaml",
-            sources_file=root / "sources.yaml",
+            config_file=data_root / "config.yaml",
+            sources_file=data_root / "sources.yaml",
+            data_root=data_root,
             data_dir=data_dir,
-            state_file=data_dir / "state.json",
+            state_file=data_dir / "state" / "state.json",
             logs_dir=data_dir / "logs",
             cache_dir=data_dir / "cache",
             lists_dir=data_dir / "lists",
             upstreams_dir=data_dir / "upstreams",
-            # v0.2: runtime is bundled near project root.
-            runtime_dir=root / "runtime",
+            runtime_dir=data_root / "runtime",
             strategies_generated_dir=data_dir / "strategies" / "generated",
             strategies_builtin_dir=data_dir / "strategies" / "builtin",
             strategies_custom_dir=data_dir / "strategies" / "custom",
@@ -59,7 +62,9 @@ class Paths:
 
     def ensure_dirs(self) -> None:
         for d in [
+            self.data_root,
             self.data_dir,
+            self.state_file.parent,
             self.logs_dir,
             self.cache_dir,
             self.lists_dir,

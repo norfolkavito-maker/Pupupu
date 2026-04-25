@@ -65,7 +65,7 @@ class HostsManager:
     def backup(self) -> str:
         """Создает бэкап файла hosts."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_dir = Path(self.ctx.config.paths.backup_dir) / "hosts"
+        backup_dir = (self.ctx.paths.data_dir / "backups" / "hosts")
         backup_dir.mkdir(parents=True, exist_ok=True)
         
         backup_file = backup_dir / f"hosts_backup_{timestamp}.txt"

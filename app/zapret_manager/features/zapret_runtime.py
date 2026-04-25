@@ -6,9 +6,10 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from zapret_manager.core.app_context import AppContext
+if TYPE_CHECKING:
+    from zapret_manager.core.app_context import AppContext
 from zapret_manager.core.state import save_state
 from zapret_manager.strategies.composer import compose
 from zapret_manager.strategies.model import Strategy
@@ -20,7 +21,7 @@ from zapret_manager.utils.subprocessx import popen_detached, run
 log = logging.getLogger(__name__)
 
 
-def runtime_health(ctx: AppContext) -> dict[str, object]:
+def runtime_health(ctx: "AppContext") -> dict[str, object]:
     """Checks that bundled runtime exists and has required files.
 
     This project is designed to ship runtime *bundled* (portable). If runtime is
@@ -34,7 +35,7 @@ def runtime_health(ctx: AppContext) -> dict[str, object]:
     windivert_dll = (rt / "WinDivert.dll")
     windivert_sys = (rt / "WinDivert64.sys")
     blockcheck_cmd = _find_first(rt, ["blockcheck.cmd"])
-    fake_dir = Path(ctx.config.paths.fake_files_dir)
+    fake_dir = ctx.paths.runtime_dir / "zapret" / "files" / "fake"
 
     ok = True
     problems: list[str] = []
@@ -66,7 +67,7 @@ def runtime_health(ctx: AppContext) -> dict[str, object]:
     }
 
 
-def require_runtime_ok(ctx: AppContext) -> None:
+def require_runtime_ok(ctx: "AppContext") -> None:
     h = runtime_health(ctx)
     if bool(h.get("ok")):
         return
@@ -77,12 +78,12 @@ def require_runtime_ok(ctx: AppContext) -> None:
     raise RuntimeError(msg)
 
 
-def _runtime_root(ctx: AppContext) -> Path:
-    # runtime_dir from config is relative to root
-    return (ctx.root / ctx.config.zapret.runtime_dir).resolve()
+def _runtime_root(ctx: "AppContext") -> Path:
+    # Portable layout: runtime lives inside DedZapretData/runtime
+    return ctx.paths.runtime_dir.resolve()
 
 
-def detect_runtime_files(ctx: AppContext) -> None:
+def detect_runtime_files(ctx: "AppContext") -> None:
     rt = _runtime_root(ctx)
     winws = _find_first(rt, ["winws.exe"])
     winws2 = _find_first(rt, ["winws2.exe"])
@@ -93,7 +94,7 @@ def detect_runtime_files(ctx: AppContext) -> None:
     save_state(ctx.paths.state_file, ctx.state)
 
 
-def uninstall_runtime(ctx: AppContext) -> None:
+def uninstall_runtime(ctx: "AppContext") -> None:
     """Not used in portable mode.
 
     Runtime is bundled with release. We deliberately do not provide UI actions
@@ -103,7 +104,7 @@ def uninstall_runtime(ctx: AppContext) -> None:
 
 
 def build_command(
-    ctx: AppContext,
+    ctx: "AppContext",
     strategy: Strategy,
     *,
     args_override: list[str] | None = None,
@@ -134,18 +135,18 @@ def build_command(
     for a in args:
         a = a.replace("{BIN}", str(exe.parent) + "\\")
         # {LISTS} -> runtime-provided lists (usually runtime/zapret/lists)
-        a = a.replace("{LISTS}", str(Path(ctx.config.paths.lists_dir).resolve()) + "\\")
+        a = a.replace("{LISTS}", str((ctx.paths.runtime_dir / "zapret" / "lists").resolve()) + "\\")
         # {MGR_LISTS} -> manager-owned lists (data/lists)
         a = a.replace("{MGR_LISTS}", str(ctx.paths.lists_dir.resolve()) + "\\")
         # Support both {FAKE:filename.bin} and legacy {FAKE} prefix.
-        a = a.replace("{FAKE}", str(Path(ctx.config.paths.fake_files_dir).resolve()) + "\\")
+        a = a.replace("{FAKE}", str((ctx.paths.runtime_dir / "zapret" / "files" / "fake").resolve()) + "\\")
         a = _resolve_fake(ctx, a)
         resolved.append(a)
     return [str(exe)] + resolved
 
 
 def start_zapret_interactive(
-    ctx: AppContext,
+    ctx: "AppContext",
     strategy: Strategy,
     youtube: Strategy | None = None,
     discord: Strategy | None = None,
@@ -196,7 +197,7 @@ def start_zapret_interactive(
     return warnings
 
 
-def stop_zapret(ctx: AppContext) -> None:
+def stop_zapret(ctx: "AppContext") -> None:
     if not is_windows():
         raise RuntimeError("This action is Windows-only")
     pid = ctx.state.zapret.pid
@@ -216,7 +217,7 @@ def _find_first(root: Path, names: list[str]) -> Path | None:
     return None
 
 
-def _resolve_fake(ctx: AppContext, token: str) -> str:
+def _resolve_fake(ctx: "AppContext", token: str) -> str:
     # token may include {FAKE:filename.bin}
     if "{FAKE:" not in token:
         return token

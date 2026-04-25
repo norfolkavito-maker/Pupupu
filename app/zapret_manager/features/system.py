@@ -14,6 +14,7 @@ from typing import Dict, List
 import requests
 
 from zapret_manager.core.app_context import AppContext
+from zapret_manager.core.paths import Paths
 from zapret_manager.utils.fsx import safe_extract_zip
 from zapret_manager.utils.platform import is_admin, is_windows
 
@@ -41,7 +42,12 @@ class FirewallManager:
             return False
             
         try:
-            winws_path = self.ctx.config.zapret.winws_path
+            from zapret_manager.features.zapret_runtime import detect_runtime_files
+
+            detect_runtime_files(self.ctx)
+            winws_path = self.ctx.state.runtime.winws_path or ""
+            if not winws_path:
+                raise RuntimeError("winws.exe not found in bundled runtime")
             _run_text_command(
                 [
                     "netsh",
@@ -207,7 +213,7 @@ class TgProxyManager:
         
     def check_proxy_exists(self) -> bool:
         """Проверяет наличие TG WS Proxy."""
-        proxy_path = Path(self.ctx.config.paths.strategies_dir) / "tgws-proxy"
+        proxy_path = self.ctx.paths.runtime_dir / "tg" / "tgws-proxy"
         return (proxy_path / "tgws-proxy.exe").exists() or \
                (proxy_path / "wsproxy.exe").exists()
                
@@ -217,7 +223,7 @@ class TgProxyManager:
             return False
             
         try:
-            proxy_path = Path(self.ctx.config.paths.strategies_dir) / "tgws-proxy"
+            proxy_path = self.ctx.paths.runtime_dir / "tg" / "tgws-proxy"
             exe_path = proxy_path / "tgws-proxy.exe"
             
             if not exe_path.exists():
@@ -333,8 +339,9 @@ class SystemInfo:
 
 def check_windivert() -> Dict[str, bool]:
     """Проверяет наличие WinDivert."""
-    # v0.2: runtime is expected at runtime/zapret (configurable via config.yaml).
-    bundle_path = Path(".\\runtime\\zapret")
+    # v0.3.1 portable layout: runtime lives in DedZapretData/runtime/zapret
+    # NOTE: This helper is legacy; runtime detection uses zapret_runtime.runtime_health.
+    bundle_path = (Paths.detect_root() / "DedZapretData" / "runtime" / "zapret").resolve()
     result = {
         "windivert_dll_exists": (bundle_path / "WinDivert.dll").exists(),
         "windivert_sys_exists": (bundle_path / "WinDivert64.sys").exists(),
@@ -453,7 +460,7 @@ def flush_dns() -> bool:
 
 
 def backup(ctx: AppContext) -> Path:
-    backup_dir = Path(ctx.config.paths.backup_dir)
+    backup_dir = ctx.paths.data_dir / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     archive = backup_dir / f"zapret_manager_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secrets.token_hex(4)}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
