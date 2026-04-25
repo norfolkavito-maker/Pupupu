@@ -23,6 +23,19 @@ def _write_crash_log(text: str) -> Path | None:
 
 if __name__ == "__main__":
     try:
+        # Setup logging as early as possible to capture admin-check decisions.
+        try:
+            from zapret_manager.core.log import setup_logging
+            from zapret_manager.core.paths import Paths
+
+            _root = Paths.detect_root()
+            _paths = Paths.from_root(_root)
+            _paths.ensure_dirs()
+            setup_logging(_paths.logs_dir / "zapret_manager.log")
+        except Exception:
+            # Logging will be configured later in AppContext.bootstrap.
+            pass
+
         # Must be before any privileged actions and before UI starts.
         from zapret_manager.utils.platform import ensure_admin_or_relaunch
 
