@@ -21,24 +21,51 @@ from zapret_manager.utils.subprocessx import popen_detached, run
 log = logging.getLogger(__name__)
 
 
+def _find_first_dir(root: Path, names: list[str]) -> Path | None:
+    for name in names:
+        for p in root.rglob(name):
+            if p.is_dir():
+                return p
+    return None
+
+
+def _runtime_fake_dir(ctx: "AppContext") -> Path:
+    zr = zapret_root(ctx)
+    preferred = zr / "files" / "fake"
+    if preferred.exists():
+        return preferred
+    found = _find_first_dir(zr, ["fake"]) if zr.exists() else None
+    return found or preferred
+
+
+def _runtime_lists_dir(ctx: "AppContext") -> Path:
+    zr = zapret_root(ctx)
+    preferred = zr / "lists"
+    if preferred.exists():
+        return preferred
+    found = _find_first_dir(zr, ["lists"]) if zr.exists() else None
+    return found or preferred
+
+
 def runtime_health(ctx: "AppContext") -> dict[str, object]:
     """Checks that bundled runtime exists and has required files.
 
-    This project is designed to ship runtime *bundled* (portable). If runtime is
-    missing, user should re-download/re-extract the release.
+    Core bypass readiness requires winws.exe and WinDivert files. Extra assets
+    such as fake/list/blockcheck are reported as problems but do not make the
+    whole runtime unusable, because some strategies can still start without
+    blockcheck and some bundles have slightly different asset layouts.
     """
     rt = _runtime_root(ctx)
     zr = zapret_root(ctx)
 
-    # We search for exe recursively to be robust.
     winws = _find_first(zr, ["winws.exe"]) if zr.exists() else None
     winws2 = _find_first(zr, ["winws2.exe"]) if zr.exists() else None
 
     windivert_dll = zr / "WinDivert.dll"
     windivert_sys = zr / "WinDivert64.sys"
     blockcheck_cmd = _find_first(zr, ["blockcheck.cmd"]) if zr.exists() else None
-    fake_dir = zr / "files" / "fake"
-    lists_dir = zr / "lists"
+    fake_dir = _runtime_fake_dir(ctx)
+    lists_dir = _runtime_lists_dir(ctx)
 
     ok = True
     problems: list[str] = []
@@ -59,7 +86,6 @@ def runtime_health(ctx: "AppContext") -> dict[str, object]:
         ok = False
         problems.append("WinDivert64.sys not found")
     if not blockcheck_cmd:
-        # Not critical for bypass itself, but useful.
         problems.append("blockcheck.cmd not found")
     if not fake_dir.exists():
         problems.append(f"fake files dir not found: {fake_dir}")
@@ -103,15 +129,14 @@ def runtime_diagnostics_text(ctx: "AppContext") -> str:
     lines.append(f"runtime root: {rt} ({okflag(rt)})")
     lines.append(f"zapret root:  {zr} ({okflag(zr)})")
     lines.append("")
-    # Key files
     winws = Path(str(h.get("winws") or "")) if h.get("winws") else (zr / "winws.exe")
     lines.append(f"winws.exe:        {winws} ({okflag(winws)})")
     wdd = Path(str(h.get("windivert_dll") or (zr / 'WinDivert.dll')))
     wds = Path(str(h.get("windivert_sys") or (zr / 'WinDivert64.sys')))
     lines.append(f"WinDivert.dll:    {wdd} ({okflag(wdd)})")
     lines.append(f"WinDivert64.sys:  {wds} ({okflag(wds)})")
-    fake_dir = Path(str(h.get("fake_dir") or (zr / 'files' / 'fake')))
-    lists_dir = Path(str(h.get("lists_dir") or (zr / 'lists')))
+    fake_dir = Path(str(h.get("fake_dir") or _runtime_fake_dir(ctx)))
+    lists_dir = Path(str(h.get("lists_dir") or _runtime_lists_dir(ctx)))
     lines.append(f"fake dir:         {fake_dir} ({okflag(fake_dir)})")
     lines.append(f"lists dir:        {lists_dir} ({okflag(lists_dir)})")
     bc = Path(str(h.get("blockcheck") or (zr / 'blockcheck' / 'blockcheck.cmd')))
@@ -124,7 +149,9 @@ def runtime_diagnostics_text(ctx: "AppContext") -> str:
             lines.append(f"- {p}")
 
         lines.append("\nWhat to do:")
-        lines.append("- Your portable bundle must contain: DedZapretData\\runtime\\zapret\\...")
+        lines.append("- Core start needs winws.exe + WinDivert.dll + WinDivert64.sys.")
+        lines.append("- Some strategies also need files/fake and lists assets.")
+        lines.append("- blockcheck is optional for normal start, but needed for blockcheck menu.")
         lines.append("- Re-download/re-extract the release, or copy zapret-win-bundle files into:")
         lines.append(f"  {zr}")
 
@@ -143,7 +170,6 @@ def require_runtime_ok(ctx: "AppContext") -> None:
 
 
 def _runtime_root(ctx: "AppContext") -> Path:
-    # Portable layout: runtime lives inside DedZapretData/runtime
     return ctx.paths.runtime_dir.resolve()
 
 
@@ -160,11 +186,6 @@ def detect_runtime_files(ctx: "AppContext") -> None:
 
 
 def uninstall_runtime(ctx: "AppContext") -> None:
-    """Not used in portable mode.
-
-    Runtime is bundled with release. We deliberately do not provide UI actions
-    that delete it.
-    """
     raise RuntimeError("Runtime uninstall is disabled (portable bundle ships runtime).")
 
 
@@ -196,15 +217,15 @@ def build_command(
         games_profile=ctx.state.zapret.games_profile,
     )
 
+    fake_dir = _runtime_fake_dir(ctx)
+    lists_dir = _runtime_lists_dir(ctx)
+
     resolved: list[str] = []
     for a in args:
         a = a.replace("{BIN}", str(exe.parent) + "\\")
-        # {LISTS} -> runtime-provided lists (usually runtime/zapret/lists)
-        a = a.replace("{LISTS}", str((zapret_root(ctx) / "lists").resolve()) + "\\")
-        # {MGR_LISTS} -> manager-owned lists (data/lists)
+        a = a.replace("{LISTS}", str(lists_dir.resolve()) + "\\")
         a = a.replace("{MGR_LISTS}", str(ctx.paths.lists_dir.resolve()) + "\\")
-        # Support both {FAKE:filename.bin} and legacy {FAKE} prefix.
-        a = a.replace("{FAKE}", str((zapret_root(ctx) / "files" / "fake").resolve()) + "\\")
+        a = a.replace("{FAKE}", str(fake_dir.resolve()) + "\\")
         a = _resolve_fake(ctx, a)
         resolved.append(a)
     return [str(exe)] + resolved
@@ -283,7 +304,6 @@ def _find_first(root: Path, names: list[str]) -> Path | None:
 
 
 def _resolve_fake(ctx: "AppContext", token: str) -> str:
-    # token may include {FAKE:filename.bin}
     if "{FAKE:" not in token:
         return token
     rt = _runtime_root(ctx)
