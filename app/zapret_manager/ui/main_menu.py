@@ -4,9 +4,7 @@ import logging
 
 from zapret_manager.core.app_context import AppContext
 from zapret_manager.core.state import save_state
-from zapret_manager.features.doh import PROFILES
 from zapret_manager.features.system import quic_rule_exists
-from zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
 from zapret_manager.features.zapret_runtime import (
     detect_runtime_files,
     runtime_health,
@@ -24,7 +22,6 @@ from zapret_manager.ui.menus import (
     test_menu,
     tg_menu,
 )
-from zapret_manager.features.key_setup import key_setup
 from zapret_manager.utils.console import C, ask, clear, pause
 from zapret_manager import __version__
 
@@ -47,8 +44,12 @@ def _status_lines(ctx: AppContext) -> list[str]:
     else:
         lines.append(f"{C.YELLOW}Zapret:{C.RESET} {C.RED}остановлен{C.RESET}")
 
-    if ctx.state.zapret.selected_strategy:
-        lines.append(f"{C.YELLOW}Стратегия:{C.RESET} {C.CYAN}{ctx.state.zapret.selected_strategy}{C.RESET}")
+    strategy = ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy
+    if strategy:
+        lines.append(f"{C.YELLOW}Стратегия:{C.RESET} {C.CYAN}{strategy}{C.RESET}")
+    else:
+        lines.append(f"{C.YELLOW}Стратегия:{C.RESET} {C.RED}не выбрана{C.RESET}")
+
     if ctx.state.zapret.discord_profile:
         lines.append(f"{C.YELLOW}Discord профиль:{C.RESET} {C.CYAN}{ctx.state.zapret.discord_profile}{C.RESET}")
     if ctx.state.zapret.games_profile:
@@ -96,14 +97,14 @@ def run_main_menu(ctx: AppContext) -> int:
                     print(f"\n{C.GREEN}Zapret остановлен.{C.RESET}\n")
                     pause()
                 else:
-                    # Load selected strategy from generated/custom
                     st = _load_selected_strategy(ctx)
                     if not st:
-                        print(f"\n{C.RED}Стратегия не выбрана. Зайди в меню стратегий (2).{C.RESET}\n")
-                        pause()
+                        st = _ask_strategy_before_start(ctx)
+                    if not st:
                         continue
                     start_zapret_interactive(ctx, st)
-                    print(f"\n{C.GREEN}Zapret запущен.{C.RESET}\n")
+                    print(f"\n{C.GREEN}Zapret запущен.{C.RESET}")
+                    print(f"{C.YELLOW}Стратегия:{C.RESET} {st.name}\n")
                     pause()
             elif choice == "2":
                 strategies_menu(ctx)
@@ -129,17 +130,76 @@ def run_main_menu(ctx: AppContext) -> int:
             pause()
 
 
-def _load_selected_strategy(ctx: AppContext):
-    name = (ctx.state.zapret.selected_strategy or "").strip()
-    if not name:
-        return None
-    for st in (
+def _all_strategies(ctx: AppContext):
+    return (
         list_strategies(ctx.paths.strategies_builtin_dir)
         + list_strategies(ctx.paths.strategies_generated_dir)
         + list_strategies(ctx.paths.strategies_custom_dir)
-    ):
+    )
+
+
+def _load_selected_strategy(ctx: AppContext):
+    name = (ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy or "").strip()
+    if not name:
+        return None
+    for st in _all_strategies(ctx):
         if st.name == name:
             return st
+    return None
+
+
+def _find_strategy_by_name(ctx: AppContext, name: str):
+    for st in _all_strategies(ctx):
+        if st.name.lower() == name.lower():
+            return st
+    return None
+
+
+def _ask_strategy_before_start(ctx: AppContext):
+    clear()
+    print(f"{C.MAGENTA}Запуск Zapret{C.RESET}\n")
+    print(f"{C.YELLOW}Активная стратегия не выбрана.{C.RESET}")
+    print("Перед запуском нужно выбрать стратегию.\n")
+    print(f"{C.CYAN}1){C.RESET} Использовать рекомендуемую base v9")
+    print(f"{C.CYAN}2){C.RESET} Открыть меню стратегий")
+    print(f"{C.CYAN}3){C.RESET} Показать доступные стратегии")
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return None
+    if c == "1":
+        st = _find_strategy_by_name(ctx, "v9")
+        if not st:
+            print(f"\n{C.RED}v9 не найдена. Сделай sync стратегий или выбери другую стратегию.{C.RESET}\n")
+            pause()
+            return None
+        ctx.state.zapret.base_strategy = st.name
+        ctx.state.zapret.selected_strategy = st.name
+        save_state(ctx.paths.state_file, ctx.state)
+        return st
+    if c == "2":
+        strategies_menu(ctx)
+        return _load_selected_strategy(ctx)
+    if c == "3":
+        strategies = _all_strategies(ctx)
+        if not strategies:
+            print(f"\n{C.RED}Стратегий нет. Сделай sync в системном меню или меню тестов.{C.RESET}\n")
+            pause()
+            return None
+        clear()
+        print(f"{C.MAGENTA}Доступные стратегии{C.RESET}\n")
+        for i, st in enumerate(strategies, start=1):
+            print(f"{i:03d}) {st.name} {C.DIM}({st.kind}/{st.engine}){C.RESET}")
+        s = ask(f"\n{C.YELLOW}Номер стратегии:{C.RESET} ").strip()
+        if not s.isdigit():
+            return None
+        idx = int(s)
+        if not (1 <= idx <= len(strategies)):
+            return None
+        st = strategies[idx - 1]
+        ctx.state.zapret.base_strategy = st.name
+        ctx.state.zapret.selected_strategy = st.name
+        save_state(ctx.paths.state_file, ctx.state)
+        return st
     return None
 
 
