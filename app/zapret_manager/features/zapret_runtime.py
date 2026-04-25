@@ -265,8 +265,12 @@ def build_command(
     resolved: list[str] = []
     for a in args:
         a = a.replace("{BIN}", str(exe.parent) + "\\")
-        a = a.replace("{LISTS}", str(ctx.paths.lists_dir.resolve()) + "\\")
+        # {LISTS} -> runtime-provided lists (usually runtime/zapret/lists)
+        a = a.replace("{LISTS}", str(Path(ctx.config.paths.lists_dir).resolve()) + "\\")
+        # {MGR_LISTS} -> manager-owned lists (data/lists)
         a = a.replace("{MGR_LISTS}", str(ctx.paths.lists_dir.resolve()) + "\\")
+        # Support both {FAKE:filename.bin} and legacy {FAKE} prefix.
+        a = a.replace("{FAKE}", str(Path(ctx.config.paths.fake_files_dir).resolve()) + "\\")
         a = _resolve_fake(ctx, a)
         resolved.append(a)
     return [str(exe)] + resolved

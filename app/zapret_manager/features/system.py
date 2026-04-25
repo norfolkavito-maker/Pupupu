@@ -333,11 +333,12 @@ class SystemInfo:
 
 def check_windivert() -> Dict[str, bool]:
     """Проверяет наличие WinDivert."""
-    bundle_path = Path(".\\zapret-win-bundle")
+    # v0.2: runtime is expected at runtime/zapret (configurable via config.yaml).
+    bundle_path = Path(".\\runtime\\zapret")
     result = {
         "windivert_dll_exists": (bundle_path / "WinDivert.dll").exists(),
         "windivert_sys_exists": (bundle_path / "WinDivert64.sys").exists(),
-        "winws_exists": (bundle_path / "winws.exe").exists()
+        "winws_exists": (bundle_path / "winws.exe").exists(),
     }
     return result
 

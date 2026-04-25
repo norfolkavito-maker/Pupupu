@@ -18,7 +18,10 @@ def run_blockcheck(ctx: AppContext, *, variant: str = "1") -> None:
     stop_zapret(ctx)
     d = _blockcheck_dir(ctx)
     if not d.exists():
-        raise RuntimeError("blockcheck directory not found in runtime. Install zapret-win-bundle first.")
+        raise RuntimeError(
+            "blockcheck directory not found in runtime. "
+            "Put runtime into runtime/zapret (or install/update runtime in menu)."
+        )
 
     script = d / ("blockcheck2.cmd" if variant == "2" else "blockcheck.cmd")
     if not script.exists():

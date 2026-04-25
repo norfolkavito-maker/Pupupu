@@ -48,7 +48,7 @@ def sync_zapret_runtime(ctx: AppContext) -> None:
     save_state(ctx.paths.state_file, ctx.state)
 
 
-def sync_flowseal(ctx: AppContext) -> int:
+def sync_flowseal(ctx: AppContext, *, generated_dir: Path | None = None) -> int:
     sources = load_sources(ctx.paths.sources_file)
     src = sources.get("flowseal")
     if not isinstance(src, RepoZipSource):
@@ -58,14 +58,13 @@ def sync_flowseal(ctx: AppContext) -> int:
     sync_repo_zip(src, dest_dir=dest, cache_dir=ctx.paths.cache_dir, app_state=ctx.state)
 
     # regenerate strategies
-    count = import_flowseal_strategies(
-        flowseal_root=dest, generated_dir=ctx.paths.strategies_generated_dir
-    )
+    out_dir = generated_dir or ctx.paths.strategies_generated_dir
+    count = import_flowseal_strategies(flowseal_root=dest, generated_dir=out_dir)
     save_state(ctx.paths.state_file, ctx.state)
     return count
 
 
-def sync_stressozz_strategies(ctx: AppContext) -> int:
+def sync_stressozz_strategies(ctx: AppContext, *, generated_dir: Path | None = None) -> int:
     sources = load_sources(ctx.paths.sources_file)
     src = sources.get("stress_ozz_manager")
     if not isinstance(src, RawUrlSource):
@@ -78,19 +77,21 @@ def sync_stressozz_strategies(ctx: AppContext) -> int:
     script_text = script_path.read_text(encoding="utf-8", errors="replace")
 
     count = 0
+    out_dir = generated_dir or ctx.paths.strategies_generated_dir
+
     count += import_v_strategies_from_script(
         script_text=script_text,
-        generated_dir=ctx.paths.strategies_generated_dir,
+        generated_dir=out_dir,
         upstream_name="stressozz",
     )
     count += import_liststryou(
         list_text=script_text,
-        generated_dir=ctx.paths.strategies_generated_dir,
+        generated_dir=out_dir,
         upstream_name="stressozz",
     )
     count += import_dv_strategies_from_script(
         script_text=script_text,
-        generated_dir=ctx.paths.strategies_generated_dir,
+        generated_dir=out_dir,
         upstream_name="stressozz",
     )
 

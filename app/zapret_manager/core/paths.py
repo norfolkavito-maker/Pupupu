@@ -49,7 +49,8 @@ class Paths:
             cache_dir=data_dir / "cache",
             lists_dir=data_dir / "lists",
             upstreams_dir=data_dir / "upstreams",
-            runtime_dir=data_dir / "runtime",
+            # v0.2: runtime is bundled near project root.
+            runtime_dir=root / "runtime",
             strategies_generated_dir=data_dir / "strategies" / "generated",
             strategies_builtin_dir=data_dir / "strategies" / "builtin",
             strategies_custom_dir=data_dir / "strategies" / "custom",

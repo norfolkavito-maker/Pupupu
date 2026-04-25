@@ -24,13 +24,16 @@ class AppSection:
 class ZapretSection:
     mode: str = "interactive"  # interactive|task
     service_name: str = "wowManagerAutostart"
-    runtime_dir: str = "data/runtime/zapret"
+    # NOTE: runtime_dir is relative to project root.
+    # v0.2: prefer bundled runtime at runtime/zapret (portable-friendly).
+    runtime_dir: str = "runtime/zapret"
     selected_strategy: str = ""
     discord_profile: str = ""
     games_profile: str = ""
-    bundle_path: str = ".\\zapret-win-bundle"
-    winws_path: str = ".\\zapret-win-bundle\\winws.exe"
-    blockcheck_path: str = ".\\zapret-win-bundle\\blockcheck\\blockcheck.cmd"
+    # Legacy compatibility (v0.1). Not required anymore if runtime_dir is set.
+    bundle_path: str = ".\\runtime\\zapret"
+    winws_path: str = ".\\runtime\\zapret\\winws.exe"
+    blockcheck_path: str = ".\\runtime\\zapret\\blockcheck\\blockcheck.cmd"
     active_strategy: str = "v7"
     run_mode: str = "process"
     autostart: bool = False
@@ -40,7 +43,8 @@ class ZapretSection:
 @dataclass(frozen=True)
 class PathsSection:
     hosts_file: str = r"C:\Windows\System32\drivers\etc\hosts"
-    fake_files_dir: str = ".\\zapret-win-bundle\\files\\fake"
+    # NOTE: manager-owned folders are in data/*, runtime-owned is in runtime/zapret.
+    fake_files_dir: str = ".\\runtime\\zapret\\files\\fake"
     lists_dir: str = ".\\data\\lists"
     strategies_dir: str = ".\\data\\strategies"
     logs_dir: str = ".\\data\\logs"
@@ -116,14 +120,14 @@ def load_config(path: Path) -> AppConfig:
     zapret = ZapretSection(
         mode=str(_get(data, ["zapret", "mode"], "interactive")),
         service_name=str(_get(data, ["zapret", "service_name"], "wowManagerAutostart")),
-        runtime_dir=str(_get(data, ["zapret", "runtime_dir"], "data/runtime/zapret")),
+        runtime_dir=str(_get(data, ["zapret", "runtime_dir"], "runtime/zapret")),
         selected_strategy=str(_get(data, ["zapret", "selected_strategy"], "")),
         discord_profile=str(_get(data, ["zapret", "discord_profile"], "")),
         games_profile=str(_get(data, ["zapret", "games_profile"], "")),
-        bundle_path=str(_get(data, ["zapret", "bundle_path"], ".\\zapret-win-bundle")),
-        winws_path=str(_get(data, ["zapret", "winws_path"], ".\\zapret-win-bundle\\winws.exe")),
+        bundle_path=str(_get(data, ["zapret", "bundle_path"], ".\\runtime\\zapret")),
+        winws_path=str(_get(data, ["zapret", "winws_path"], ".\\runtime\\zapret\\winws.exe")),
         blockcheck_path=str(
-            _get(data, ["zapret", "blockcheck_path"], ".\\zapret-win-bundle\\blockcheck\\blockcheck.cmd")
+            _get(data, ["zapret", "blockcheck_path"], ".\\runtime\\zapret\\blockcheck\\blockcheck.cmd")
         ),
         active_strategy=str(_get(data, ["zapret", "active_strategy"], "v7")),
         run_mode=str(_get(data, ["zapret", "run_mode"], "process")),
@@ -132,7 +136,7 @@ def load_config(path: Path) -> AppConfig:
     )
     paths = PathsSection(
         hosts_file=str(_get(data, ["paths", "hosts_file"], r"C:\Windows\System32\drivers\etc\hosts")),
-        fake_files_dir=str(_get(data, ["paths", "fake_files_dir"], ".\\zapret-win-bundle\\files\\fake")),
+        fake_files_dir=str(_get(data, ["paths", "fake_files_dir"], ".\\runtime\\zapret\\files\\fake")),
         lists_dir=str(_get(data, ["paths", "lists_dir"], ".\\data\\lists")),
         strategies_dir=str(_get(data, ["paths", "strategies_dir"], ".\\data\\strategies")),
         logs_dir=str(_get(data, ["paths", "logs_dir"], ".\\data\\logs")),

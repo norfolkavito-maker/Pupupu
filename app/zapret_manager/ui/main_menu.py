@@ -60,7 +60,7 @@ def run_main_menu(ctx: AppContext) -> int:
         clear()
         print(
             "╔═══════════════════════════════╗\n"
-            f"║ {C.BLUE}wow Manager (Windows){C.RESET}         ║\n"
+            f"║ {C.BLUE}DedZapret (Windows){C.RESET}            ║\n"
             "╚═══════════════════════════════╝\n"
             f" {C.DIM}v0.2.0{C.RESET}\n"
         )

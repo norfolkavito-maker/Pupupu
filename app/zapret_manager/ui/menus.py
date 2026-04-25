@@ -14,6 +14,7 @@ from zapret_manager.features.strategy_test import (
     TestResult,
     control_test,
     test_strategy,
+    test_session,
     write_results,
 )
 from zapret_manager.features.sysinfo import system_info_text
@@ -441,38 +442,41 @@ def _run_test_group(ctx: AppContext, *, group: str) -> None:
     results: list[TestResult] = [control_test(domains, parallel=parallel)]
 
     if group == "v":
-        strategies = _bases_v(ctx)
         out_name = "results_versions.txt"
+        ensure_flowseal = False
     elif group == "flowseal":
-        strategies = _bases_flowseal(ctx)
         out_name = "results_flowseal.txt"
+        ensure_flowseal = True
     else:
-        strategies = _bases_v(ctx) + _bases_flowseal(ctx)
         out_name = "results_all.txt"
-
-    if not strategies:
-        raise RuntimeError("Стратегий нет. Сделай sync.")
+        ensure_flowseal = True
 
     # run each base strategy with layers disabled
-    old = ctx.state.zapret
-    try:
-        ctx.state.zapret.youtube_layer = ""
-        ctx.state.zapret.discord_layer = ""
-        ctx.state.zapret.discord_script = ""
-        ctx.state.zapret.games_profile = ""
-        ctx.state.zapret.rkn_enabled = False
-        ctx.state.zapret.wssize_enabled = False
-        save_state(ctx.paths.state_file, ctx.state)
+    ctx.state.zapret.youtube_layer = ""
+    ctx.state.zapret.discord_layer = ""
+    ctx.state.zapret.discord_script = ""
+    ctx.state.zapret.games_profile = ""
+    ctx.state.zapret.rkn_enabled = False
+    ctx.state.zapret.wssize_enabled = False
+    save_state(ctx.paths.state_file, ctx.state)
 
-        for st in strategies:
-            print(f"\n{C.CYAN}Тест:{C.RESET} {st.name}")
-            results.append(test_strategy(ctx, st, domains, parallel=parallel))
-    finally:
-        # restore only selection fields (keep runtime/pid state handled by stop/start)
-        pass
-
-    out = write_results(ctx, results, out_name)
-    print(f"\n{C.GREEN}Готово:{C.RESET} {out}\n")
+    summary = test_session(
+        ctx,
+        group=group,
+        domains=domains,
+        out_name=out_name,
+        top_n=5,
+        ensure_runtime=True,
+        ensure_flowseal=ensure_flowseal,
+        ensure_stressozz=True,
+    )
+    out = summary.results_file
+    print(f"\n{C.GREEN}Готово:{C.RESET} {out}")
+    if summary.pinned:
+        print(f"\n{C.YELLOW}Закреплено (top 5) в custom:{C.RESET}")
+        for p in summary.pinned:
+            print(f"- {p}")
+    print()
     pause()
 
 
@@ -515,7 +519,11 @@ def _youtube_auto_test(ctx: AppContext) -> None:
         raise RuntimeError("Выбери базовую стратегию (меню стратегий).")
     yv_layers = [s for s in list_layers(ctx, "youtube") if s.name.lower().startswith("yv")]
     if not yv_layers:
-        raise RuntimeError("YouTube стратегий нет. Сделай sync StressOzz.")
+        # auto ensure packs
+        sync_stressozz_strategies(ctx)
+        yv_layers = [s for s in list_layers(ctx, "youtube") if s.name.lower().startswith("yv")]
+        if not yv_layers:
+            raise RuntimeError("YouTube стратегий нет даже после sync StressOzz.")
 
     print(f"\n{C.YELLOW}YouTube auto-test:{C.RESET} тестируем Yv на доменах googlevideo...\n")
     pause("Enter чтобы начать...")

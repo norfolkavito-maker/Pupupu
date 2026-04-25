@@ -8,13 +8,13 @@ app:
 zapret:
   mode: interactive  # interactive | task (autostart via schtasks)
   service_name: wowManagerAutostart
-  runtime_dir: data/runtime/zapret
+  runtime_dir: runtime/zapret
   selected_strategy: ""   # имя стратегии без расширения
   discord_profile: ""     # Dv1..DvN (опционально)
   games_profile: ""       # Gv1..Gv4 (опционально)
-  bundle_path: ".\\zapret-win-bundle"
-  winws_path: ".\\zapret-win-bundle\\winws.exe"
-  blockcheck_path: ".\\zapret-win-bundle\\blockcheck\\blockcheck.cmd"
+  bundle_path: ".\\runtime\\zapret"
+  winws_path: ".\\runtime\\zapret\\winws.exe"
+  blockcheck_path: ".\\runtime\\zapret\\blockcheck\\blockcheck.cmd"
   active_strategy: "v7"
   run_mode: "process"
   autostart: false
@@ -22,8 +22,8 @@ zapret:
 
 paths:
   hosts_file: "C:\\Windows\\System32\\drivers\\etc\\hosts"
-  fake_files_dir: ".\\zapret-win-bundle\\files\\fake"
-  lists_dir: ".\\zapret-win-bundle\\lists"
+  fake_files_dir: ".\\runtime\\zapret\\files\\fake"
+  lists_dir: ".\\data\\lists"
   strategies_dir: ".\\data\\strategies"
   logs_dir: ".\\data\\logs"
   backup_dir: ".\\data\\backup"
