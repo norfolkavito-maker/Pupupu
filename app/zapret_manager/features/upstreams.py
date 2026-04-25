@@ -37,15 +37,12 @@ def check_updates(ctx: AppContext) -> dict[str, tuple[bool, str]]:
 
 
 def sync_zapret_runtime(ctx: AppContext) -> None:
-    sources = load_sources(ctx.paths.sources_file)
-    src = sources.get("zapret_win_bundle")
-    if not isinstance(src, RepoZipSource):
-        raise RuntimeError("sources.yaml: zapret_win_bundle must be repo_zip")
+    """Disabled in portable mode.
 
-    dest = (ctx.root / ctx.config.zapret.runtime_dir).resolve()
-    sync_repo_zip(src, dest_dir=dest, cache_dir=ctx.paths.cache_dir, app_state=ctx.state)
-    # runtime paths will be detected lazily
-    save_state(ctx.paths.state_file, ctx.state)
+    Runtime must be shipped bundled inside the release. We do not download it
+    for the user.
+    """
+    raise RuntimeError("Runtime sync is disabled (portable bundle ships runtime).")
 
 
 def sync_flowseal(ctx: AppContext, *, generated_dir: Path | None = None) -> int:

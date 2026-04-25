@@ -11,15 +11,19 @@ import requests
 
 from zapret_manager.core.app_context import AppContext
 from zapret_manager.features.selection import find_strategy
-from zapret_manager.features.upstreams import (
-    sync_flowseal,
-    sync_stressozz_strategies,
-    sync_zapret_runtime,
-)
+from zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
 from zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret
 from zapret_manager.strategies.model import Strategy
 from zapret_manager.strategies.store import list_strategies, save_strategy
 from zapret_manager.utils.timex import now_utc_iso
+
+
+def _fetch_one(url: str, *, timeout_s: float) -> bool:
+    try:
+        r = requests.get(url, timeout=timeout_s)
+        return 200 <= r.status_code < 500
+    except Exception:
+        return False
 
 
 log = logging.getLogger(__name__)
@@ -47,27 +51,39 @@ class TestSessionSummary:
     results_file: Path
 
 
-def check_domains(domains: list[str], *, timeout_s: float = 3.0) -> tuple[int, int]:
-    ok = 0
-    total = 0
+def check_domains(domains: list[str], *, timeout_s: float = 3.0, parallel: int | None = None) -> tuple[int, int]:
+    cleaned: list[str] = []
     for d in domains:
         d = d.strip()
         if not d:
             continue
-        total += 1
         url = d if d.startswith("http://") or d.startswith("https://") else f"https://{d}"
-        try:
-            r = requests.get(url, timeout=timeout_s)
-            if 200 <= r.status_code < 500:
+        cleaned.append(url)
+
+    if not cleaned:
+        return 0, 0
+
+    # If parallel not requested, keep simple deterministic behavior.
+    if not parallel or parallel <= 1:
+        ok = 0
+        for url in cleaned:
+            if _fetch_one(url, timeout_s=timeout_s):
                 ok += 1
-        except Exception:
-            pass
-    return ok, total
+        return ok, len(cleaned)
+
+    # Parallel fetch: speeds up multi-domain test suites.
+    from concurrent.futures import ThreadPoolExecutor
+
+    ok = 0
+    with ThreadPoolExecutor(max_workers=int(parallel)) as ex:
+        for is_ok in ex.map(lambda u: _fetch_one(u, timeout_s=timeout_s), cleaned):
+            ok += 1 if is_ok else 0
+    return ok, len(cleaned)
 
 
 def control_test(domains: list[str], *, parallel: int | None = None) -> TestResult:
     """Legacy helper used by UI: baseline check without any strategy running."""
-    ok, total = check_domains(domains)
+    ok, total = check_domains(domains, parallel=parallel)
     return TestResult(strategy="control", ok=ok, total=total)
 
 
@@ -83,15 +99,12 @@ def _runtime_ready(ctx: AppContext) -> bool:
 
 
 def _ensure_runtime(ctx: AppContext) -> None:
+    # v0.3: runtime is bundled. We do not download it for the user.
     if _runtime_ready(ctx):
         return
-    log.info("runtime missing for tests -> syncing zapret runtime")
-    sync_zapret_runtime(ctx)
-    from zapret_manager.features.zapret_runtime import detect_runtime_files
-
-    detect_runtime_files(ctx)
-    if not _runtime_ready(ctx):
-        raise RuntimeError("Runtime is still missing after sync. Check sources.yaml/runtime layout.")
+    raise RuntimeError(
+        "Bundled runtime not found. Re-download/re-extract the release (expected runtime/zapret/*)."
+    )
 
 
 def _ensure_pack_strategies(ctx: AppContext, *, need_flowseal: bool, need_stressozz: bool) -> None:
@@ -166,7 +179,7 @@ def test_strategy(
         stop_zapret(ctx)
         start_zapret_interactive(ctx, strategy)
         time.sleep(settle_s)
-        ok, total = check_domains(domains)
+        ok, total = check_domains(domains, parallel=parallel)
         return TestResult(strategy=strategy.name, ok=ok, total=total)
     finally:
         stop_zapret(ctx)
@@ -272,6 +285,7 @@ def test_session(
     out_name: str,
     settle_s: float = 1.5,
     top_n: int = 5,
+    parallel: int | None = None,
     ensure_runtime: bool = True,
     ensure_flowseal: bool = False,
     ensure_stressozz: bool = False,
@@ -310,7 +324,7 @@ def test_session(
         results: list[TestResult] = []
         for st in session_strategies:
             log.info("testing strategy %s", st.name)
-            results.append(test_strategy(ctx, st, domains, settle_s=settle_s))
+            results.append(test_strategy(ctx, st, domains, settle_s=settle_s, parallel=parallel))
 
         results_file = write_results(ctx, results, out_name)
         pinned = _pin_top_results(ctx, results, tmp_dir, top_n=top_n)

@@ -1,12 +1,6 @@
 # Источники для синка/обновлений. Можно отключать/менять URL вручную.
 sources:
-  zapret_win_bundle:
-    kind: repo_zip
-    owner: bol-van
-    repo: zapret-win-bundle
-    ref: master
-    # Какая папка внутри архива считается runtime-ом
-    select_subdir: zapret-winws
+  # Runtime is bundled in release. Do not download runtime for user.
 
   flowseal:
     kind: repo_zip

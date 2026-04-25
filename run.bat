@@ -20,7 +20,7 @@ if errorlevel 1 exit /b 1
 pip install -r requirements.txt
 if errorlevel 1 exit /b 1
 
-echo [*] Running wow Manager...
+echo [*] Running DedZapret...
 set PYTHONPATH=%CD%\app
 python -m zapret_manager
 pause

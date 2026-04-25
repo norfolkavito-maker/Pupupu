@@ -1,13 +1,26 @@
-# wow Manager for Windows (portable)
+# DedZapret for Windows (portable)
 
-Консольный менеджер для Windows 10/11 x64 с меню, похожим на `Zapret-Manager.sh`, который:
+Консольный менеджер для Windows 10/11 x64 с меню, похожим на `Zapret-Manager.sh` (StressOzz), который:
 
-- умеет подтягивать upstream (`bol-van/zapret-win-bundle`, `Flowseal/zapret-discord-youtube`, `stressOzz/zapret-discord-youtube`);
+- умеет подтягивать upstream стратегий (`Flowseal/zapret-discord-youtube`, `StressOzz/Zapret-Manager`);
 - генерирует стратегии в `data/strategies/generated/` (не редактировать руками);
 - хранит пользовательские стратегии отдельно в `data/strategies/custom/`;
 - поддерживает Discord стратегии **Dv1–Dv17**, YouTube **Yv1–Yv4**, игры **Gv1–Gv4**;
 - запускает игры/программы с автозапуском `winws` и генерацией `.bat`/`.lnk`;
-- запускается из `run.bat` (dev-режим) или из `wowManager.exe` (релиз).
+- запускается из `run.bat` (dev-режим) или из `DedZapret.exe` (релиз).
+
+## Credits
+
+Этот проект вдохновлён и опирается на работы:
+
+- **bol-van / zapret** — `winws` + WinDivert и механики DPI desync (runtime движок).
+  https://github.com/bol-van/zapret
+- **StressOzz / Zapret-Manager** — UX/меню и набор стратегий (основа сценариев).
+  https://github.com/StressOzz/Zapret-Manager
+- **Flowseal / zapret-discord-youtube** — дополнительные стратегии.
+  https://github.com/Flowseal/zapret-discord-youtube
+
+Runtime в релизе поставляется **в комплекте** (portable), пользователю не нужно ничего скачивать отдельно.
 
 ## Запуск (dev)
 

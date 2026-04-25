@@ -42,7 +42,6 @@ from zapret_manager.features.upstreams import (
     check_updates,
     sync_flowseal,
     sync_stressozz_strategies,
-    sync_zapret_runtime,
 )
 from zapret_manager.features.hosts import (
     finland_discord_block,
@@ -466,6 +465,7 @@ def _run_test_group(ctx: AppContext, *, group: str) -> None:
         domains=domains,
         out_name=out_name,
         top_n=5,
+        parallel=parallel,
         ensure_runtime=True,
         ensure_flowseal=ensure_flowseal,
         ensure_stressozz=True,
@@ -631,7 +631,7 @@ def system_menu(ctx: AppContext) -> None:
         print(f"{C.YELLOW}QUIC block:{C.RESET} {'on' if quic_rule_exists() else 'off'}\n")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Системная информация{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Проверить обновления upstream{C.RESET}")
-        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Применить обновления (sync runtime/стратегии){C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Применить обновления (sync стратегий){C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Запустить blockcheck{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Запустить blockcheck2{C.RESET}")
         print(f"{C.CYAN}6){C.RESET} {C.GREEN}Вкл/выкл блокировку QUIC (UDP 443){C.RESET}")
@@ -641,6 +641,7 @@ def system_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}10){C.RESET} {C.GREEN}Бэкап (zip){C.RESET}")
         print(f"{C.CYAN}11){C.RESET} {C.GREEN}Восстановить из бэкапа (zip){C.RESET}")
         print(f"{C.CYAN}12){C.RESET} {C.GREEN}Обновить exclude + RKN list{C.RESET}")
+        print(f"{C.CYAN}13){C.RESET} {C.GREEN}Автонастройка «под ключ» (без переустановки){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -657,9 +658,7 @@ def system_menu(ctx: AppContext) -> None:
                 print()
                 pause()
             elif c == "3":
-                print(f"\n{C.MAGENTA}Sync runtime...{C.RESET}")
-                sync_zapret_runtime(ctx)
-                print(f"{C.MAGENTA}Sync Flowseal...{C.RESET}")
+                print(f"\n{C.MAGENTA}Sync Flowseal...{C.RESET}")
                 sync_flowseal(ctx)
                 print(f"{C.MAGENTA}Sync StressOzz...{C.RESET}")
                 sync_stressozz_strategies(ctx)
@@ -698,6 +697,13 @@ def system_menu(ctx: AppContext) -> None:
                 p1 = update_exclude(ctx)
                 p2 = update_rkn(ctx)
                 print(f"\n{C.GREEN}OK:{C.RESET} {p1}\n{C.GREEN}OK:{C.RESET} {p2}\n")
+                pause()
+            elif c == "13":
+                lines = key_setup(ctx)
+                print()
+                for ln in lines:
+                    print(ln)
+                print()
                 pause()
         except Exception as e:
             log.exception("system_menu failed")

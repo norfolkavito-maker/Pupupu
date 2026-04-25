@@ -8,8 +8,8 @@ from zapret_manager.core.state import save_state
 from zapret_manager.features.hosts import HostsManager
 from zapret_manager.features.lists import update_exclude
 from zapret_manager.features.selection import find_strategy
-from zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies, sync_zapret_runtime
-from zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret, uninstall_runtime
+from zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
+from zapret_manager.features.zapret_runtime import require_runtime_ok, start_zapret_interactive, stop_zapret
 from zapret_manager.features.hosts import load_blocks_from_file, set_block_enabled
 
 
@@ -19,18 +19,14 @@ log = logging.getLogger(__name__)
 def key_setup(ctx: AppContext) -> list[str]:
     """
     StressOzz-like "под ключ":
-    uninstall -> install -> v7 -> hosts all -> 50-stun4all -> Gv1 -> start.
+    sync strategies -> v7 -> hosts all -> 50-stun4all -> Gv1 -> start.
     """
     lines: list[str] = []
     state_backup = deepcopy(ctx.state)
     hosts_backup = HostsManager(ctx).backup()
     try:
+        require_runtime_ok(ctx)
         stop_zapret(ctx)
-        uninstall_runtime(ctx)
-        lines.append("runtime: uninstalled")
-
-        sync_zapret_runtime(ctx)
-        lines.append("runtime: installed/updated")
 
         sync_flowseal(ctx)
         sync_stressozz_strategies(ctx)

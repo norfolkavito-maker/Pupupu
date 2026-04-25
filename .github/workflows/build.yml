@@ -26,6 +26,19 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Fetch zapret-win-bundle runtime (for portable release)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path runtime\zapret | Out-Null
+          $zip = "zapret-win-bundle.zip"
+          Invoke-WebRequest -Uri "https://github.com/bol-van/zapret-win-bundle/archive/refs/heads/master.zip" -OutFile $zip
+          Expand-Archive -Force $zip -DestinationPath .
+          $src = Get-ChildItem -Directory | Where-Object { $_.Name -like "zapret-win-bundle-*" } | Select-Object -First 1
+          if (-not $src) { throw "cannot find extracted zapret-win-bundle dir" }
+          $sub = Join-Path $src.FullName "zapret-winws"
+          if (-not (Test-Path $sub)) { throw "cannot find zapret-winws subdir" }
+          Copy-Item -Recurse -Force (Join-Path $sub "*") runtime\zapret\
+
       - name: Run tests
         env:
           PYTHONPATH: app
@@ -34,17 +47,20 @@ jobs:
 
       - name: Build exe
         run: |
-          pyinstaller --noconfirm --clean --onefile --name wowManager --paths app app\zapret_manager\__main__.py
+          pyinstaller --noconfirm --clean --onefile --name DedZapret --paths app app\zapret_manager\__main__.py
 
       - name: Prepare portable bundle
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path bundle | Out-Null
-          Copy-Item -Force dist\wowManager.exe bundle\
+          Copy-Item -Force dist\DedZapret.exe bundle\
           Copy-Item -Force run.bat bundle\
           Copy-Item -Force config.yaml bundle\
           Copy-Item -Force sources.yaml bundle\
           Copy-Item -Force README.md bundle\
+          if (Test-Path runtime\zapret) {
+            Copy-Item -Recurse -Force runtime\zapret bundle\runtime\zapret
+          }
           if (Test-Path data\strategies\builtin) {
             Copy-Item -Recurse -Force data\strategies\builtin bundle\data\strategies\builtin
           }
@@ -52,5 +68,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wowManager-portable
+          name: DedZapret-portable
           path: bundle

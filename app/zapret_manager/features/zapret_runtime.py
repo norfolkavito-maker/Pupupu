@@ -20,191 +20,61 @@ from zapret_manager.utils.subprocessx import popen_detached, run
 log = logging.getLogger(__name__)
 
 
-class WinwsRunner:
-    """Класс для управления winws.exe процессом."""
-    
-    def __init__(self, ctx: AppContext):
-        self.ctx = ctx
-        self.process: Optional[subprocess.Popen] = None
-        
-    def check_bundle(self) -> dict:
-        """Проверяет наличие zapret-win-bundle и его компонентов."""
-        bundle_path = Path(self.ctx.config.zapret.bundle_path)
-        winws_path = Path(self.ctx.config.zapret.winws_path)
-        blockcheck_path = Path(self.ctx.config.zapret.blockcheck_path)
-        
-        windivert_dll = bundle_path / "WinDivert.dll"
-        windivert_sys = bundle_path / "WinDivert64.sys"
-        
-        result = {
-            "bundle_exists": bundle_path.exists(),
-            "winws_exists": winws_path.exists(),
-            "windivert_dll_exists": windivert_dll.exists(),
-            "windivert_sys_exists": windivert_sys.exists(),
-            "blockcheck_exists": blockcheck_path.exists(),
-            "fake_files_dir_exists": Path(self.ctx.config.paths.fake_files_dir).exists(),
-            "lists_dir_exists": Path(self.ctx.config.paths.lists_dir).exists(),
-        }
-        
-        return result
-        
-    def check_admin_rights(self) -> bool:
-        """Проверяет права администратора."""
-        if not is_windows():
-            return False
-        return is_admin()
-        
-    def start(self, strategy: Strategy, wait_time: int = 2) -> bool:
-        """Запускает winws.exe с указанной стратегией."""
-        if not is_windows():
-            raise RuntimeError("This action is Windows-only")
-        
-        if not self.check_admin_rights():
-            raise RuntimeError("Нужны права администратора (запусти от имени администратора).")
-            
-        if not self.check_bundle()["winws_exists"]:
-            raise RuntimeError("winws.exe не найден. Сначала установи zapret-win-bundle.")
-            
-        cmd = self._build_command(strategy)
-        
-        try:
-            self.process = subprocess.Popen(
-                cmd,
-                cwd=Path(self.ctx.config.zapret.bundle_path),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-                
-            # Обновляем состояние
-            self.ctx.state.zapret.running = True
-            self.ctx.state.zapret.mode = "interactive"
-            self.ctx.state.zapret.pid = self.process.pid
-            self.ctx.state.zapret.selected_strategy = strategy.name
-            save_state(self.ctx.paths.state_file, self.ctx.state)
-            
-            log.info(f"winws запущен с PID {self.process.pid}")
-            time.sleep(wait_time)  # Даем время на инициализацию
-            return True
-            
-        except Exception as e:
-            log.error(f"Ошибка запуска winws: {e}")
-            return False
-            
-    def stop(self) -> bool:
-        """Останавливает winws.exe."""
-        if not is_windows():
-            raise RuntimeError("This action is Windows-only")
-            
-        pid = self.ctx.state.zapret.pid
-        if not pid:
-            log.info("winws не запущен")
-            return True
-            
-        try:
-            # Останавливаем процесс
-            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], 
-                          check=False, capture_output=True)
-            
-            # Закрываем процесс, если он еще жив
-            if self.process and self.process.poll() is None:
-                self.process.terminate()
-                self.process.wait(timeout=5)
-                
-            # Обновляем состояние
-            self.ctx.state.zapret.running = False
-            self.ctx.state.zapret.pid = None
-            save_state(self.ctx.paths.state_file, self.ctx.state)
-            
-            log.info("winws остановлен")
-            return True
-            
-        except Exception as e:
-            log.error(f"Ошибка остановки winws: {e}")
-            return False
-            
-    def restart(self, strategy: Strategy) -> bool:
-        """Перезапускает winws.exe."""
-        log.info("Перезапуск winws...")
-        self.stop()
-        time.sleep(1)
-        return self.start(strategy)
-        
-    def get_status(self) -> dict:
-        """Получает текущий статус winws."""
-        pid = self.ctx.state.zapret.pid
-        running = False
-        
-        if pid:
-            try:
-                # Проверяем, существует ли процесс
-                result = subprocess.run(
-                    ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV"],
-                    capture_output=True, text=True
-                )
-                running = "winws.exe" in result.stdout
-            except Exception:
-                running = False
-                
-        return {
-            "running": running,
-            "pid": pid,
-            "active_strategy": self.ctx.state.zapret.selected_strategy,
-            "admin": self.check_admin_rights()
-        }
-        
-    def _build_command(self, strategy: Strategy) -> list[str]:
-        """Строит команду запуска для winws с учётом compose/оверлеев."""
-        winws_path = self.ctx.config.zapret.winws_path
-        lists_dir = self.ctx.config.paths.lists_dir
-        fake_files_dir = self.ctx.config.paths.fake_files_dir
-        
-        state = self.ctx.state.zapret
-        # Если есть активные слои/оверлеи — используем compose
-        if (
-            state.youtube_layer
-            or state.discord_layer
-            or state.discord_script
-            or state.games_profile
-            or state.rkn_enabled
-            or state.wssize_enabled
-        ):
-            from zapret_manager.features.selection import find_strategy
-            from zapret_manager.strategies.composer import compose
-            
-            youtube = find_strategy(self.ctx, state.youtube_layer, kind="youtube") if state.youtube_layer else None
-            discord = find_strategy(self.ctx, state.discord_layer, kind="discord") if state.discord_layer else None
-            
-            composed = compose(
-                base=strategy,
-                youtube=youtube,
-                discord=discord,
-                discord_script=state.discord_script,
-                games_profile=state.games_profile,
-                rkn_enabled=state.rkn_enabled,
-                wssize_enabled=state.wssize_enabled,
-            )
-            args = composed.args
-        else:
-            args = apply_overlays(
-                strategy.args,
-                discord_profile=state.discord_profile,
-                games_profile=state.games_profile,
-            )
-        
-        # Заменяем пути
-        resolved_args = []
-        for arg in args:
-            arg = arg.replace("{BIN}", os.path.dirname(winws_path) + "\\")
-            arg = arg.replace("{LISTS}", lists_dir + "\\")
-            arg = arg.replace("{FAKE}", fake_files_dir + "\\")
-            resolved_args.append(arg)
-            
-        return [winws_path] + resolved_args
-        
-    def get_start_command(self, strategy: Strategy) -> str:
-        """Возвращает строку команды запуска для отображения."""
-        cmd = self._build_command(strategy)
-        return " ".join(cmd)
+def runtime_health(ctx: AppContext) -> dict[str, object]:
+    """Checks that bundled runtime exists and has required files.
+
+    This project is designed to ship runtime *bundled* (portable). If runtime is
+    missing, user should re-download/re-extract the release.
+    """
+    rt = _runtime_root(ctx)
+    # common root for zapret-win-bundle layout is runtime/zapret
+    # but we search for exe recursively to be robust.
+    winws = _find_first(rt, ["winws.exe"])
+    winws2 = _find_first(rt, ["winws2.exe"])
+    windivert_dll = (rt / "WinDivert.dll")
+    windivert_sys = (rt / "WinDivert64.sys")
+    blockcheck_cmd = _find_first(rt, ["blockcheck.cmd"])
+    fake_dir = Path(ctx.config.paths.fake_files_dir)
+
+    ok = True
+    problems: list[str] = []
+
+    if not rt.exists():
+        ok = False
+        problems.append(f"runtime dir not found: {rt}")
+    if not winws:
+        ok = False
+        problems.append("winws.exe not found")
+    if not windivert_dll.exists():
+        ok = False
+        problems.append("WinDivert.dll not found")
+    if not windivert_sys.exists():
+        ok = False
+        problems.append("WinDivert64.sys not found")
+    if not blockcheck_cmd:
+        # Not critical for bypass itself, but useful.
+        problems.append("blockcheck.cmd not found")
+    if not fake_dir.exists():
+        problems.append(f"fake files dir not found: {fake_dir}")
+
+    return {
+        "ok": ok,
+        "runtime_dir": str(rt),
+        "winws": str(winws) if winws else "",
+        "winws2": str(winws2) if winws2 else "",
+        "problems": problems,
+    }
+
+
+def require_runtime_ok(ctx: AppContext) -> None:
+    h = runtime_health(ctx)
+    if bool(h.get("ok")):
+        return
+    problems = h.get("problems") or []
+    msg = "Bundled runtime is missing or broken. Re-download/re-extract the release."
+    if problems:
+        msg += "\nProblems:\n- " + "\n- ".join(str(x) for x in problems)
+    raise RuntimeError(msg)
 
 
 def _runtime_root(ctx: AppContext) -> Path:
@@ -224,14 +94,12 @@ def detect_runtime_files(ctx: AppContext) -> None:
 
 
 def uninstall_runtime(ctx: AppContext) -> None:
-    rt = _runtime_root(ctx)
-    if rt.exists():
-        shutil.rmtree(rt)
-    ctx.state.runtime.installed = False
-    ctx.state.runtime.runtime_path = str(rt)
-    ctx.state.runtime.winws_path = ""
-    ctx.state.runtime.winws2_path = ""
-    save_state(ctx.paths.state_file, ctx.state)
+    """Not used in portable mode.
+
+    Runtime is bundled with release. We deliberately do not provide UI actions
+    that delete it.
+    """
+    raise RuntimeError("Runtime uninstall is disabled (portable bundle ships runtime).")
 
 
 def build_command(
@@ -287,9 +155,12 @@ def start_zapret_interactive(
     if not is_admin():
         raise RuntimeError("Нужны права администратора (запусти от имени администратора).")
 
+    require_runtime_ok(ctx)
     detect_runtime_files(ctx)
     if not ctx.state.runtime.installed:
-        raise RuntimeError("Runtime не установлен. Сначала установи Zapret (пункт 1).")
+        raise RuntimeError(
+            "Runtime not detected. Re-download/re-extract the release (expected runtime/zapret/*)."
+        )
 
     warnings: list[str] = []
     args_override: list[str] | None = None
