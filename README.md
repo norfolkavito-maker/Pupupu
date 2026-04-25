@@ -36,6 +36,9 @@ Runtime в релизе поставляется **в комплекте** (port
 
 Сборка делается через GitHub Actions на Windows (PyInstaller). См. `.github/workflows/build.yml`.
 
+Скачать готовую portable-сборку можно во вкладке **Releases**:
+https://github.com/norfolkavito-maker/Pupupu/releases
+
 ## Важно
 
 - Для управления `winws`/WinDivert и редактирования `hosts` нужны права администратора.

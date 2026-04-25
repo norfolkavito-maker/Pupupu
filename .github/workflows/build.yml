@@ -12,6 +12,8 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -70,3 +72,15 @@ jobs:
         with:
           name: DedZapret-portable
           path: bundle
+
+      - name: Make portable zip
+        shell: pwsh
+        run: |
+          if (Test-Path DedZapret-portable.zip) { Remove-Item -Force DedZapret-portable.zip }
+          Compress-Archive -Path bundle\* -DestinationPath DedZapret-portable.zip
+
+      - name: Publish GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DedZapret-portable.zip
