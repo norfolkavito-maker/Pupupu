@@ -23,6 +23,10 @@ def _write_crash_log(text: str) -> Path | None:
 
 if __name__ == "__main__":
     try:
+        # Must be before any privileged actions and before UI starts.
+        from zapret_manager.utils.platform import ensure_admin_or_relaunch
+
+        ensure_admin_or_relaunch()
         raise SystemExit(main())
     except SystemExit:
         raise

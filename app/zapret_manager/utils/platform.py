@@ -6,6 +6,8 @@ import subprocess
 import sys
 from typing import Optional, Sequence
 
+import logging
+
 
 def _ps_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
@@ -24,6 +26,75 @@ def is_admin() -> bool:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
     except Exception:
         return False
+
+
+def relaunch_self_as_admin() -> bool:
+    """Try to re-launch current process elevated via UAC.
+
+    Returns True if ShellExecuteW succeeded (process spawned). If user cancels
+    UAC prompt, returns False.
+    """
+    if not is_windows():
+        return False
+    try:
+        import ctypes
+
+        frozen = bool(getattr(sys, "frozen", False))
+        exe = sys.executable
+
+        # Keep original args.
+        # NOTE: ShellExecuteW expects a single command-line string.
+        # For frozen exe: relaunch same exe with same argv.
+        # For dev runs: we don't try to elevate python invocation because env
+        # (venv/PYTHONPATH) may not be preserved. run.bat handles elevation.
+        if frozen:
+            params = " ".join(f'"{a}"' if " " in a else a for a in sys.argv[1:])
+        else:
+            return False
+        # 32 is SW_SHOW
+        rc = int(ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, params, None, 32))
+        # rc <= 32 indicates error. In some cases cancel may show as 1223.
+        if rc == 1223:
+            return False
+        return rc > 32
+    except Exception:
+        return False
+
+
+def ensure_admin_or_relaunch(*, message: str | None = None) -> None:
+    """Ensure current process has admin rights.
+
+    - If already admin: logs `Admin rights: yes`.
+    - If not admin: logs `Admin rights: no` and `Relaunch requested via UAC`,
+      prints a friendly message, attempts self-relaunch via UAC.
+      If user cancels UAC, exits with clear text.
+    """
+    log = logging.getLogger(__name__)
+    if not is_windows():
+        return
+
+    if is_admin():
+        log.info("Admin rights: yes")
+        return
+
+    log.info("Admin rights: no")
+    log.info("Relaunch requested via UAC")
+
+    if not message:
+        message = (
+            "Нужны права администратора. Сейчас появится запрос UAC.\n"
+            "Если вы нажмёте 'Нет', программа завершится."
+        )
+    print("\n" + message + "\n")
+
+    ok = relaunch_self_as_admin()
+    if ok:
+        # Exit current (non-elevated) instance.
+        raise SystemExit(0)
+
+    # User likely canceled UAC (or dev run without elevation).
+    print("\nЗапуск отменён пользователем (UAC) или запуск без прав.\n")
+    raise SystemExit(1)
 
 
 def run_as_admin(command: str | Sequence[str], wait: bool = True) -> Optional[int]:

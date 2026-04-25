@@ -49,7 +49,7 @@ jobs:
 
       - name: Build exe
         run: |
-          pyinstaller --noconfirm --clean --onefile --name DedZapret --paths app app\zapret_manager\__main__.py
+          pyinstaller --noconfirm --clean --onefile --uac-admin --name DedZapret --paths app app\zapret_manager\__main__.py
 
       - name: Prepare portable bundle
         shell: pwsh
