@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from app.zapret_manager.core.app_context import AppContext
+if TYPE_CHECKING:
+    from app.zapret_manager.core.app_context import AppContext
 
 
 @dataclass(frozen=True)
@@ -13,11 +15,17 @@ class DomainSet:
     rel_path: str
     description: str = ""
 
-    def file_path(self, ctx: AppContext) -> Path:
+    def file_path(self, ctx: "AppContext") -> Path:
         return (ctx.paths.data_dir / self.rel_path).resolve()
 
 
 DOMAIN_SETS: list[DomainSet] = [
+    DomainSet(
+        key="all",
+        title="All (все наборы)",
+        rel_path="tests/domains_all.txt",
+        description="Объединение всех наборов (default + youtube + cdn + amazon + discord + instagram + games).",
+    ),
     DomainSet(
         key="default",
         title="Default (общий набор)",
@@ -42,10 +50,28 @@ DOMAIN_SETS: list[DomainSet] = [
         rel_path="tests/domains_amazon.txt",
         description="amazon/primevideo/aws endpoints.",
     ),
+    DomainSet(
+        key="discord",
+        title="Discord",
+        rel_path="tests/domains_discord.txt",
+        description="discord.com и связанные домены.",
+    ),
+    DomainSet(
+        key="instagram",
+        title="Instagram / Meta",
+        rel_path="tests/domains_instagram.txt",
+        description="instagram + fbcdn/cdninstagram.",
+    ),
+    DomainSet(
+        key="games",
+        title="Games (общие игровые домены)",
+        rel_path="tests/domains_games.txt",
+        description="Набор доменов для диагностики игровых сервисов (best-effort).",
+    ),
 ]
 
 
-def ensure_domain_sets(ctx: AppContext) -> None:
+def ensure_domain_sets(ctx: "AppContext") -> None:
     """Create default domain set files if missing.
 
     Users can edit these files in DedZapretData without rebuilding the app.
@@ -55,6 +81,8 @@ def ensure_domain_sets(ctx: AppContext) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
 
     defaults: dict[str, str] = {
+        # NOTE: domains_all.txt is not created by default. "all" set is computed
+        # dynamically by combining other set files.
         "tests/domains_default.txt": "\n".join(
             [
                 "# Default domains (one per line). You can add/remove lines.",
@@ -112,6 +140,42 @@ def ensure_domain_sets(ctx: AppContext) -> None:
                 "",
             ]
         ),
+        "tests/domains_discord.txt": "\n".join(
+            [
+                "# Discord domains",
+                "https://discord.com/",
+                "https://discordapp.com/",
+                "https://discord.gg/",
+                "https://discord.media/",
+                "https://gateway.discord.gg/",
+                "",
+            ]
+        ),
+        "tests/domains_instagram.txt": "\n".join(
+            [
+                "# Instagram / Meta domains",
+                "https://instagram.com/",
+                "https://www.instagram.com/",
+                "https://cdninstagram.com/",
+                "https://fbcdn.net/",
+                "https://facebook.com/",
+                "",
+            ]
+        ),
+        "tests/domains_games.txt": "\n".join(
+            [
+                "# Games / gaming services (best-effort)",
+                "# NOTE: game connectivity is often UDP-only and can't be reliably checked by HTTP.",
+                "# Keep this list for auxiliary diagnostics.",
+                "https://store.steampowered.com/",
+                "https://steamcommunity.com/",
+                "https://api.steampowered.com/",
+                "https://epicgames.com/",
+                "https://www.epicgames.com/",
+                "https://origin.com/",
+                "",
+            ]
+        ),
     }
 
     for rel, content in defaults.items():
@@ -130,4 +194,20 @@ def read_domain_set_file(path: Path) -> list[str]:
         if not ln or ln.startswith("#"):
             continue
         out.append(ln)
+    return out
+
+
+def combine_domain_sets(ctx: "AppContext", keys: list[str]) -> list[str]:
+    """Combine multiple domain sets with deduplication, preserving order."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for key in keys:
+        ds = next((d for d in DOMAIN_SETS if d.key == key), None)
+        if not ds:
+            continue
+        for ln in read_domain_set_file(ds.file_path(ctx)):
+            if ln in seen:
+                continue
+            seen.add(ln)
+            out.append(ln)
     return out

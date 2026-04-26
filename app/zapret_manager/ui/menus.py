@@ -8,7 +8,7 @@ import yaml
 from app.zapret_manager.core.app_context import AppContext
 from app.zapret_manager.core.state import save_state
 from app.zapret_manager.features.blockcheck import run_blockcheck
-from app.zapret_manager.features.key_setup import key_setup
+from app.zapret_manager.features.key_setup import key_setup, key_setup_full_check
 from app.zapret_manager.features.lists import update_exclude, update_rkn
 from app.zapret_manager.features.selection import find_strategy, list_bases, list_layers
 from app.zapret_manager.features.strategy_test import (
@@ -19,7 +19,7 @@ from app.zapret_manager.features.strategy_test import (
     test_session,
     write_results,
 )
-from app.zapret_manager.features.test_sets import DOMAIN_SETS, read_domain_set_file
+from app.zapret_manager.features.test_sets import DOMAIN_SETS, read_domain_set_file, combine_domain_sets
 from app.zapret_manager.features.sysinfo import system_info_text
 from app.zapret_manager.features.system import (
     backup,
@@ -30,6 +30,7 @@ from app.zapret_manager.features.system import (
     restore,
     tcp_timestamps_disable,
     tcp_timestamps_enable,
+    show_tcp_timestamp_status,
 )
 from app.zapret_manager.features.tg_proxy import (
     install_go,
@@ -443,7 +444,12 @@ def test_menu(ctx: AppContext) -> None:
 def _domains_for_current_set(ctx: AppContext) -> list[str]:
     # Default behavior: use domains_default.txt if present.
     key = (ctx.state.tg.get("domain_set") or "default") if isinstance(ctx.state.tg, dict) else "default"
-    ds = next((d for d in DOMAIN_SETS if d.key == key), DOMAIN_SETS[0])
+    if key == "all":
+        # Combine all sets (excluding "all" itself).
+        keys = [d.key for d in DOMAIN_SETS if d.key != "all"]
+        domains = combine_domain_sets(ctx, keys)
+        return domains or [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
+    ds = next((d for d in DOMAIN_SETS if d.key == key), next((d for d in DOMAIN_SETS if d.key == "default"), DOMAIN_SETS[0]))
     domains = read_domain_set_file(ds.file_path(ctx))
     return domains or [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
 
@@ -475,7 +481,7 @@ def _run_control_test(ctx: AppContext) -> None:
     domains = _domains_for_current_set(ctx)
     r = control_test(domains, parallel=8)
     out = write_results(ctx, [r], "results_control.txt")
-    print(f"\n{C.GREEN}Control test:{C.RESET} {r.ok}/{r.total}\n{C.DIM}{out}{C.RESET}\n")
+    print(f"\n{C.GREEN}Control test:{C.RESET} {r.summary_text()}\n{C.DIM}{out}{C.RESET}\n")
     pause()
 
 
@@ -542,7 +548,7 @@ def _run_test_current(ctx: AppContext) -> None:
     domains = [u.url for u in prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)]
     r = test_strategy(ctx, base, domains, parallel=8)
     out = write_results(ctx, [r], "results_current.txt")
-    print(f"\n{C.GREEN}Результат:{C.RESET} {r.ok}/{r.total}\n{C.DIM}{out}{C.RESET}\n")
+    print(f"\n{C.GREEN}Результат:{C.RESET} {r.summary_text()}\n{C.DIM}{out}{C.RESET}\n")
     pause()
 
 
@@ -589,8 +595,8 @@ def _youtube_auto_test(ctx: AppContext) -> None:
         domains = _domains_for_current_set(ctx)
         if not domains:
             domains = [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
-        r = test_strategy(ctx, base, domains, parallel=4)
-        print(f"{C.YELLOW}Результат:{C.RESET} {r.ok}/{r.total}")
+        r = test_strategy(ctx, base, domains, youtube=yv, parallel=4)
+        print(f"{C.YELLOW}Результат:{C.RESET} {r.summary_text()}")
         if r.ok == r.total and r.total > 0:
             ans = ask("Enter=применить, N=дальше, S=стоп: ").strip().lower()
             if ans == "":
@@ -792,6 +798,8 @@ def _network_menu(ctx: AppContext) -> None:
         clear()
         print(f"{C.MAGENTA}Network{C.RESET}\n")
         print(f"{C.YELLOW}QUIC block:{C.RESET} {'on' if quic_rule_exists() else 'off'}\n")
+        print(f"{C.YELLOW}TCP timestamps:{C.RESET} {show_tcp_timestamp_status()}")
+        print()
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Вкл/выкл блокировку QUIC (UDP 443){C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}TCP timestamps: enabled{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}TCP timestamps: disabled{C.RESET}")
@@ -823,6 +831,7 @@ def _backup_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Бэкап (zip){C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Восстановить из бэкапа (zip){C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Автонастройка «под ключ» (без переустановки){C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Под ключ + полная проверка/подбор (мастер){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -838,6 +847,13 @@ def _backup_menu(ctx: AppContext) -> None:
                 pause()
         elif c == "3":
             lines = key_setup(ctx)
+            print()
+            for ln in lines:
+                print(ln)
+            print()
+            pause()
+        elif c == "4":
+            lines = key_setup_full_check(ctx)
             print()
             for ln in lines:
                 print(ln)

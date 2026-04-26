@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import socket
 import tempfile
 import time
 from dataclasses import dataclass, field
@@ -45,6 +46,17 @@ class DomainCheck:
     error: str = ""
     status_code: int | None = None
 
+    # Extended probes (best-effort). All of these can be None if probe was not
+    # executed or is not applicable.
+    resolved_ip: str = ""
+    dns_ok: bool | None = None
+    dns_ms: int | None = None
+    tcp_ok: bool | None = None
+    tcp_ms: int | None = None
+    ping_ok: bool | None = None
+    ping_ms: int | None = None
+    udp443: str = ""  # ok/fail/unknown/skip
+
     @property
     def status_text(self) -> str:
         if self.ok:
@@ -58,6 +70,22 @@ class TestResult:
     ok: int
     total: int
     checks: list[DomainCheck] = field(default_factory=list)
+
+    # Extended summary fields (best-effort).
+    dns_ok: int = 0
+    tcp_ok: int = 0
+    ping_ok: int = 0
+    udp_ok: int = 0
+
+    def summary_text(self) -> str:
+        # ok/total is HTTP result to preserve backward compatible display.
+        parts = [f"HTTP: {self.ok}/{self.total}"]
+        if self.total:
+            parts.append(f"TCP: {self.tcp_ok}/{self.total}")
+            parts.append(f"DNS: {self.dns_ok}/{self.total}")
+            parts.append(f"PING: {self.ping_ok}/{self.total}")
+            parts.append(f"UDP443: {self.udp_ok}/{self.total}")
+        return " | ".join(parts)
 
 
 @dataclass(frozen=True)
@@ -81,8 +109,97 @@ def _display_domain(url: str) -> str:
     return url.replace("https://", "").replace("http://", "").strip("/")
 
 
+def _host_for_probes(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.netloc:
+        return parsed.netloc
+    # handle raw host without scheme
+    return url.replace("https://", "").replace("http://", "").strip("/")
+
+
+def _dns_resolve(host: str) -> tuple[bool, str, int, str]:
+    start = time.perf_counter()
+    try:
+        infos = socket.getaddrinfo(host, None)
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        ip = ""
+        for fam, _socktype, _proto, _canon, sockaddr in infos:
+            if fam in (socket.AF_INET, socket.AF_INET6):
+                ip = sockaddr[0]
+                break
+        return (bool(ip), ip, elapsed_ms, "" if ip else "no ip")
+    except Exception as e:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return (False, "", elapsed_ms, type(e).__name__)
+
+
+def _tcp_connect(host: str, port: int, *, timeout_s: float) -> tuple[bool, int, str]:
+    start = time.perf_counter()
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            pass
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return True, elapsed_ms, ""
+    except Exception as e:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return False, elapsed_ms, type(e).__name__
+
+
+def _ping_host(host: str, *, timeout_ms: int = 1200) -> tuple[bool, int, str]:
+    # Best-effort and cross-platform.
+    from app.zapret_manager.utils.platform import is_windows
+    from app.zapret_manager.utils.subprocessx import run
+
+    start = time.perf_counter()
+    try:
+        if is_windows():
+            # -n 1 : single echo
+            # -w timeout in ms
+            r = run(["ping", "-n", "1", "-w", str(timeout_ms), host], check=False, capture=True)
+        else:
+            # macOS: -W is timeout in ms
+            r = run(["ping", "-c", "1", "-W", str(max(1, int(timeout_ms / 1000))), host], check=False, capture=True)
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        ok = r.code == 0
+        return ok, elapsed_ms, "" if ok else (r.err.strip() or "ping failed")
+    except Exception as e:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return False, elapsed_ms, type(e).__name__
+
+
+def _udp443_probe(ip: str, *, timeout_s: float = 1.0) -> tuple[str, str]:
+    """Best-effort QUIC/UDP indicator.
+
+    UDP reachability can't be reliably tested without protocol/response.
+    We return:
+      - ok: send did not error (still not a guarantee)
+      - fail: immediate socket error
+      - skip: no ip
+    """
+    if not ip:
+        return "skip", ""
+    try:
+        s = socket.socket(socket.AF_INET6 if ":" in ip else socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(timeout_s)
+        try:
+            s.connect((ip, 443))
+            s.send(b"\x00")
+        finally:
+            s.close()
+        return "ok", ""
+    except Exception as e:
+        return "fail", type(e).__name__
+
+
 def _fetch_one_detail(url: str, *, timeout_s: float) -> DomainCheck:
     display = _display_domain(url)
+    host = _host_for_probes(url)
+
+    dns_ok, ip, dns_ms, dns_err = _dns_resolve(host)
+    tcp_ok, tcp_ms, tcp_err = _tcp_connect(host, 443, timeout_s=timeout_s)
+    ping_ok, ping_ms, ping_err = _ping_host(host)
+    udp_status, udp_err = _udp443_probe(ip)
+
     start = time.perf_counter()
     try:
         # A normal GET is closer to real browser behavior than just opening TCP.
@@ -98,19 +215,83 @@ def _fetch_one_detail(url: str, *, timeout_s: float) -> DomainCheck:
             elapsed_ms=elapsed_ms,
             status_code=r.status_code,
             error="" if ok else f"http {r.status_code}",
+            resolved_ip=ip,
+            dns_ok=dns_ok,
+            dns_ms=dns_ms,
+            tcp_ok=tcp_ok,
+            tcp_ms=tcp_ms,
+            ping_ok=ping_ok,
+            ping_ms=ping_ms,
+            udp443=udp_status,
         )
     except requests.exceptions.Timeout:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return DomainCheck(display, url, False, elapsed_ms, error="timeout")
+        return DomainCheck(
+            display,
+            url,
+            False,
+            elapsed_ms,
+            error="timeout",
+            resolved_ip=ip,
+            dns_ok=dns_ok,
+            dns_ms=dns_ms,
+            tcp_ok=tcp_ok,
+            tcp_ms=tcp_ms,
+            ping_ok=ping_ok,
+            ping_ms=ping_ms,
+            udp443=udp_status,
+        )
     except requests.exceptions.SSLError:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return DomainCheck(display, url, False, elapsed_ms, error="tls error")
+        return DomainCheck(
+            display,
+            url,
+            False,
+            elapsed_ms,
+            error="tls error",
+            resolved_ip=ip,
+            dns_ok=dns_ok,
+            dns_ms=dns_ms,
+            tcp_ok=tcp_ok,
+            tcp_ms=tcp_ms,
+            ping_ok=ping_ok,
+            ping_ms=ping_ms,
+            udp443=udp_status,
+        )
     except requests.exceptions.ConnectionError:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return DomainCheck(display, url, False, elapsed_ms, error="connection error")
+        return DomainCheck(
+            display,
+            url,
+            False,
+            elapsed_ms,
+            error="connection error",
+            resolved_ip=ip,
+            dns_ok=dns_ok,
+            dns_ms=dns_ms,
+            tcp_ok=tcp_ok,
+            tcp_ms=tcp_ms,
+            ping_ok=ping_ok,
+            ping_ms=ping_ms,
+            udp443=udp_status,
+        )
     except Exception as e:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        return DomainCheck(display, url, False, elapsed_ms, error=type(e).__name__)
+        return DomainCheck(
+            display,
+            url,
+            False,
+            elapsed_ms,
+            error=type(e).__name__,
+            resolved_ip=ip,
+            dns_ok=dns_ok,
+            dns_ms=dns_ms,
+            tcp_ok=tcp_ok,
+            tcp_ms=tcp_ms,
+            ping_ok=ping_ok,
+            ping_ms=ping_ms,
+            udp443=udp_status,
+        )
 
 
 def _format_domain_row(index: int, total: int, check: DomainCheck) -> str:
@@ -120,6 +301,15 @@ def _format_domain_row(index: int, total: int, check: DomainCheck) -> str:
         extra += f", HTTP {check.status_code}"
     if check.error:
         extra += f", {check.error}"
+    # Extended probes
+    if check.dns_ok is not None:
+        extra += f", DNS {'OK' if check.dns_ok else 'FAIL'}"
+    if check.tcp_ok is not None:
+        extra += f", TCP443 {'OK' if check.tcp_ok else 'FAIL'}"
+    if check.ping_ok is not None:
+        extra += f", PING {'OK' if check.ping_ok else 'FAIL'}"
+    if check.udp443:
+        extra += f", UDP443 {check.udp443}"
     return f"[{index:02d}/{total:02d}] {check.domain:<42} {status:<5} {extra}"
 
 
@@ -168,7 +358,20 @@ def control_test(domains: list[str], *, parallel: int | None = None) -> TestResu
     """Legacy helper used by UI: baseline check without any strategy running."""
     checks = check_domains_detailed(domains, parallel=parallel, progress=False)
     ok = sum(1 for c in checks if c.ok)
-    return TestResult(strategy="control", ok=ok, total=len(checks), checks=checks)
+    dns_ok = sum(1 for c in checks if c.dns_ok)
+    tcp_ok = sum(1 for c in checks if c.tcp_ok)
+    ping_ok = sum(1 for c in checks if c.ping_ok)
+    udp_ok = sum(1 for c in checks if c.udp443 == "ok")
+    return TestResult(
+        strategy="control",
+        ok=ok,
+        total=len(checks),
+        checks=checks,
+        dns_ok=dns_ok,
+        tcp_ok=tcp_ok,
+        ping_ok=ping_ok,
+        udp_ok=udp_ok,
+    )
 
 
 def _runtime_ready(ctx: AppContext) -> bool:
@@ -252,7 +455,7 @@ def _print_strategy_header(strategy: Strategy, domains: list[str]) -> None:
 
 def _print_strategy_footer(result: TestResult) -> None:
     print("-" * 78)
-    print(f"Итог {result.strategy}: {result.ok}/{result.total} OK")
+    print(f"Итог {result.strategy}: {result.summary_text()}")
     failed = [c for c in result.checks if not c.ok]
     if failed:
         print("Провалились:")
@@ -266,6 +469,8 @@ def test_strategy(
     strategy: Strategy,
     domains: list[str],
     *,
+    youtube: Strategy | None = None,
+    discord: Strategy | None = None,
     settle_s: float = 1.5,
     parallel: int | None = None,
     show_progress: bool = True,
@@ -279,11 +484,24 @@ def test_strategy(
         stop_zapret(ctx)
         if show_progress:
             _print_strategy_header(strategy, domains)
-        start_zapret_interactive(ctx, strategy)
+        start_zapret_interactive(ctx, strategy, youtube=youtube, discord=discord)
         time.sleep(settle_s)
         checks = check_domains_detailed(domains, parallel=parallel, progress=show_progress)
         ok = sum(1 for c in checks if c.ok)
-        result = TestResult(strategy=strategy.name, ok=ok, total=len(checks), checks=checks)
+        dns_ok = sum(1 for c in checks if c.dns_ok)
+        tcp_ok = sum(1 for c in checks if c.tcp_ok)
+        ping_ok = sum(1 for c in checks if c.ping_ok)
+        udp_ok = sum(1 for c in checks if c.udp443 == "ok")
+        result = TestResult(
+            strategy=strategy.name,
+            ok=ok,
+            total=len(checks),
+            checks=checks,
+            dns_ok=dns_ok,
+            tcp_ok=tcp_ok,
+            ping_ok=ping_ok,
+            udp_ok=udp_ok,
+        )
         if show_progress:
             _print_strategy_footer(result)
         return result
@@ -456,13 +674,13 @@ def write_results(ctx: AppContext, results: list[TestResult], file_name: str) ->
     lines.append("Summary")
     lines.append("-------")
     for r in sorted(results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True):
-        lines.append(f"{r.strategy} -> {r.ok}/{r.total}")
+        lines.append(f"{r.strategy} -> {r.summary_text()}")
     lines.append("")
     lines.append("Details")
     lines.append("-------")
     for r in sorted(results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True):
         lines.append("")
-        lines.append(f"[{r.strategy}] {r.ok}/{r.total}")
+        lines.append(f"[{r.strategy}] {r.summary_text()}")
         for i, c in enumerate(r.checks, start=1):
             lines.append(_format_domain_row(i, r.total, c))
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")

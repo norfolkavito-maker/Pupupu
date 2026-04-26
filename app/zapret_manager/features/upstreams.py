@@ -19,6 +19,19 @@ from app.zapret_manager.upstreams.sync import check_update, sync_repo_zip
 log = logging.getLogger(__name__)
 
 
+def _extract_var(script_text: str, var: str) -> str | None:
+    # Very small parser: VAR="..." or VAR='...'
+    import re
+
+    m = re.search(rf"^{re.escape(var)}=(.+)$", script_text, flags=re.MULTILINE)
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
+        raw = raw[1:-1]
+    return raw.strip() or None
+
+
 def get_sources(ctx: AppContext) -> dict[str, object]:
     return load_sources(ctx.paths.sources_file)
 
@@ -80,11 +93,18 @@ def sync_stressozz_strategies(ctx: AppContext, *, generated_dir: Path | None = N
         generated_dir=out_dir,
         upstream_name="stressozz",
     )
-    count += import_liststryou(
-        list_text=script_text,
-        generated_dir=out_dir,
-        upstream_name="stressozz",
-    )
+
+    # YouTube pack (YvNN) lives in a separate ListStrYou file in StressOzz repo.
+    # Zapret-Manager.sh contains STR_URL pointing to that file.
+    try:
+        list_url = _extract_var(script_text, "STR_URL") or "https://raw.githubusercontent.com/StressOzz/Zapret-Manager/main/ListStrYou"
+        list_path = dest / "ListStrYou"
+        download(list_url, list_path)
+        list_text = list_path.read_text(encoding="utf-8", errors="replace")
+        count += import_liststryou(list_text=list_text, generated_dir=out_dir, upstream_name="stressozz")
+    except Exception as e:
+        # Do not fail whole sync: v-strategies and Dv-strategies are still useful.
+        log.warning("failed to import StressOzz ListStrYou youtube pack: %s", e)
     count += import_dv_strategies_from_script(
         script_text=script_text,
         generated_dir=out_dir,
