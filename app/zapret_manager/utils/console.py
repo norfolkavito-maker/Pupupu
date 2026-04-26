@@ -4,6 +4,11 @@ import os
 import sys
 
 from app.zapret_manager.core.diagnostics import diag_log
+from app.zapret_manager.ui.colors import C
+
+# Backward-compatible alias for older UI code / bundled builds.
+# Some modules historically imported `c` (lowercase) as a color holder.
+c = C
 
 
 

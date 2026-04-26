@@ -5,9 +5,6 @@ from pathlib import Path
 import os
 import sys
 
-from app.zapret_manager.main import main
-
-
 def _write_crash_log(text: str) -> Path | None:
     try:
         from app.zapret_manager.core.paths import Paths
@@ -25,6 +22,10 @@ def _write_crash_log(text: str) -> Path | None:
 
 if __name__ == "__main__":
     try:
+        # Defer imports so we can capture ImportError into crash.log even when
+        # module imports fail inside PyInstaller bundle.
+        from app.zapret_manager.main import main
+
         # Setup logging as early as possible to capture admin-check decisions.
         try:
             from app.zapret_manager.core.log import setup_logging
