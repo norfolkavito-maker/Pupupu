@@ -14,6 +14,10 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      # Use tag name as VERSION for releases. For branch builds keep a stable
+      # name so artifacts don't spam versioned files.
+      VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'snapshot' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,25 +96,27 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DedZapret-portable
+          name: DedZapret-portable-${{ env.VERSION }}
           path: bundle
 
       - name: Make portable zip
         shell: pwsh
         run: |
-          if (Test-Path DedZapret-portable.zip) { Remove-Item -Force DedZapret-portable.zip }
-          Compress-Archive -Path bundle\DedZapret -DestinationPath DedZapret-portable.zip
+          $out = "DedZapret-portable-${{ env.VERSION }}.zip"
+          if (Test-Path $out) { Remove-Item -Force $out }
+          Compress-Archive -Path bundle\DedZapret -DestinationPath $out
 
       - name: Make dev/source zip
         shell: pwsh
         run: |
-          if (Test-Path DedZapret-dev-source.zip) { Remove-Item -Force DedZapret-dev-source.zip }
-          Compress-Archive -Path app,tests,requirements.txt,run.bat,config.yaml,sources.yaml,README.md -DestinationPath DedZapret-dev-source.zip
+          $out = "DedZapret-dev-source-${{ env.VERSION }}.zip"
+          if (Test-Path $out) { Remove-Item -Force $out }
+          Compress-Archive -Path app,tests,requirements.txt,run.bat,config.yaml,sources.yaml,README.md -DestinationPath $out
 
       - name: Publish GitHub Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            DedZapret-portable.zip
-            DedZapret-dev-source.zip
+            DedZapret-portable-${{ env.VERSION }}.zip
+            DedZapret-dev-source-${{ env.VERSION }}.zip
