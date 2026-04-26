@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import yaml
+
 from app.zapret_manager.core.app_context import AppContext
 from app.zapret_manager.core.state import save_state
 from app.zapret_manager.features.blockcheck import run_blockcheck
@@ -17,6 +19,7 @@ from app.zapret_manager.features.strategy_test import (
     test_session,
     write_results,
 )
+from app.zapret_manager.features.test_sets import DOMAIN_SETS, read_domain_set_file
 from app.zapret_manager.features.sysinfo import system_info_text
 from app.zapret_manager.features.system import (
     backup,
@@ -393,20 +396,24 @@ def test_menu(ctx: AppContext) -> None:
         clear()
         have_results = any(ctx.paths.results_dir.glob("results_*.txt"))
         print(f"{C.MAGENTA}Меню тестирования стратегий{C.RESET}\n")
+        print(f"{C.CYAN}0){C.RESET} {C.GREEN}Control test (без zapret){C.RESET}")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Тестировать стратегии v{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Тестировать стратегии Flowseal{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Тестировать v и Flowseal стратегии{C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Тестировать текущую стратегию{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Тестировать стратегии по домену{C.RESET}")
-        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Тестировать стратегии для YouTube{C.RESET}")
+        print(f"{C.CYAN}6){C.RESET} {C.GREEN}YouTube auto-test (Yv){C.RESET}")
+        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Выбрать набор доменов{C.RESET} (Default/YouTube/CDN/Amazon)")
         if have_results:
             print(f"{C.CYAN}9){C.RESET} {C.GREEN}Результаты тестирования стратегий{C.RESET}")
-            print(f"{C.CYAN}0){C.RESET} {C.GREEN}Удалить результаты тестирования{C.RESET}")
+            print(f"{C.CYAN}D){C.RESET} {C.GREEN}Удалить результаты тестирования{C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
         try:
-            if c == "1":
+            if c == "0":
+                _run_control_test(ctx)
+            elif c == "1":
                 _run_test_group(ctx, group="v")
             elif c == "2":
                 _run_test_group(ctx, group="flowseal")
@@ -418,9 +425,11 @@ def test_menu(ctx: AppContext) -> None:
                 _run_test_by_domain(ctx)
             elif c == "6":
                 _youtube_auto_test(ctx)
+            elif c == "7":
+                _choose_domain_set(ctx)
             elif c == "9" and have_results:
                 _show_results(ctx)
-            elif c == "0" and have_results:
+            elif c.lower() == "d" and have_results:
                 for p in ctx.paths.results_dir.glob("results_*.txt"):
                     p.unlink(missing_ok=True)  # type: ignore[arg-type]
                 print(f"\n{C.GREEN}Удалено.{C.RESET}\n")
@@ -429,6 +438,45 @@ def test_menu(ctx: AppContext) -> None:
             log.exception("test_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
             pause()
+
+
+def _domains_for_current_set(ctx: AppContext) -> list[str]:
+    # Default behavior: use domains_default.txt if present.
+    key = (ctx.state.tg.get("domain_set") or "default") if isinstance(ctx.state.tg, dict) else "default"
+    ds = next((d for d in DOMAIN_SETS if d.key == key), DOMAIN_SETS[0])
+    domains = read_domain_set_file(ds.file_path(ctx))
+    return domains or [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
+
+
+def _choose_domain_set(ctx: AppContext) -> None:
+    clear()
+    print(f"{C.MAGENTA}Наборы доменов{C.RESET}\n")
+    cur = (ctx.state.tg.get("domain_set") or "default") if isinstance(ctx.state.tg, dict) else "default"
+    for i, ds in enumerate(DOMAIN_SETS, start=1):
+        mark = "*" if ds.key == cur else " "
+        print(f"{mark} {i}) {ds.title}")
+        if ds.description:
+            print(f"    {C.DIM}{ds.description}{C.RESET}")
+        print(f"    file: {ds.file_path(ctx)}")
+    s = ask(f"\n{C.YELLOW}Выберите набор:{C.RESET} ").strip()
+    if not s.isdigit():
+        return
+    idx = int(s)
+    if not (1 <= idx <= len(DOMAIN_SETS)):
+        return
+    if isinstance(ctx.state.tg, dict):
+        ctx.state.tg["domain_set"] = DOMAIN_SETS[idx - 1].key
+        save_state(ctx.paths.state_file, ctx.state)
+    print(f"\n{C.GREEN}Выбрано:{C.RESET} {DOMAIN_SETS[idx - 1].title}\n")
+    pause()
+
+
+def _run_control_test(ctx: AppContext) -> None:
+    domains = _domains_for_current_set(ctx)
+    r = control_test(domains, parallel=8)
+    out = write_results(ctx, [r], "results_control.txt")
+    print(f"\n{C.GREEN}Control test:{C.RESET} {r.ok}/{r.total}\n{C.DIM}{out}{C.RESET}\n")
+    pause()
 
 
 def _bases_v(ctx: AppContext):
@@ -440,7 +488,8 @@ def _bases_flowseal(ctx: AppContext):
 
 
 def _run_test_group(ctx: AppContext, *, group: str) -> None:
-    urls = prepare_urls(include_suite=True)
+    base_urls = _domains_for_current_set(ctx)
+    urls = prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)
     domains = [u.url for u in urls]
     parallel = 8
     results: list[TestResult] = [control_test(domains, parallel=parallel)]
@@ -488,8 +537,9 @@ def _run_test_group(ctx: AppContext, *, group: str) -> None:
 def _run_test_current(ctx: AppContext) -> None:
     base = find_strategy(ctx, ctx.state.zapret.base_strategy, kind="base")
     if not base:
-        raise RuntimeError("Базовая стратегия не выбрана.")
-    domains = [u.url for u in prepare_urls(include_suite=True)]
+        raise RuntimeError("Базовая стратегия не выбрана (выбери в меню стратегий).")
+    base_urls = _domains_for_current_set(ctx)
+    domains = [u.url for u in prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)]
     r = test_strategy(ctx, base, domains, parallel=8)
     out = write_results(ctx, [r], "results_current.txt")
     print(f"\n{C.GREEN}Результат:{C.RESET} {r.ok}/{r.total}\n{C.DIM}{out}{C.RESET}\n")
@@ -535,7 +585,11 @@ def _youtube_auto_test(ctx: AppContext) -> None:
 
     for yv in yv_layers:
         print(f"\n{C.CYAN}Тест:{C.RESET} {yv.name}")
-        r = test_strategy(ctx, base, DEFAULT_TEST_DOMAINS, parallel=4)
+        # Use youtube pack file if user selected it; fallback to DEFAULT_TEST_DOMAINS.
+        domains = _domains_for_current_set(ctx)
+        if not domains:
+            domains = [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
+        r = test_strategy(ctx, base, domains, parallel=4)
         print(f"{C.YELLOW}Результат:{C.RESET} {r.ok}/{r.total}")
         if r.ok == r.total and r.total > 0:
             ans = ask("Enter=применить, N=дальше, S=стоп: ").strip().lower()
@@ -648,6 +702,12 @@ def system_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}12){C.RESET} {C.GREEN}Обновить exclude + RKN list{C.RESET}")
         print(f"{C.CYAN}13){C.RESET} {C.GREEN}Автонастройка «под ключ» (без переустановки){C.RESET}")
         print(f"{C.CYAN}14){C.RESET} {C.GREEN}Проверить runtime{C.RESET}")
+        diag_on = bool(getattr(ctx.config, "diagnostics", None) and ctx.config.diagnostics.enabled)
+        print(
+            f"{C.CYAN}15){C.RESET} {C.GREEN}Diagnostics:{C.RESET} "
+            + (f"{C.GREEN}ON{C.RESET}" if diag_on else f"{C.DIM}OFF{C.RESET}")
+            + f" {C.DIM}(включится после перезапуска){C.RESET}"
+        )
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -722,10 +782,36 @@ def system_menu(ctx: AppContext) -> None:
                         "внутри должна быть папка DedZapretData\\runtime\\zapret\\ с winws/WinDivert.\n"
                     )
                 pause()
+            elif c == "15":
+                _toggle_diagnostics_in_config(ctx)
+                pause()
         except Exception as e:
             log.exception("system_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
             pause()
+
+
+def _toggle_diagnostics_in_config(ctx: AppContext) -> None:
+    """Toggle diagnostics.enabled in DedZapretData/config.yaml.
+
+    Note: diagnostics session recorder is created at bootstrap, so this takes
+    effect after restart.
+    """
+    p = ctx.paths.config_file
+    data = {}
+    if p.exists():
+        data = yaml.safe_load(p.read_text(encoding="utf-8", errors="replace")) or {}
+    diag = data.get("diagnostics") if isinstance(data, dict) else None
+    if not isinstance(diag, dict):
+        diag = {}
+        if isinstance(data, dict):
+            data["diagnostics"] = diag
+    cur = bool(diag.get("enabled", False))
+    diag["enabled"] = not cur
+    p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    state = "ON" if diag["enabled"] else "OFF"
+    print(f"\n{C.GREEN}Diagnostics теперь: {state}{C.RESET}")
+    print(f"{C.YELLOW}Важно:{C.RESET} вступит в силу после перезапуска DedZapret.\n")
 
 
 def _restart_if_running(ctx: AppContext) -> None:

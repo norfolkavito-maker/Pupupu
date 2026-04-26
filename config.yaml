@@ -42,3 +42,13 @@ doh:
   profile: default
   listen_addr: 127.0.0.1
   listen_port: 5053
+
+diagnostics:
+  enabled: false
+  record_console_io: true
+  record_subprocess: true
+  max_text_len: 8000
+  redact_paths: false
+  reporting:
+    mode: github_issue
+    github_repo: norfolkavito-maker/Pupupu

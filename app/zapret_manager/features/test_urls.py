@@ -28,8 +28,25 @@ DEFAULT_DOMAINS = [
 ]
 
 
-def prepare_urls(*, include_suite: bool = True, timeout_s: int = 15) -> list[UrlCheck]:
-    urls: list[str] = list(DEFAULT_DOMAINS)
+def prepare_urls(
+    *,
+    base_urls: list[str] | None = None,
+    include_default: bool = True,
+    include_suite: bool = True,
+    timeout_s: int = 15,
+) -> list[UrlCheck]:
+    """Prepare list of URLs to check.
+
+    - base_urls: extra URLs provided by user (e.g. from DedZapretData/data/tests/*.txt)
+    - include_default: include built-in DEFAULT_DOMAINS
+    - include_suite: include external suite.v2.json (best-effort)
+    """
+
+    urls: list[str] = []
+    if base_urls:
+        urls.extend(base_urls)
+    if include_default:
+        urls.extend(DEFAULT_DOMAINS)
     if include_suite:
         try:
             r = requests.get(RAW_SUITE_URL, timeout=timeout_s)

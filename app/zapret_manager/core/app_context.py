@@ -50,6 +50,12 @@ class AppContext:
         set_global_recorder(rec)
 
         ctx = AppContext(root=root, paths=paths, config=config, state=state, diagnostics=rec)
+        try:
+            from app.zapret_manager.features.test_sets import ensure_domain_sets
+
+            ensure_domain_sets(ctx)
+        except Exception:
+            pass
         # Ensure bundled runtime exists. (Portable app should ship with runtime.)
         try:
             from app.zapret_manager.features.zapret_runtime import require_runtime_ok
