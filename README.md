@@ -83,6 +83,28 @@ Runtime в релизе поставляется **в комплекте** (port
 
 См. [CHANGELOG.md](CHANGELOG.md).
 
+## Диагностическая сессия (тотальный лог)
+
+Можно включить режим, который записывает **все взаимодействия** (ввод в меню + запуск процессов/команд) в файл сессии и на выходе предлагает сформировать zip-отчёт.
+
+В `DedZapretData/config.yaml`:
+
+```yaml
+diagnostics:
+  enabled: true
+  record_console_io: true
+  record_subprocess: true
+  max_text_len: 8000
+  redact_paths: false
+  reporting:
+    mode: github_issue
+    github_repo: norfolkavito-maker/Pupupu
+```
+
+Файлы:
+- `DedZapretData/data/logs/session_*.jsonl`
+- `DedZapretData/data/logs/report_*.zip` (создаётся после подтверждения на выходе)
+
 ## Важно
 
 - Для управления `winws`/WinDivert и редактирования `hosts` нужны права администратора.

@@ -4,6 +4,8 @@ import logging
 import subprocess
 from dataclasses import dataclass
 
+from app.zapret_manager.core.diagnostics import diag_log
+
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ def run(
     timeout: int | None = None,
 ) -> CmdResult:
     log.info("run: %s", args)
+    diag_log("process.run", "subprocessx", {"args": args, "cwd": cwd, "timeout": timeout, "capture": capture})
     p = subprocess.run(
         args,
         check=False,
@@ -35,12 +38,23 @@ def run(
         errors="replace",
     )
     if check and p.returncode != 0:
+        diag_log(
+            "process.error",
+            "subprocessx",
+            {"args": args, "code": p.returncode, "stderr": p.stderr or "", "stdout": p.stdout or ""},
+        )
         raise RuntimeError(f"Command failed ({p.returncode}): {args}\n{p.stderr}")
+    diag_log(
+        "process.result",
+        "subprocessx",
+        {"args": args, "code": p.returncode, "stdout": p.stdout or "", "stderr": p.stderr or ""},
+    )
     return CmdResult(code=p.returncode, out=p.stdout or "", err=p.stderr or "")
 
 
 def popen_detached(args: list[str], *, cwd: str | None = None) -> subprocess.Popen:
     log.info("popen: %s", args)
+    diag_log("process.popen", "subprocessx", {"args": args, "cwd": cwd})
     # On Windows create new process group to allow taskkill by PID.
     creationflags = 0
     try:

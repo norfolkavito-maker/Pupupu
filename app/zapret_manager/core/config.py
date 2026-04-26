@@ -88,6 +88,27 @@ class AppConfig:
     network: NetworkSection = field(default_factory=NetworkSection)
     game_launcher: GameLauncherSection = field(default_factory=GameLauncherSection)
     doh: DoHSection = field(default_factory=DoHSection)
+    diagnostics: "DiagnosticsSection" = field(default_factory=lambda: DiagnosticsSection())
+
+
+@dataclass(frozen=True)
+class DiagnosticsReportingSection:
+    mode: str = "github_issue"  # github_issue
+    # Repo issues page. We will open it with prefilled template.
+    github_repo: str = "norfolkavito-maker/Pupupu"
+
+
+@dataclass(frozen=True)
+class DiagnosticsSection:
+    enabled: bool = False
+    # If enabled, record ALL UI interactions + subprocess calls into jsonl.
+    record_console_io: bool = True
+    record_subprocess: bool = True
+    # safety limits
+    max_text_len: int = 8000
+    # if true, do not store full absolute paths in session log
+    redact_paths: bool = False
+    reporting: DiagnosticsReportingSection = field(default_factory=DiagnosticsReportingSection)
 
 
 def _get(d: dict[str, Any], path: list[str], default: Any) -> Any:
@@ -172,5 +193,26 @@ def load_config(path: Path) -> AppConfig:
         listen_addr=str(_get(data, ["doh", "listen_addr"], "127.0.0.1")),
         listen_port=int(_get(data, ["doh", "listen_port"], 5053)),
     )
-    return AppConfig(app=app, zapret=zapret, paths=paths, network=network, game_launcher=game_launcher, doh=doh)
+
+    reporting = DiagnosticsReportingSection(
+        mode=str(_get(data, ["diagnostics", "reporting", "mode"], "github_issue")),
+        github_repo=str(_get(data, ["diagnostics", "reporting", "github_repo"], "norfolkavito-maker/Pupupu")),
+    )
+    diagnostics = DiagnosticsSection(
+        enabled=bool(_get(data, ["diagnostics", "enabled"], False)),
+        record_console_io=bool(_get(data, ["diagnostics", "record_console_io"], True)),
+        record_subprocess=bool(_get(data, ["diagnostics", "record_subprocess"], True)),
+        max_text_len=int(_get(data, ["diagnostics", "max_text_len"], 8000)),
+        redact_paths=bool(_get(data, ["diagnostics", "redact_paths"], False)),
+        reporting=reporting,
+    )
+    return AppConfig(
+        app=app,
+        zapret=zapret,
+        paths=paths,
+        network=network,
+        game_launcher=game_launcher,
+        doh=doh,
+        diagnostics=diagnostics,
+    )
 
