@@ -64,8 +64,12 @@ def sync_repo_zip(source: RepoZipSource, *, dest_dir: Path, cache_dir: Path, app
             )
         selected = cand
 
+    # NOTE: shutil.copytree requires the destination to NOT exist unless
+    # dirs_exist_ok=True. We intentionally keep dirs_exist_ok=False to avoid
+    # mixing old/new files, so staging must not exist.
     staging = tmp_root / "staging"
-    ensure_empty_dir(staging)
+    if staging.exists():
+        shutil.rmtree(staging, ignore_errors=True)
     shutil.copytree(selected, staging, dirs_exist_ok=False)
 
     atomic_replace_dir(staging, dest_dir)

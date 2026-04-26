@@ -41,6 +41,13 @@ jobs:
           if (-not (Test-Path $sub)) { throw "cannot find zapret-winws subdir" }
           Copy-Item -Recurse -Force (Join-Path $sub "*") runtime\zapret\
 
+          # blockcheck scripts live in the repo root of zapret-win-bundle.
+          $blockcheck = Join-Path $src.FullName "blockcheck"
+          if (Test-Path $blockcheck) {
+            New-Item -ItemType Directory -Force -Path runtime\zapret\blockcheck | Out-Null
+            Copy-Item -Recurse -Force (Join-Path $blockcheck "*") runtime\zapret\blockcheck\
+          }
+
       - name: Run tests
         env:
           PYTHONPATH: .
