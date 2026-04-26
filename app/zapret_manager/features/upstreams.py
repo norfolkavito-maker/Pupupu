@@ -3,18 +3,17 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.state import save_state
-from zapret_manager.strategies.flowseal_import import import_flowseal_strategies
-from zapret_manager.strategies.stressozz_import import (
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.state import save_state
+from app.zapret_manager.strategies.flowseal_import import import_flowseal_strategies
+from app.zapret_manager.strategies.stressozz_import import (
     import_dv_strategies_from_script,
     import_liststryou,
     import_v_strategies_from_script,
 )
-from zapret_manager.upstreams.http import download
-from zapret_manager.upstreams.sources import RawUrlSource, RepoZipSource, load_sources
-from zapret_manager.upstreams.sync import check_update, sync_repo_zip
-from zapret_manager.utils.timex import now_utc_iso
+from app.zapret_manager.upstreams.http import download
+from app.zapret_manager.upstreams.sources import RawUrlSource, RepoZipSource, load_sources
+from app.zapret_manager.upstreams.sync import check_update, sync_repo_zip
 
 
 log = logging.getLogger(__name__)

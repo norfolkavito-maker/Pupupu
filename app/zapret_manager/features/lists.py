@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.upstreams.http import download
-from zapret_manager.utils.timex import now_utc_iso
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.upstreams.http import download
+from app.zapret_manager.utils.timex import now_utc_iso
 
 
 log = logging.getLogger(__name__)

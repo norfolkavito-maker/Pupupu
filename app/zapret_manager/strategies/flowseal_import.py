@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from zapret_manager.strategies.flowseal_parser import extract_winws_command
-from zapret_manager.strategies.model import Strategy
-from zapret_manager.strategies.store import save_strategy
+from app.zapret_manager.strategies.flowseal_parser import extract_winws_command
+from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.store import save_strategy
 
 
 log = logging.getLogger(__name__)

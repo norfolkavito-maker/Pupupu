@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.features.zapret_runtime import stop_zapret
-from zapret_manager.utils.platform import is_windows
-from zapret_manager.utils.subprocessx import run
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.features.zapret_runtime import stop_zapret
+from app.zapret_manager.utils.platform import is_windows
+from app.zapret_manager.utils.subprocessx import run
 
 
 def _blockcheck_dir(ctx: AppContext) -> Path:

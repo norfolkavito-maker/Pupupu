@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.upstreams.http import download
-from zapret_manager.utils.fsx import ensure_empty_dir
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.upstreams.http import download
 
 
 def doh_dir(ctx: AppContext) -> Path:

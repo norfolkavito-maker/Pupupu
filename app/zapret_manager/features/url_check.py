@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Iterable
 
-from zapret_manager.utils.subprocessx import run
+from app.zapret_manager.utils.subprocessx import run
 
 
 log = logging.getLogger(__name__)

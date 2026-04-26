@@ -6,11 +6,11 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from zapret_manager.core.state import AppState, UpstreamState
-from zapret_manager.upstreams.http import download, head
-from zapret_manager.upstreams.sources import RepoZipSource, Source
-from zapret_manager.utils.fsx import atomic_replace_dir, ensure_empty_dir, safe_extract_zip
-from zapret_manager.utils.timex import now_utc_iso
+from app.zapret_manager.core.state import AppState, UpstreamState
+from app.zapret_manager.upstreams.http import download, head
+from app.zapret_manager.upstreams.sources import RepoZipSource, Source
+from app.zapret_manager.utils.fsx import atomic_replace_dir, ensure_empty_dir, safe_extract_zip
+from app.zapret_manager.utils.timex import now_utc_iso
 
 
 log = logging.getLogger(__name__)

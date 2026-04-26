@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from zapret_manager.utils.fsx import safe_extract_zip
+from app.zapret_manager.utils.fsx import safe_extract_zip
 
 
 class SafeExtractZipTests(unittest.TestCase):

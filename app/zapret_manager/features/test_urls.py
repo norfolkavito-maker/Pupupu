@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
-from typing import Iterable
 
 import requests
 
-from zapret_manager.features.url_check import UrlCheck
+from app.zapret_manager.features.url_check import UrlCheck
 
 
 RAW_SUITE_URL = "https://raw.githubusercontent.com/hyperion-cs/dpi-checkers/refs/heads/main/ru/tcp-16-20/suite.v2.json"

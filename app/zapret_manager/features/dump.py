@@ -7,9 +7,9 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.utils.fsx import safe_extract_zip
-from zapret_manager.utils.timex import now_utc_iso
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.utils.fsx import safe_extract_zip
+from app.zapret_manager.utils.timex import now_utc_iso
 
 
 def _sha256_file(path: Path) -> str:

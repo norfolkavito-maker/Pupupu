@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import logging
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.state import save_state
-from zapret_manager.features.system import quic_rule_exists
-from zapret_manager.features.zapret_runtime import (
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.state import save_state
+from app.zapret_manager.features.system import quic_rule_exists
+from app.zapret_manager.features.zapret_runtime import (
     detect_runtime_files,
     runtime_health,
     start_zapret_interactive,
     stop_zapret,
 )
-from zapret_manager.strategies.store import list_strategies
-from zapret_manager.ui.menus import (
+from app.zapret_manager.strategies.store import list_strategies
+from app.zapret_manager.ui.menus import (
     discord_menu,
     doh_menu,
     game_launcher_menu,
@@ -22,8 +22,8 @@ from zapret_manager.ui.menus import (
     test_menu,
     tg_menu,
 )
-from zapret_manager.utils.console import C, ask, clear, pause
-from zapret_manager import __version__
+from app.zapret_manager.utils.console import C, ask, clear, pause
+from app.zapret_manager import __version__
 
 
 log = logging.getLogger(__name__)

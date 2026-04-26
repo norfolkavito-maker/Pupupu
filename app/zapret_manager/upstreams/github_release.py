@@ -6,7 +6,7 @@ from pathlib import Path
 
 import requests
 
-from zapret_manager.upstreams.http import download
+from app.zapret_manager.upstreams.http import download
 
 
 log = logging.getLogger(__name__)

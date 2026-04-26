@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import platform
-from dataclasses import dataclass
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.features.zapret_runtime import detect_runtime_files
-from zapret_manager.utils.platform import is_windows
-from zapret_manager.utils.subprocessx import run
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.features.zapret_runtime import detect_runtime_files
+from app.zapret_manager.utils.platform import is_windows
+from app.zapret_manager.utils.subprocessx import run
 
 
 def system_info_text(ctx: AppContext) -> str:

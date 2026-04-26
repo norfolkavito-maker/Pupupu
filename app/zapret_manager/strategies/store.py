@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy
 
 
 log = logging.getLogger(__name__)

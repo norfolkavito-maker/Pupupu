@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import sys
 
-from zapret_manager.ui.colors import C
 
 
 def clear() -> None:

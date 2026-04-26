@@ -4,7 +4,6 @@ import logging
 import os
 import platform
 import secrets
-import shutil
 import subprocess
 import zipfile
 from datetime import datetime
@@ -13,10 +12,10 @@ from typing import Dict, List
 
 import requests
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.paths import Paths
-from zapret_manager.utils.fsx import safe_extract_zip
-from zapret_manager.utils.platform import is_admin, is_windows
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.paths import Paths
+from app.zapret_manager.utils.fsx import safe_extract_zip
+from app.zapret_manager.utils.platform import is_admin, is_windows
 
 
 log = logging.getLogger(__name__)
@@ -42,7 +41,7 @@ class FirewallManager:
             return False
             
         try:
-            from zapret_manager.features.zapret_runtime import detect_runtime_files
+            from app.zapret_manager.features.zapret_runtime import detect_runtime_files
 
             detect_runtime_files(self.ctx)
             winws_path = self.ctx.state.runtime.winws_path or ""

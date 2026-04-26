@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import unittest
 
-from zapret_manager.strategies.composer import compose
-from zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.composer import compose
+from app.zapret_manager.strategies.model import Strategy
 
 
 class TestComposer(unittest.TestCase):

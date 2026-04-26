@@ -10,13 +10,13 @@ from urllib.parse import urlparse
 
 import requests
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.features.selection import find_strategy
-from zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
-from zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret
-from zapret_manager.strategies.model import Strategy
-from zapret_manager.strategies.store import list_strategies, save_strategy
-from zapret_manager.utils.timex import now_utc_iso
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.features.selection import find_strategy
+from app.zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
+from app.zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret
+from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.store import list_strategies, save_strategy
+from app.zapret_manager.utils.timex import now_utc_iso
 
 
 log = logging.getLogger(__name__)
@@ -174,7 +174,7 @@ def control_test(domains: list[str], *, parallel: int | None = None) -> TestResu
 def _runtime_ready(ctx: AppContext) -> bool:
     """Best-effort check that runtime is installed and winws.exe is discoverable."""
     try:
-        from zapret_manager.features.zapret_runtime import detect_runtime_files
+        from app.zapret_manager.features.zapret_runtime import detect_runtime_files
 
         detect_runtime_files(ctx)
         return bool(ctx.state.runtime.installed and ctx.state.runtime.winws_path)
@@ -305,7 +305,7 @@ def test_strategy(
 
 
 def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
-    from zapret_manager.features.selection import list_bases, list_layers
+    from app.zapret_manager.features.selection import list_bases, list_layers
 
     tmp_flowseal = ctx.paths.strategies_generated_dir / "_tmp" / "packs" / "flowseal"
     tmp_stressozz = ctx.paths.strategies_generated_dir / "_tmp" / "packs" / "stressozz"

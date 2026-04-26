@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from zapret_manager.strategies.model import Strategy
-from zapret_manager.strategies.store import save_strategy
+from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.store import save_strategy
 
 
 def _map_linux_paths(args: list[str]) -> list[str]:

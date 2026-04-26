@@ -79,6 +79,10 @@ Runtime в релизе поставляется **в комплекте** (port
 Сборка делается через GitHub Actions на Windows (PyInstaller). См. `.github/workflows/build.yml`.
 В релиз кладутся 2 архива: portable и dev/source.
 
+## Patch list / Changelog
+
+См. [CHANGELOG.md](CHANGELOG.md).
+
 ## Важно
 
 - Для управления `winws`/WinDivert и редактирования `hosts` нужны права администратора.

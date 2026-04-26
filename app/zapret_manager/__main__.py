@@ -5,12 +5,12 @@ from pathlib import Path
 import os
 import sys
 
-from zapret_manager.main import main
+from app.zapret_manager.main import main
 
 
 def _write_crash_log(text: str) -> Path | None:
     try:
-        from zapret_manager.core.paths import Paths
+        from app.zapret_manager.core.paths import Paths
 
         root = Paths.detect_root()
         paths = Paths.from_root(root)
@@ -27,8 +27,8 @@ if __name__ == "__main__":
     try:
         # Setup logging as early as possible to capture admin-check decisions.
         try:
-            from zapret_manager.core.log import setup_logging
-            from zapret_manager.core.paths import Paths
+            from app.zapret_manager.core.log import setup_logging
+            from app.zapret_manager.core.paths import Paths
 
             _root = Paths.detect_root()
             _paths = Paths.from_root(_root)
@@ -39,7 +39,7 @@ if __name__ == "__main__":
             pass
 
         # Must be before any privileged actions and before UI starts.
-        from zapret_manager.utils.platform import ensure_admin_or_relaunch
+        from app.zapret_manager.utils.platform import ensure_admin_or_relaunch
 
         ensure_admin_or_relaunch()
         raise SystemExit(main())
@@ -50,10 +50,10 @@ if __name__ == "__main__":
 
         # Collect extra context for crash log.
         try:
-            from zapret_manager import __version__
-            from zapret_manager.core.paths import Paths
-            from zapret_manager.utils.platform import is_admin
-            from zapret_manager.features.zapret_runtime import runtime_health
+            from app.zapret_manager import __version__
+            from app.zapret_manager.core.paths import Paths
+            from app.zapret_manager.utils.platform import is_admin
+            from app.zapret_manager.features.zapret_runtime import runtime_health
 
             root = Paths.detect_root()
             paths = Paths.from_root(root)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             # via AppContext.bootstrap is too risky (might crash). We'll build a
             # small object with .paths and .state enough for runtime_health.
             from types import SimpleNamespace
-            from zapret_manager.core.state import load_state
+            from app.zapret_manager.core.state import load_state
 
             state = load_state(paths.state_file)
             ctx = SimpleNamespace(root=root, paths=paths, state=state)

@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy
 
 
 class FakeCtx:
@@ -24,13 +24,13 @@ class FakeCtx:
 
 class TestGameLauncher(unittest.TestCase):
     def test_generate_bat_contains_real_args_not_strategy_flag(self):
-        from zapret_manager.features.game_launcher import generate_bat
-        from zapret_manager.core.config import GameLauncherProfile
+        from app.zapret_manager.features.game_launcher import generate_bat
+        from app.zapret_manager.core.config import GameLauncherProfile
 
         profile = GameLauncherProfile(name="test", exe_path=r"C:\Games\test.exe", strategy_name="v7")
 
         # Temporarily patch find_strategy to return a known strategy
-        import zapret_manager.features.game_launcher as gl
+        import app.zapret_manager.features.game_launcher as gl
         original_find = gl.find_strategy
 
         def fake_find(ctx, name, kind=None):

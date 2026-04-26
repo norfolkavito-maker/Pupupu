@@ -1,6 +1,6 @@
 import unittest
 
-from zapret_manager.strategies.flowseal_parser import extract_winws_command
+from app.zapret_manager.strategies.flowseal_parser import extract_winws_command
 
 
 class FlowsealParserTests(unittest.TestCase):

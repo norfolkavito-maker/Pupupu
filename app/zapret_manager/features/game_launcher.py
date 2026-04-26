@@ -5,11 +5,10 @@ import subprocess
 import time
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.config import GameLauncherProfile
-from zapret_manager.core.state import save_state
-from zapret_manager.features.selection import find_strategy
-from zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.config import GameLauncherProfile
+from app.zapret_manager.features.selection import find_strategy
+from app.zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret
 
 
 log = logging.getLogger(__name__)
@@ -89,9 +88,29 @@ def generate_bat(ctx: AppContext, profile: GameLauncherProfile, output_path: Pat
     if not strategy:
         raise RuntimeError(f"Стратегия не найдена: {profile.strategy_name}")
 
-    from zapret_manager.features.zapret_runtime import build_command
+    # Prefer using the same command builder as interactive mode.
+    # But allow a minimal context (used by unit tests) where runtime paths/state
+    # may be absent.
+    from app.zapret_manager.features.zapret_runtime import build_command
 
-    cmd_list = build_command(ctx, strategy)
+    try:
+        cmd_list = build_command(ctx, strategy)
+    except Exception as e:  # pragma: no cover (fallback path for minimal ctx)
+        log.debug("generate_bat: build_command failed, using fallback: %s", e)
+
+        exe = "winws.exe"
+        # Try to discover executable path from ctx if present.
+        if hasattr(ctx, "state") and getattr(ctx, "state", None):
+            rt = getattr(ctx.state, "runtime", None)
+            if rt and getattr(rt, "winws_path", None):
+                exe = str(rt.winws_path)
+        if exe == "winws.exe" and hasattr(ctx, "config") and getattr(ctx, "config", None):
+            zap = getattr(ctx.config, "zapret", None)
+            if zap and getattr(zap, "winws_path", None):
+                exe = str(zap.winws_path)
+
+        args = strategy.get_full_args() if hasattr(strategy, "get_full_args") else list(strategy.args)
+        cmd_list = [exe] + args
     cmd = " ".join(f'"{x}"' if " " in x else x for x in cmd_list)
 
     bat_lines = [

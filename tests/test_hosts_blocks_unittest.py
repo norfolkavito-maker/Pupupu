@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from zapret_manager.features.hosts import clear_all_manager_blocks, has_block, set_block_enabled
+from app.zapret_manager.features.hosts import clear_all_manager_blocks, has_block, set_block_enabled
 
 
 class HostsBlockTests(unittest.TestCase):

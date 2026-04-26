@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.state import save_state
-from zapret_manager.features.blockcheck import run_blockcheck
-from zapret_manager.features.key_setup import key_setup
-from zapret_manager.features.lists import update_exclude, update_rkn
-from zapret_manager.features.selection import find_strategy, list_bases, list_layers
-from zapret_manager.features.strategy_test import (
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.state import save_state
+from app.zapret_manager.features.blockcheck import run_blockcheck
+from app.zapret_manager.features.key_setup import key_setup
+from app.zapret_manager.features.lists import update_exclude, update_rkn
+from app.zapret_manager.features.selection import find_strategy, list_bases, list_layers
+from app.zapret_manager.features.strategy_test import (
     DEFAULT_TEST_DOMAINS,
     TestResult,
     control_test,
@@ -17,8 +17,8 @@ from zapret_manager.features.strategy_test import (
     test_session,
     write_results,
 )
-from zapret_manager.features.sysinfo import system_info_text
-from zapret_manager.features.system import (
+from app.zapret_manager.features.sysinfo import system_info_text
+from app.zapret_manager.features.system import (
     backup,
     flush_dns,
     quic_block_disable,
@@ -28,7 +28,7 @@ from zapret_manager.features.system import (
     tcp_timestamps_disable,
     tcp_timestamps_enable,
 )
-from zapret_manager.features.tg_proxy import (
+from app.zapret_manager.features.tg_proxy import (
     install_go,
     install_rust,
     start_go,
@@ -38,12 +38,12 @@ from zapret_manager.features.tg_proxy import (
     uninstall_go,
     uninstall_rust,
 )
-from zapret_manager.features.upstreams import (
+from app.zapret_manager.features.upstreams import (
     check_updates,
     sync_flowseal,
     sync_stressozz_strategies,
 )
-from zapret_manager.features.hosts import (
+from app.zapret_manager.features.hosts import (
     finland_discord_block,
     load_blocks_from_file,
     reset_hosts_windows,
@@ -51,17 +51,17 @@ from zapret_manager.features.hosts import (
     has_block,
     clear_all_manager_blocks,
 )
-from zapret_manager.features.zapret_runtime import (
+from app.zapret_manager.features.zapret_runtime import (
     runtime_diagnostics_text,
     runtime_health,
     start_zapret_interactive,
     stop_zapret,
 )
-from zapret_manager.features.test_urls import prepare_urls
-from zapret_manager.utils.console import C, ask, clear, pause
+from app.zapret_manager.features.test_urls import prepare_urls
+from app.zapret_manager.utils.console import C, ask, clear, pause
 
-from zapret_manager.features.doh import PROFILES, start_doh, stop_doh
-from zapret_manager.features.game_launcher import (
+from app.zapret_manager.features.doh import PROFILES, start_doh, stop_doh
+from app.zapret_manager.features.game_launcher import (
     add_profile,
     generate_bat,
     generate_shortcut,

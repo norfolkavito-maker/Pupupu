@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.strategies.model import Strategy
-from zapret_manager.strategies.store import list_strategies
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.store import list_strategies
 
 
 def find_strategy(ctx: AppContext, name: str, *, kind: str | None = None) -> Strategy | None:

@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.state import save_state
-from zapret_manager.features.hosts import HostsManager
-from zapret_manager.features.lists import update_exclude
-from zapret_manager.features.selection import find_strategy
-from zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
-from zapret_manager.features.zapret_runtime import require_runtime_ok, start_zapret_interactive, stop_zapret
-from zapret_manager.features.hosts import load_blocks_from_file, set_block_enabled
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.state import save_state
+from app.zapret_manager.features.hosts import HostsManager
+from app.zapret_manager.features.lists import update_exclude
+from app.zapret_manager.features.selection import find_strategy
+from app.zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
+from app.zapret_manager.features.zapret_runtime import require_runtime_ok, start_zapret_interactive, stop_zapret
+from app.zapret_manager.features.hosts import load_blocks_from_file, set_block_enabled
 
 
 log = logging.getLogger(__name__)

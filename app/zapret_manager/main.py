@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sys
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.ui.main_menu import run_main_menu
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.ui.main_menu import run_main_menu
 
 
 def main(argv: list[str] | None = None) -> int:

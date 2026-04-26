@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from zapret_manager.strategies.model import Strategy
-from zapret_manager.strategies.overlays import games_profile_args
+from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.overlays import games_profile_args
 
 
 DISCORD_PORTS = "2053,2083,2087,2096,8443"

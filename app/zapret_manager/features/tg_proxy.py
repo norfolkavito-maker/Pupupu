@@ -4,11 +4,11 @@ import hashlib
 import logging
 from pathlib import Path
 
-from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.state import save_state
-from zapret_manager.upstreams.github_release import download_asset, latest_release
-from zapret_manager.utils.platform import is_windows
-from zapret_manager.utils.subprocessx import popen_detached, run
+from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.state import save_state
+from app.zapret_manager.upstreams.github_release import download_asset, latest_release
+from app.zapret_manager.utils.platform import is_windows
+from app.zapret_manager.utils.subprocessx import popen_detached, run
 
 
 log = logging.getLogger(__name__)

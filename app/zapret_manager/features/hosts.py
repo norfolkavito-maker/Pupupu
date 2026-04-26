@@ -9,11 +9,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import TYPE_CHECKING, List, Dict, Optional
 
-from zapret_manager.core.state import save_state
-from zapret_manager.utils.platform import is_admin, is_windows
+from app.zapret_manager.core.state import save_state
+from app.zapret_manager.utils.platform import is_admin, is_windows
 
 if TYPE_CHECKING:
-    from zapret_manager.core.app_context import AppContext
+    from app.zapret_manager.core.app_context import AppContext
 
 
 log = logging.getLogger(__name__)

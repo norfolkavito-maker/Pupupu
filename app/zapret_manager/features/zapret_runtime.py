@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import logging
-import os
-import shutil
-import subprocess
-import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from zapret_manager.core.app_context import AppContext
-from zapret_manager.core.state import save_state
-from zapret_manager.strategies.composer import compose
-from zapret_manager.strategies.model import Strategy
-from zapret_manager.strategies.overlays import apply_overlays
-from zapret_manager.utils.platform import is_admin, is_windows
-from zapret_manager.utils.subprocessx import popen_detached, run
+    from app.zapret_manager.core.app_context import AppContext
+from app.zapret_manager.core.state import save_state
+from app.zapret_manager.strategies.composer import compose
+from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.overlays import apply_overlays
+from app.zapret_manager.utils.platform import is_admin, is_windows
+from app.zapret_manager.utils.subprocessx import popen_detached, run
 
 
 log = logging.getLogger(__name__)
