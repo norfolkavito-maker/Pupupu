@@ -687,107 +687,161 @@ def system_menu(ctx: AppContext) -> None:
     while True:
         clear()
         print(f"{C.MAGENTA}Системное меню{C.RESET}\n")
-        print(f"{C.YELLOW}QUIC block:{C.RESET} {'on' if quic_rule_exists() else 'off'}\n")
-        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Системная информация{C.RESET}")
-        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Проверить обновления upstream{C.RESET}")
-        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Применить обновления (sync стратегий){C.RESET}")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Запустить blockcheck{C.RESET}")
-        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Запустить blockcheck2{C.RESET}")
-        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Вкл/выкл блокировку QUIC (UDP 443){C.RESET}")
-        print(f"{C.CYAN}7){C.RESET} {C.GREEN}TCP timestamps: enabled{C.RESET}")
-        print(f"{C.CYAN}8){C.RESET} {C.GREEN}TCP timestamps: disabled{C.RESET}")
-        print(f"{C.CYAN}9){C.RESET} {C.GREEN}Flush DNS{C.RESET}")
-        print(f"{C.CYAN}10){C.RESET} {C.GREEN}Бэкап (zip){C.RESET}")
-        print(f"{C.CYAN}11){C.RESET} {C.GREEN}Восстановить из бэкапа (zip){C.RESET}")
-        print(f"{C.CYAN}12){C.RESET} {C.GREEN}Обновить exclude + RKN list{C.RESET}")
-        print(f"{C.CYAN}13){C.RESET} {C.GREEN}Автонастройка «под ключ» (без переустановки){C.RESET}")
-        print(f"{C.CYAN}14){C.RESET} {C.GREEN}Проверить runtime{C.RESET}")
-        diag_on = bool(getattr(ctx.config, "diagnostics", None) and ctx.config.diagnostics.enabled)
-        print(
-            f"{C.CYAN}15){C.RESET} {C.GREEN}Diagnostics:{C.RESET} "
-            + (f"{C.GREEN}ON{C.RESET}" if diag_on else f"{C.DIM}OFF{C.RESET}")
-            + f" {C.DIM}(включится после перезапуска){C.RESET}"
-        )
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Runtime / Blockcheck / Diagnostics{C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Upstreams (обновления стратегий){C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Network (QUIC / TCP timestamps / Flush DNS){C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Backup / Restore{C.RESET}")
+        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Системная информация{C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
         try:
             if c == "1":
-                print("\n" + system_info_text(ctx) + "\n")
-                pause()
+                _runtime_menu(ctx)
             elif c == "2":
-                res = check_updates(ctx)
-                print()
-                for name, (changed, msg) in res.items():
-                    flag = f"{C.GREEN}update{C.RESET}" if changed else f"{C.DIM}ok{C.RESET}"
-                    print(f"- {name}: {flag} ({msg})")
-                print()
-                pause()
+                _upstreams_menu(ctx)
             elif c == "3":
-                print(f"\n{C.MAGENTA}Sync Flowseal...{C.RESET}")
-                sync_flowseal(ctx)
-                print(f"{C.MAGENTA}Sync StressOzz...{C.RESET}")
-                sync_stressozz_strategies(ctx)
-                print(f"\n{C.GREEN}Готово.{C.RESET}\n")
-                pause()
+                _network_menu(ctx)
             elif c == "4":
-                run_blockcheck(ctx, variant="1")
+                _backup_menu(ctx)
             elif c == "5":
-                run_blockcheck(ctx, variant="2")
-            elif c == "6":
-                if quic_rule_exists():
-                    quic_block_disable()
-                else:
-                    quic_block_enable()
-                pause()
-            elif c == "7":
-                tcp_timestamps_enable()
-                pause()
-            elif c == "8":
-                tcp_timestamps_disable()
-                pause()
-            elif c == "9":
-                flush_dns()
-                pause()
-            elif c == "10":
-                p = backup(ctx)
-                print(f"\n{C.GREEN}Бэкап создан:{C.RESET} {p}\n")
-                pause()
-            elif c == "11":
-                p = ask("\nПуть к zip бэкапу: ").strip()
-                if p:
-                    restore(ctx, Path(p))
-                    print(f"\n{C.GREEN}Восстановлено.{C.RESET}\n")
-                    pause()
-            elif c == "12":
-                p1 = update_exclude(ctx)
-                p2 = update_rkn(ctx)
-                print(f"\n{C.GREEN}OK:{C.RESET} {p1}\n{C.GREEN}OK:{C.RESET} {p2}\n")
-                pause()
-            elif c == "13":
-                lines = key_setup(ctx)
-                print()
-                for ln in lines:
-                    print(ln)
-                print()
-                pause()
-            elif c == "14":
                 clear()
-                print(runtime_diagnostics_text(ctx))
-                h = runtime_health(ctx)
-                if not h.get("ok"):
-                    print(
-                        f"\n{C.YELLOW}Runtime не готов.{C.RESET} "
-                        "Если вы используете portable-архив — распакуйте его полностью, "
-                        "внутри должна быть папка DedZapretData\\runtime\\zapret\\ с winws/WinDivert.\n"
-                    )
-                pause()
-            elif c == "15":
-                _toggle_diagnostics_in_config(ctx)
+                print("\n" + system_info_text(ctx) + "\n")
                 pause()
         except Exception as e:
             log.exception("system_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
+
+
+def _runtime_menu(ctx: AppContext) -> None:
+    while True:
+        clear()
+        print(f"{C.MAGENTA}Runtime / Blockcheck / Diagnostics{C.RESET}\n")
+        h = runtime_health(ctx)
+        ok = bool(h.get("ok"))
+        print(f"{C.YELLOW}Runtime:{C.RESET} " + (f"{C.GREEN}OK{C.RESET}" if ok else f"{C.RED}MISSING/BROKEN{C.RESET}"))
+        diag_on = bool(getattr(ctx.config, "diagnostics", None) and ctx.config.diagnostics.enabled)
+        print(f"{C.YELLOW}Diagnostics:{C.RESET} " + (f"{C.GREEN}ON{C.RESET}" if diag_on else f"{C.DIM}OFF{C.RESET}") + "\n")
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Показать runtime diagnostics{C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Запустить blockcheck{C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Запустить blockcheck2{C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Toggle Diagnostics (в config.yaml){C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        if c == "1":
+            clear()
+            print(runtime_diagnostics_text(ctx))
+            pause()
+        elif c == "2":
+            run_blockcheck(ctx, variant="1")
+        elif c == "3":
+            run_blockcheck(ctx, variant="2")
+        elif c == "4":
+            _toggle_diagnostics_in_config(ctx)
+            pause()
+
+
+def _upstreams_menu(ctx: AppContext) -> None:
+    while True:
+        clear()
+        print(f"{C.MAGENTA}Upstreams (обновления){C.RESET}\n")
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Проверить обновления upstream{C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Sync Flowseal{C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Sync StressOzz{C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Sync оба (Flowseal + StressOzz){C.RESET}")
+        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Обновить exclude + RKN list{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        if c == "1":
+            res = check_updates(ctx)
+            print()
+            for name, (changed, msg) in res.items():
+                flag = f"{C.GREEN}update{C.RESET}" if changed else f"{C.DIM}ok{C.RESET}"
+                print(f"- {name}: {flag} ({msg})")
+            print()
+            pause()
+        elif c == "2":
+            print(f"\n{C.MAGENTA}Sync Flowseal...{C.RESET}")
+            sync_flowseal(ctx)
+            print(f"\n{C.GREEN}Готово.{C.RESET}\n")
+            pause()
+        elif c == "3":
+            print(f"\n{C.MAGENTA}Sync StressOzz...{C.RESET}")
+            sync_stressozz_strategies(ctx)
+            print(f"\n{C.GREEN}Готово.{C.RESET}\n")
+            pause()
+        elif c == "4":
+            print(f"\n{C.MAGENTA}Sync Flowseal...{C.RESET}")
+            sync_flowseal(ctx)
+            print(f"{C.MAGENTA}Sync StressOzz...{C.RESET}")
+            sync_stressozz_strategies(ctx)
+            print(f"\n{C.GREEN}Готово.{C.RESET}\n")
+            pause()
+        elif c == "5":
+            p1 = update_exclude(ctx)
+            p2 = update_rkn(ctx)
+            print(f"\n{C.GREEN}OK:{C.RESET} {p1}\n{C.GREEN}OK:{C.RESET} {p2}\n")
+            pause()
+
+
+def _network_menu(ctx: AppContext) -> None:
+    while True:
+        clear()
+        print(f"{C.MAGENTA}Network{C.RESET}\n")
+        print(f"{C.YELLOW}QUIC block:{C.RESET} {'on' if quic_rule_exists() else 'off'}\n")
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Вкл/выкл блокировку QUIC (UDP 443){C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}TCP timestamps: enabled{C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}TCP timestamps: disabled{C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Flush DNS{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        if c == "1":
+            if quic_rule_exists():
+                quic_block_disable()
+            else:
+                quic_block_enable()
+            pause()
+        elif c == "2":
+            tcp_timestamps_enable()
+            pause()
+        elif c == "3":
+            tcp_timestamps_disable()
+            pause()
+        elif c == "4":
+            flush_dns()
+            pause()
+
+
+def _backup_menu(ctx: AppContext) -> None:
+    while True:
+        clear()
+        print(f"{C.MAGENTA}Backup / Restore{C.RESET}\n")
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Бэкап (zip){C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Восстановить из бэкапа (zip){C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Автонастройка «под ключ» (без переустановки){C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        if c == "1":
+            p = backup(ctx)
+            print(f"\n{C.GREEN}Бэкап создан:{C.RESET} {p}\n")
+            pause()
+        elif c == "2":
+            p = ask("\nПуть к zip бэкапу: ").strip()
+            if p:
+                restore(ctx, Path(p))
+                print(f"\n{C.GREEN}Восстановлено.{C.RESET}\n")
+                pause()
+        elif c == "3":
+            lines = key_setup(ctx)
+            print()
+            for ln in lines:
+                print(ln)
+            print()
             pause()
 
 
