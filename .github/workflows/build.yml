@@ -43,13 +43,13 @@ jobs:
 
       - name: Run tests
         env:
-          PYTHONPATH: app
+          PYTHONPATH: .
         run: |
           python -m unittest discover -s tests -p "*_unittest.py"
 
       - name: Build exe
         run: |
-          pyinstaller --noconfirm --clean --onefile --uac-admin --name DedZapret --paths app app\zapret_manager\__main__.py
+          pyinstaller --noconfirm --clean --onefile --uac-admin --name DedZapret --paths . app\zapret_manager\__main__.py
 
       - name: Prepare portable bundle
         shell: pwsh
