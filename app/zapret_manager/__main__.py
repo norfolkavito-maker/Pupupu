@@ -1,9 +1,47 @@
 from __future__ import annotations
 
-import traceback
-from pathlib import Path
 import os
+from pathlib import Path
 import sys
+import traceback
+
+
+def _parse_smoke_flag(argv: list[str]) -> bool:
+    return "--ci-smoke" in argv
+
+
+def _run_ci_smoke() -> int:
+    """Non-interactive smoke check for CI.
+
+    Must:
+    - NOT request admin/UAC
+    - NOT open interactive menus
+    - exit quickly with code 0 if imports/bootstrap are OK
+    """
+    print("[ci-smoke] starting")
+    try:
+        from app.zapret_manager.core.app_context import AppContext
+        from app.zapret_manager.core.paths import Paths
+        from app.zapret_manager.features.zapret_runtime import runtime_health
+        from app.zapret_manager import __version__
+
+        root = Paths.detect_root()
+        print(f"[ci-smoke] version: {__version__}")
+        print(f"[ci-smoke] detected root: {root}")
+
+        ctx = AppContext.bootstrap(argv=["--ci-smoke"])
+        h = runtime_health(ctx)
+        # Runtime is not expected to exist in CI (it is shipped in release bundle),
+        # so we do NOT fail on runtime missing.
+        print(f"[ci-smoke] runtime ok: {bool(h.get('ok'))}")
+        if h.get("problems"):
+            print(f"[ci-smoke] runtime problems: {h.get('problems')}")
+        print("[ci-smoke] OK")
+        return 0
+    except Exception as e:
+        print(f"[ci-smoke] FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return 2
 
 def _write_crash_log(text: str) -> Path | None:
     try:
@@ -22,6 +60,10 @@ def _write_crash_log(text: str) -> Path | None:
 
 if __name__ == "__main__":
     try:
+        # CI smoke mode (must be before any privileged actions and UI).
+        if _parse_smoke_flag(sys.argv[1:]):
+            raise SystemExit(_run_ci_smoke())
+
         # Defer imports so we can capture ImportError into crash.log even when
         # module imports fail inside PyInstaller bundle.
         from app.zapret_manager.main import main

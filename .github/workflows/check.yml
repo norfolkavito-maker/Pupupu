@@ -1,0 +1,128 @@
+name: Project Check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  check-windows:
+    name: Check (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Show environment
+        shell: pwsh
+        run: |
+          Write-Host "Python:" (python --version)
+          Write-Host "Pip:" (python -m pip --version)
+          Write-Host "Runner OS:" $env:RUNNER_OS
+          Write-Host "Workspace:" $env:GITHUB_WORKSPACE
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Dependency sanity (pip check)
+        shell: pwsh
+        run: |
+          python -m pip check
+
+      - name: Syntax check (compileall)
+        shell: pwsh
+        run: |
+          python -m compileall -q app tests
+
+      - name: Lint (ruff - only fatal errors)
+        shell: pwsh
+        run: |
+          pip install ruff
+          ruff --version
+          ruff check --select E9,F63,F7,F82 app tests
+
+      - name: Unit tests (pytest)
+        shell: pwsh
+        run: |
+          if (Test-Path tests) {
+            # tests import "app.*" so repo root must be on sys.path
+            $env:PYTHONPATH = "${env:GITHUB_WORKSPACE}"
+            python -m pytest -q
+          } else {
+            Write-Host "No tests/ directory. Skipping."
+          }
+
+      - name: Smoke check (non-interactive)
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "${env:GITHUB_WORKSPACE}"
+          python -m app.zapret_manager --ci-smoke
+
+      - name: Script sanity (bat/cmd/ps1 exist)
+        shell: pwsh
+        run: |
+          Write-Host "Checking presence of launcher scripts..."
+          if (-not (Test-Path run.bat)) { throw "run.bat is missing" }
+          if (Test-Path scripts) {
+            Write-Host "scripts/ exists"
+          }
+
+      - name: Security sanity (accidental secrets)
+        shell: pwsh
+        run: |
+          Write-Host "Fail if .env files are committed"
+          $envFiles = Get-ChildItem -Recurse -Force -File -Include .env,.env.* -ErrorAction SilentlyContinue
+          if ($envFiles) {
+            $envFiles | ForEach-Object { Write-Host "FOUND: $($_.FullName)" }
+            throw "Committed .env file(s) detected"
+          }
+
+          Write-Host "Warn on suspicious key/cert files (does not fail)"
+          $sus = Get-ChildItem -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^(id_rsa|id_dsa)$' -or $_.Extension -in '.pem','.p12','.pfx','.key' }
+          if ($sus) {
+            $sus | ForEach-Object { Write-Host "SUSPICIOUS: $($_.FullName)" }
+          } else {
+            Write-Host "No suspicious key/cert files found"
+          }
+
+  check-ubuntu:
+    name: Check (Ubuntu - quick)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -m compileall -q app tests
+
+      - name: Unit tests (pytest)
+        run: |
+          if [ -d tests ]; then
+            # tests import "app.*" so repo root must be on sys.path
+            PYTHONPATH="$GITHUB_WORKSPACE" python -m pytest -q
+          else
+            echo "No tests/ directory. Skipping."
+          fi
