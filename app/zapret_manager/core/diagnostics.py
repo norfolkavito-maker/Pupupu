@@ -45,6 +45,12 @@ def _maybe_redact_paths(text: str) -> str:
 def detect_git_commit() -> str:
     # Portable builds may not ship .git; in that case we return empty.
     # In dev runs this helps correlate session with exact source revision.
+    # Preferred: env var injected at build time.
+    # We can set this from CI/pyinstaller without relying on .git being present.
+    env = os.environ.get("DEDZAPRET_GIT_COMMIT") or os.environ.get("GITHUB_SHA")
+    if env:
+        return env.strip()
+
     try:
         import subprocess
 

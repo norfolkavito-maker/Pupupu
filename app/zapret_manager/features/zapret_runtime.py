@@ -374,7 +374,7 @@ def validate_winws_command(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> l
         if not p.is_absolute():
             p = (cwd / p).resolve()
         if not p.exists():
-            problems.append(f"missing file for {opt}: {p}")
+            problems.append(f"missing file for {opt}: {p} (cwd={cwd})")
 
     def looks_like_path(v: str) -> bool:
         vv = _strip_quotes(v).strip()

@@ -18,6 +18,7 @@ jobs:
       # Use tag name as VERSION for releases. For branch builds keep a stable
       # name so artifacts don't spam versioned files.
       VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'snapshot' }}
+      DEDZAPRET_GIT_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
 

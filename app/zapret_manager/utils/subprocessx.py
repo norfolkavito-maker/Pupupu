@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import locale
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +20,39 @@ class CmdResult:
     err: str
 
 
+def _windows_oem_encoding() -> str:
+    """Return Windows OEM code page encoding name.
+
+    Many console tools (ping, ipconfig, netsh, etc.) write in OEM code page
+    (cp866 for RU), not in ANSI code page. Using utf-8 causes mojibake.
+    """
+    if os.name != "nt":
+        return "utf-8"
+
+    # Best-effort: read current console output CP (OEM) via WinAPI.
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        GetConsoleOutputCP = kernel32.GetConsoleOutputCP
+        GetConsoleOutputCP.restype = ctypes.c_uint
+        cp = int(GetConsoleOutputCP())
+        if cp:
+            return f"cp{cp}"
+    except Exception:
+        pass
+
+    # Fallback: OEM code page (RU typical).
+    return "cp866"
+
+
+def _default_text_encoding() -> str:
+    if os.name == "nt":
+        # Prefer OEM for console utilities.
+        return _windows_oem_encoding()
+    return "utf-8"
+
+
 def run(
     args: list[str],
     *,
@@ -28,6 +63,8 @@ def run(
 ) -> CmdResult:
     log.info("run: %s", args)
     diag_log("process.run", "subprocessx", {"args": args, "cwd": cwd, "timeout": timeout, "capture": capture})
+
+    encoding = _default_text_encoding()
     p = subprocess.run(
         args,
         check=False,
@@ -35,7 +72,7 @@ def run(
         timeout=timeout,
         text=True,
         capture_output=capture,
-        encoding="utf-8",
+        encoding=encoding,
         errors="replace",
     )
     if check and p.returncode != 0:

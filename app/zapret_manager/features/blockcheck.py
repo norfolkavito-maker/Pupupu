@@ -27,6 +27,9 @@ def run_blockcheck(ctx: AppContext, *, variant: str = "1") -> None:
     if not script.exists():
         raise RuntimeError(f"{script.name} not found in runtime.")
 
-    # Open in a new console window and wait.
-    run(["cmd", "/c", "start", "\"\"", "/wait", str(script)], check=False, capture=True, cwd=str(d))
+    # Do NOT use `start /wait`.
+    # It may spawn a new console window and show OS popups ("network path not found"),
+    # and also breaks stdout/stderr capturing.
+    # Run script directly in the current console, preserving cwd.
+    run(["cmd", "/c", str(script)], check=False, capture=True, cwd=str(d))
 
