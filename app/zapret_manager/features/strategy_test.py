@@ -5,16 +5,21 @@ import shutil
 import socket
 import tempfile
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from urllib.parse import urlparse
 
-import requests
+try:
+    import requests
+except ImportError:
+    requests = None
 
 from app.zapret_manager.core.app_context import AppContext
 from app.zapret_manager.features.selection import find_strategy
 from app.zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
 from app.zapret_manager.features.zapret_runtime import start_zapret_interactive, stop_zapret
+from app.zapret_manager.features.zapret_runtime import WinwsStartError
+from app.zapret_manager.features.zapret_runtime import is_pid_alive
 from app.zapret_manager.strategies.model import Strategy
 from app.zapret_manager.strategies.store import list_strategies, save_strategy
 from app.zapret_manager.utils.timex import now_utc_iso
@@ -71,6 +76,10 @@ class TestResult:
     total: int
     checks: list[DomainCheck] = field(default_factory=list)
 
+    # When winws could not be started/verified, do not pretend it's a domain fail.
+    status: str = "ok"  # ok|invalid
+    error: str = ""
+
     # Extended summary fields (best-effort).
     dns_ok: int = 0
     tcp_ok: int = 0
@@ -86,6 +95,40 @@ class TestResult:
             parts.append(f"PING: {self.ping_ok}/{self.total}")
             parts.append(f"UDP443: {self.udp_ok}/{self.total}")
         return " | ".join(parts)
+
+
+@dataclass(frozen=True)
+class ProofRow:
+    """One domain probe result for proof-of-effect test."""
+
+    domain: str
+    baseline_ok: bool
+    strategy_ok: bool
+    effect: str
+    baseline_error: str | None
+    strategy_error: str | None
+    baseline_ms: int | None
+    strategy_ms: int | None
+
+
+@dataclass(frozen=True)
+class ProofResult:
+    """Proof-of-effect test result with winws evidence."""
+
+    strategy_name: str
+    rows: list[ProofRow]
+    total: int
+    improved: int
+    already_ok: int
+    no_effect: int
+    worsened: int
+    invalid: int
+    strategy_effect_proven: bool
+    winws_pid: int | None
+    winws_alive_at_start: bool
+    winws_alive_at_end: bool
+    invalid_reason: str | None
+    restore_warning: str | None
 
 
 @dataclass(frozen=True)
@@ -201,6 +244,24 @@ def _fetch_one_detail(url: str, *, timeout_s: float) -> DomainCheck:
     udp_status, udp_err = _udp443_probe(ip)
 
     start = time.perf_counter()
+    
+    if requests is None:
+        return DomainCheck(
+            domain=display,
+            url=url,
+            ok=False,
+            elapsed_ms=int((time.perf_counter() - start) * 1000),
+            error="requests module not available",
+            resolved_ip=ip,
+            dns_ok=dns_ok,
+            dns_ms=dns_ms,
+            tcp_ok=tcp_ok,
+            tcp_ms=tcp_ms,
+            ping_ok=ping_ok,
+            ping_ms=ping_ms,
+            udp443=udp_status,
+        )
+
     try:
         # A normal GET is closer to real browser behavior than just opening TCP.
         # We intentionally treat HTTP 4xx as network OK: domain is reachable, even
@@ -455,6 +516,10 @@ def _print_strategy_header(strategy: Strategy, domains: list[str]) -> None:
 
 def _print_strategy_footer(result: TestResult) -> None:
     print("-" * 78)
+    if result.status != "ok":
+        print(f"Итог {result.strategy}: INVALID ({result.error})")
+        print()
+        return
     print(f"Итог {result.strategy}: {result.summary_text()}")
     failed = [c for c in result.checks if not c.ok]
     if failed:
@@ -484,7 +549,11 @@ def test_strategy(
         stop_zapret(ctx)
         if show_progress:
             _print_strategy_header(strategy, domains)
-        start_zapret_interactive(ctx, strategy, youtube=youtube, discord=discord)
+        try:
+            start_zapret_interactive(ctx, strategy, youtube=youtube, discord=discord)
+        except WinwsStartError as e:
+            # Strategy is not active. Do not run domain checks.
+            return TestResult(strategy=strategy.name, ok=0, total=0, checks=[], status="invalid", error=str(e))
         time.sleep(settle_s)
         checks = check_domains_detailed(domains, parallel=parallel, progress=show_progress)
         ok = sum(1 for c in checks if c.ok)
@@ -668,18 +737,246 @@ def test_session(
             _cleanup_tmp(_tmp_pack_dir(ctx, "stressozz"))
 
 
+def classify_effect(baseline_ok: bool, strategy_ok: bool) -> str:
+    """Classify the effect of strategy compared to baseline."""
+    if not baseline_ok and strategy_ok:
+        return "improved"
+    if baseline_ok and strategy_ok:
+        return "already_ok"
+    if not baseline_ok and not strategy_ok:
+        return "no_effect"
+    if baseline_ok and not strategy_ok:
+        return "worsened"
+    return "invalid"
+
+
+def classify_effect_from_checks(baseline_check: DomainCheck, strategy_check: DomainCheck) -> str:
+    """Classify effect from DomainCheck objects."""
+    return classify_effect(baseline_check.ok, strategy_check.ok)
+
+
+def _ensure_winws_stopped(ctx: AppContext) -> None:
+    """Ensure winws is stopped and verify it's really dead."""
+    stop_zapret(ctx)
+    # Small delay to allow winws to shut down
+    time.sleep(0.5)
+    
+    # Check if winws process is still alive
+    if ctx.state.zapret.running and ctx.state.zapret.pid:
+        # Try to kill the process forcefully
+        try:
+            import os
+            os.kill(ctx.state.zapret.pid, 9)
+            ctx.state.zapret.running = False
+            ctx.state.zapret.pid = None
+            log.info("Force-killed remaining winws process")
+        except Exception:
+            pass
+    
+    # Final verification
+    if ctx.state.zapret.running:
+        raise RuntimeError("WinWS failed to stop after zapret stop command")
+
+
+def proof_of_effect(
+    ctx: AppContext, 
+    strategy: Strategy, 
+    domains: list[str], 
+    *, 
+    settle_s: float = 1.5, 
+    parallel: int = 6
+) -> ProofResult:
+    """Proof-of-effect test: baseline vs strategy with winws evidence."""
+    
+    # Save previous state
+    was_running = ctx.state.zapret.running
+    prev_base = ctx.state.zapret.base_strategy
+    prev_selected = ctx.state.zapret.selected_strategy
+    prev_youtube = ctx.state.zapret.youtube_layer
+    prev_discord = ctx.state.zapret.discord_layer
+    
+    restore_warning: str | None = None
+    result: ProofResult | None = None
+
+    try:
+        # Phase 1: Stop winws and verify baseline is without winws
+        _ensure_winws_stopped(ctx)
+        winws_alive_at_start = False
+
+        # Phase 2: Run baseline check (without winws)
+        baseline_checks = check_domains_detailed(domains, parallel=parallel, progress=False)
+
+        # Phase 3: Start strategy and verify winws is alive
+        start_zapret_interactive(ctx, strategy)
+        time.sleep(settle_s)
+
+        # Strict proof requirement:
+        # - running must be True
+        # - pid must be known
+        # - pid must be alive (PR-1 health-check logic)
+        if not ctx.state.zapret.running:
+            raise WinwsStartError("WinWS process failed to start or died immediately")
+
+        if ctx.state.zapret.pid is None:
+            raise WinwsStartError("WinWS started but PID is unknown")
+
+        winws_pid = int(ctx.state.zapret.pid)
+        winws_alive_at_end = is_pid_alive(winws_pid)
+        if not winws_alive_at_end:
+            raise WinwsStartError("WinWS process is not alive after start")
+
+        # Phase 4: Run strategy check (with winws)
+        strategy_checks = check_domains_detailed(domains, parallel=parallel, progress=False)
+
+        # Phase 5: Compare baseline vs strategy
+        rows: list[ProofRow] = []
+        improved = 0
+        already_ok = 0
+        no_effect = 0
+        worsened = 0
+
+        for baseline_check, strategy_check in zip(baseline_checks, strategy_checks):
+            effect = classify_effect_from_checks(baseline_check, strategy_check)
+
+            row = ProofRow(
+                domain=baseline_check.domain,
+                baseline_ok=baseline_check.ok,
+                strategy_ok=strategy_check.ok,
+                effect=effect,
+                baseline_error=baseline_check.error if not baseline_check.ok else None,
+                strategy_error=strategy_check.error if not strategy_check.ok else None,
+                baseline_ms=baseline_check.elapsed_ms,
+                strategy_ms=strategy_check.elapsed_ms,
+            )
+            rows.append(row)
+
+            if effect == "improved":
+                improved += 1
+            elif effect == "already_ok":
+                already_ok += 1
+            elif effect == "no_effect":
+                no_effect += 1
+            elif effect == "worsened":
+                worsened += 1
+
+        total = len(rows)
+        strategy_effect_proven = improved > 0
+
+        result = ProofResult(
+            strategy_name=strategy.name,
+            rows=rows,
+            total=total,
+            improved=improved,
+            already_ok=already_ok,
+            no_effect=no_effect,
+            worsened=worsened,
+            invalid=0,
+            strategy_effect_proven=strategy_effect_proven,
+            winws_pid=winws_pid,
+            winws_alive_at_start=winws_alive_at_start,
+            winws_alive_at_end=winws_alive_at_end,
+            invalid_reason=None,
+            restore_warning=None,
+        )
+
+    except WinwsStartError as e:
+        # Strategy failed to start, don't run domain checks.
+        result = ProofResult(
+            strategy_name=strategy.name,
+            rows=[],
+            total=0,
+            improved=0,
+            already_ok=0,
+            no_effect=0,
+            worsened=0,
+            invalid=1,
+            strategy_effect_proven=False,
+            winws_pid=None,
+            winws_alive_at_start=False,
+            winws_alive_at_end=False,
+            invalid_reason=str(e),
+            restore_warning=None,
+        )
+
+    except Exception as e:
+        # If anything failed during the test (baseline probe, compare, etc.)
+        result = ProofResult(
+            strategy_name=strategy.name,
+            rows=[],
+            total=0,
+            improved=0,
+            already_ok=0,
+            no_effect=0,
+            worsened=0,
+            invalid=1,
+            strategy_effect_proven=False,
+            winws_pid=None,
+            winws_alive_at_start=False,
+            winws_alive_at_end=False,
+            invalid_reason=str(e),
+            restore_warning=None,
+        )
+
+    finally:
+        # Phase 6: Stop test winws and restore previous state
+        stop_zapret(ctx)
+
+        if was_running and prev_selected:
+            try:
+                prev_strategy = find_strategy(ctx, prev_selected, kind="base") or find_strategy(ctx, prev_selected)
+                if prev_strategy:
+                    youtube = find_strategy(ctx, prev_youtube, kind="youtube") if prev_youtube else None
+                    discord = find_strategy(ctx, prev_discord, kind="discord") if prev_discord else None
+                    start_zapret_interactive(ctx, prev_strategy, youtube=youtube, discord=discord)
+                else:
+                    restore_warning = f"Previous strategy '{prev_selected}' not found for restoration"
+            except Exception as e:
+                # IMPORTANT: do not turn proof into invalid if restore failed.
+                restore_warning = f"Failed to restore previous state: {e}"
+
+    if result is None:
+        # Defensive fallback, should not happen.
+        result = ProofResult(
+            strategy_name=strategy.name,
+            rows=[],
+            total=0,
+            improved=0,
+            already_ok=0,
+            no_effect=0,
+            worsened=0,
+            invalid=1,
+            strategy_effect_proven=False,
+            winws_pid=None,
+            winws_alive_at_start=False,
+            winws_alive_at_end=False,
+            invalid_reason="proof_of_effect: internal error (no result)",
+            restore_warning=None,
+        )
+
+    if restore_warning:
+        result = replace(result, restore_warning=restore_warning)
+
+    return result
+
+
 def write_results(ctx: AppContext, results: list[TestResult], file_name: str) -> Path:
     out = ctx.paths.results_dir / file_name
     lines = [f"# {now_utc_iso()}", ""]
     lines.append("Summary")
     lines.append("-------")
     for r in sorted(results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True):
-        lines.append(f"{r.strategy} -> {r.summary_text()}")
+        if r.status != "ok":
+            lines.append(f"{r.strategy} -> INVALID ({r.error})")
+        else:
+            lines.append(f"{r.strategy} -> {r.summary_text()}")
     lines.append("")
     lines.append("Details")
     lines.append("-------")
     for r in sorted(results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True):
         lines.append("")
+        if r.status != "ok":
+            lines.append(f"[{r.strategy}] INVALID ({r.error})")
+            continue
         lines.append(f"[{r.strategy}] {r.summary_text()}")
         for i, c in enumerate(r.checks, start=1):
             lines.append(_format_domain_row(i, r.total, c))

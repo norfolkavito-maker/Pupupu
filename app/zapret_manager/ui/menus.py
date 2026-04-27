@@ -14,9 +14,11 @@ from app.zapret_manager.features.selection import find_strategy, list_bases, lis
 from app.zapret_manager.features.strategy_test import (
     DEFAULT_TEST_DOMAINS,
     TestResult,
+    ProofResult,
     control_test,
     test_strategy,
     test_session,
+    proof_of_effect,
     write_results,
 )
 from app.zapret_manager.features.test_sets import DOMAIN_SETS, read_domain_set_file, combine_domain_sets
@@ -405,6 +407,7 @@ def test_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Тестировать стратегии по домену{C.RESET}")
         print(f"{C.CYAN}6){C.RESET} {C.GREEN}YouTube auto-test (Yv){C.RESET}")
         print(f"{C.CYAN}7){C.RESET} {C.GREEN}Выбрать набор доменов{C.RESET} (Default/YouTube/CDN/Amazon)")
+        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Proof-of-effect test (baseline vs strategy){C.RESET}")
         if have_results:
             print(f"{C.CYAN}9){C.RESET} {C.GREEN}Результаты тестирования стратегий{C.RESET}")
             print(f"{C.CYAN}D){C.RESET} {C.GREEN}Удалить результаты тестирования{C.RESET}")
@@ -428,6 +431,8 @@ def test_menu(ctx: AppContext) -> None:
                 _youtube_auto_test(ctx)
             elif c == "7":
                 _choose_domain_set(ctx)
+            elif c == "8":
+                _run_proof_of_effect_test(ctx)
             elif c == "9" and have_results:
                 _show_results(ctx)
             elif c.lower() == "d" and have_results:
@@ -634,6 +639,88 @@ def _show_results(ctx: AppContext) -> None:
     print(f"{C.CYAN}{p}{C.RESET}\n")
     print(p.read_text(encoding="utf-8", errors="replace")[:12000])
     pause()
+
+
+def _run_proof_of_effect_test(ctx: AppContext) -> None:
+    """Run proof-of-effect test: baseline vs strategy."""
+    # Check if strategy is selected
+    strategy_name = ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy
+    if not strategy_name:
+        print(f"\n{C.YELLOW}Не выбрана стратегия для тестирования.{C.RESET}")
+        print(f"{C.YELLOW}Выберите стратегию в меню 'Стратегии' и повторите попытку.{C.RESET}\n")
+        pause()
+        return
+    
+    # Find the strategy
+    strategy = find_strategy(ctx, strategy_name, kind="base") or find_strategy(ctx, strategy_name)
+    if not strategy:
+        print(f"\n{C.RED}Стратегия '{strategy_name}' не найдена.{C.RESET}")
+        print(f"{C.YELLOW}Попробуйте сделать sync стратегий в системном меню.{C.RESET}\n")
+        pause()
+        return
+    
+    # Get domains for current set
+    domains = _domains_for_current_set(ctx)
+    if not domains:
+        domains = [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
+    
+    print(f"\n{C.MAGENTA}Proof-of-effect тест{C.RESET}")
+    print(f"Стратегия: {strategy.name}")
+    print(f"Домены: {len(domains)}")
+    print(f"Формат: Базовый тест → Тест со стратегией → Сравнение")
+    print("-" * 70)
+    
+    try:
+        # Run proof-of-effect test
+        result = proof_of_effect(ctx, strategy, domains, settle_s=1.5, parallel=6)
+        
+        # Display results
+        print(f"\n{C.CYAN}{'domain':<25} {'baseline':<10} {'strategy':<10} {'effect':<12} {'error':<15}{C.RESET}")
+        print("-" * 70)
+        
+        for row in result.rows:
+            baseline_status = "OK" if row.baseline_ok else "FAIL"
+            strategy_status = "OK" if row.strategy_ok else "FAIL"
+            print(f"{row.domain:<25} {baseline_status:<10} {strategy_status:<10} {row.effect:<12} {row.strategy_error or '-':<15}")
+        
+        # Summary
+        print("-" * 70)
+        print(f"{C.MAGENTA}Сводка:{C.RESET}")
+        print(f"  total: {result.total}")
+        print(f"  improved: {result.improved}")
+        print(f"  already_ok: {result.already_ok}")
+        print(f"  no_effect: {result.no_effect}")
+        print(f"  worsened: {result.worsened}")
+        print(f"  invalid: {result.invalid}")
+        
+        # WinWS evidence
+        print(f"\n{C.MAGENTA}WinWS доказательство:{C.RESET}")
+        print(f"  pid: {result.winws_pid or 'N/A'}")
+        print(f"  alive at start: {result.winws_alive_at_start}")
+        print(f"  alive at end: {result.winws_alive_at_end}")
+        
+        # Effect proven status
+        if result.strategy_effect_proven:
+            print(f"\n{C.GREEN}✓ Доказано, что стратегия влияет на соединение{C.RESET}")
+        else:
+            print(f"\n{C.YELLOW}✗ Не доказано, что стратегия влияет на соединение{C.RESET}")
+        
+        # Restore warning if any
+        if result.restore_warning:
+            print(f"\n{C.YELLOW}Предупреждение при восстановлении:{C.RESET}")
+            print(f"  {result.restore_warning}")
+        
+        if result.invalid_reason:
+            print(f"\n{C.RED}Причина недействительности:{C.RESET}")
+            print(f"  {result.invalid_reason}")
+        
+        print(f"\n{C.GREEN}Тест завершен.{C.RESET}\n")
+        pause()
+        
+    except Exception as e:
+        print(f"\n{C.RED}Ошибка при выполнении proof-of-effect теста:{C.RESET}")
+        print(f"{e}\n")
+        pause()
 
 
 def tg_menu(ctx: AppContext) -> None:

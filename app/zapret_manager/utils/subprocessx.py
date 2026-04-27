@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 from app.zapret_manager.core.diagnostics import diag_log
 
@@ -52,7 +53,13 @@ def run(
     return CmdResult(code=p.returncode, out=p.stdout or "", err=p.stderr or "")
 
 
-def popen_detached(args: list[str], *, cwd: str | None = None) -> subprocess.Popen:
+def popen_detached(
+    args: list[str],
+    *,
+    cwd: str | None = None,
+    stdout_path: Path | None = None,
+    stderr_path: Path | None = None,
+) -> subprocess.Popen:
     log.info("popen: %s", args)
     diag_log("process.popen", "subprocessx", {"args": args, "cwd": cwd})
     # On Windows create new process group to allow taskkill by PID.
@@ -62,12 +69,33 @@ def popen_detached(args: list[str], *, cwd: str | None = None) -> subprocess.Pop
     except Exception:
         creationflags = 0
 
-    return subprocess.Popen(
-        args,
-        cwd=cwd,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-        creationflags=creationflags,
-    )
+    # If stdout/stderr are redirected into files, close parent-side file handles
+    # immediately after spawn to avoid handle leaks. Child process keeps its
+    # own handles.
+    out_f = None
+    err_f = None
+    try:
+        if stdout_path:
+            stdout_path.parent.mkdir(parents=True, exist_ok=True)
+            out_f = open(stdout_path, "ab")
+        if stderr_path:
+            stderr_path.parent.mkdir(parents=True, exist_ok=True)
+            err_f = open(stderr_path, "ab")
+
+        p = subprocess.Popen(
+            args,
+            cwd=cwd,
+            stdout=out_f or subprocess.DEVNULL,
+            stderr=err_f or subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            creationflags=creationflags,
+        )
+        return p
+    finally:
+        try:
+            if out_f:
+                out_f.close()
+        finally:
+            if err_f:
+                err_f.close()
 
