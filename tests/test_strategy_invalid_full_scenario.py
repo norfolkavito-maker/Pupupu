@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import tempfile
+import shutil
 from pathlib import Path
 
 from app.zapret_manager.features.strategy_test import test_strategy
@@ -83,8 +84,8 @@ class TestStrategyInvalidFullScenario(unittest.TestCase):
             mock_stop.assert_called()
             
         # Cleanup temp dirs
-        ctx.paths.logs_dir.rmdir(parents=True, ignore_errors=True)
-        ctx.paths.results_dir.rmdir(parents=True, ignore_errors=True)
+        shutil.rmtree(ctx.paths.logs_dir, ignore_errors=True)
+        shutil.rmtree(ctx.paths.results_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

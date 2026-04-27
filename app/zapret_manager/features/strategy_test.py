@@ -591,6 +591,10 @@ def test_strategy(
                     log.exception("failed to restore previous zapret state after strategy test")
 
 
+# Prevent pytest from collecting this helper as a test function.
+test_strategy.__test__ = False  # type: ignore[attr-defined]
+
+
 def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
     from app.zapret_manager.features.selection import list_bases, list_layers
 
@@ -735,6 +739,10 @@ def test_session(
             _cleanup_tmp(_tmp_pack_dir(ctx, "flowseal"))
         if ensure_stressozz:
             _cleanup_tmp(_tmp_pack_dir(ctx, "stressozz"))
+
+
+# Prevent pytest from collecting this helper as a test function.
+test_session.__test__ = False  # type: ignore[attr-defined]
 
 
 def classify_effect(baseline_ok: bool, strategy_ok: bool) -> str:
