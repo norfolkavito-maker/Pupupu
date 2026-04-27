@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -60,6 +61,71 @@ def _runtime_lists_dir(ctx: "AppContext") -> Path:
     return found or preferred
 
 
+def _manager_lists_dir(ctx: "AppContext") -> Path:
+    return ctx.paths.lists_dir.resolve()
+
+
+def _rt_lists_dir(ctx: "AppContext") -> Path:
+    # Explicit runtime lists dir (legacy / fallback).
+    return _runtime_lists_dir(ctx).resolve()
+
+
+def _resolve_list_path_compat(ctx: "AppContext", path_str: str) -> str:
+    """Best-effort mapping for list file names.
+
+    We support common naming differences between bundles/strategies:
+    - google.txt <-> list-google.txt
+    - exclude.txt <-> list-exclude.txt
+    - general.txt <-> list-general.txt
+    - general-user.txt <-> list-general-user.txt
+    - ipset-exclude.txt <-> list-ipset-exclude.txt
+    - ipset-all.txt <-> list-ipset-all.txt
+
+    This function DOES NOT create empty files.
+    """
+    # Path() on non-Windows treats backslashes as regular characters.
+    # Since we frequently build Win-style paths even in unit tests on POSIX,
+    # normalize separators when not on Windows.
+    norm = path_str
+    if os.name != "nt":
+        norm = norm.replace("\\", "/")
+
+    try:
+        p = Path(norm)
+    except Exception:
+        return path_str
+
+    name = p.name
+    parent = p.parent
+    low = name.lower()
+
+    # candidate name swaps
+    swaps: dict[str, list[str]] = {
+        "google.txt": ["list-google.txt"],
+        "list-google.txt": ["google.txt"],
+        "exclude.txt": ["list-exclude.txt", "hostlist-exclude.txt"],
+        "list-exclude.txt": ["exclude.txt"],
+        "general.txt": ["list-general.txt"],
+        "list-general.txt": ["general.txt"],
+        "general-user.txt": ["list-general-user.txt"],
+        "list-general-user.txt": ["general-user.txt"],
+        "ipset-exclude.txt": ["list-ipset-exclude.txt"],
+        "list-ipset-exclude.txt": ["ipset-exclude.txt"],
+        "ipset-all.txt": ["list-ipset-all.txt"],
+        "list-ipset-all.txt": ["ipset-all.txt"],
+    }
+
+    cand_names = swaps.get(low)
+    if not cand_names:
+        return path_str
+
+    for cn in cand_names:
+        cp = (parent / cn)
+        if cp.exists():
+            return str(cp)
+    return path_str
+
+
 def runtime_health(ctx: "AppContext") -> dict[str, object]:
     """Checks that bundled runtime exists and has required files.
 
@@ -78,35 +144,51 @@ def runtime_health(ctx: "AppContext") -> dict[str, object]:
     windivert_sys = zr / "WinDivert64.sys"
     blockcheck_cmd = _find_first(zr, ["blockcheck.cmd"]) if zr.exists() else None
     fake_dir = _runtime_fake_dir(ctx)
-    lists_dir = _runtime_lists_dir(ctx)
+    # Canonical lists dir (manager): DedZapretData/data/lists
+    mgr_lists_dir = _manager_lists_dir(ctx)
+    # Legacy runtime lists dir (optional): DedZapretData/runtime/zapret/lists
+    rt_lists_dir = _rt_lists_dir(ctx)
 
     ok = True
     problems: list[str] = []
 
+    # Core runtime: required for ANY start
+    core_ok = True
+
     if not rt.exists():
         ok = False
+        core_ok = False
         problems.append(f"runtime dir not found: {rt}")
     if not zr.exists():
         ok = False
+        core_ok = False
         problems.append(f"zapret dir not found: {zr}")
     if not winws:
         ok = False
+        core_ok = False
         problems.append("winws.exe not found")
     if not windivert_dll.exists():
         ok = False
+        core_ok = False
         problems.append("WinDivert.dll not found")
     if not windivert_sys.exists():
         ok = False
+        core_ok = False
         problems.append("WinDivert64.sys not found")
     if not blockcheck_cmd:
         problems.append("blockcheck.cmd not found")
     if not fake_dir.exists():
         problems.append(f"fake files dir not found: {fake_dir}")
-    if not lists_dir.exists():
-        problems.append(f"lists dir not found: {lists_dir}")
+    if not mgr_lists_dir.exists():
+        problems.append(f"manager lists dir not found: {mgr_lists_dir}")
+    # runtime lists are optional fallback
+    if not rt_lists_dir.exists():
+        problems.append(f"runtime lists dir not found (optional): {rt_lists_dir}")
 
     return {
-        "ok": ok,
+        # Backward compatible flag (core runtime)
+        "ok": core_ok,
+        "core_ok": core_ok,
         "runtime_dir": str(rt),
         "zapret_dir": str(zr),
         "winws": str(winws) if winws else "",
@@ -114,7 +196,8 @@ def runtime_health(ctx: "AppContext") -> dict[str, object]:
         "windivert_dll": str(windivert_dll),
         "windivert_sys": str(windivert_sys),
         "fake_dir": str(fake_dir),
-        "lists_dir": str(lists_dir),
+        "lists_dir": str(mgr_lists_dir),
+        "rt_lists_dir": str(rt_lists_dir),
         "blockcheck": str(blockcheck_cmd) if blockcheck_cmd else "",
         "problems": problems,
     }
@@ -149,9 +232,11 @@ def runtime_diagnostics_text(ctx: "AppContext") -> str:
     lines.append(f"WinDivert.dll:    {wdd} ({okflag(wdd)})")
     lines.append(f"WinDivert64.sys:  {wds} ({okflag(wds)})")
     fake_dir = Path(str(h.get("fake_dir") or _runtime_fake_dir(ctx)))
-    lists_dir = Path(str(h.get("lists_dir") or _runtime_lists_dir(ctx)))
+    lists_dir = Path(str(h.get("lists_dir") or _manager_lists_dir(ctx)))
+    rt_lists_dir = Path(str(h.get("rt_lists_dir") or _rt_lists_dir(ctx)))
     lines.append(f"fake dir:         {fake_dir} ({okflag(fake_dir)})")
     lines.append(f"lists dir:        {lists_dir} ({okflag(lists_dir)})")
+    lines.append(f"rt lists dir:     {rt_lists_dir} ({okflag(rt_lists_dir)})")
     bc = Path(str(h.get("blockcheck") or (zr / 'blockcheck' / 'blockcheck.cmd')))
     lines.append(f"blockcheck.cmd:   {bc} ({okflag(bc)})")
 
@@ -180,6 +265,19 @@ def require_runtime_ok(ctx: "AppContext") -> None:
     if problems:
         msg += "\nProblems:\n- " + "\n- ".join(str(x) for x in problems)
     raise RuntimeError(msg)
+
+
+def validate_strategy_assets(ctx: "AppContext", strategy: Strategy) -> list[str]:
+    """Validate that all file-based assets referenced by a strategy exist.
+
+    This does NOT start winws. Used for UI health reporting.
+    """
+    try:
+        cmd = build_command(ctx, strategy)
+        cwd = zapret_root(ctx)
+        return validate_winws_command(ctx, cmd=cmd, cwd=cwd)
+    except Exception as e:
+        return [str(e)]
 
 
 def _runtime_root(ctx: "AppContext") -> Path:
@@ -239,14 +337,27 @@ def build_command(
 
 def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> list[str]:
     fake_dir = _runtime_fake_dir(ctx)
-    lists_dir = _runtime_lists_dir(ctx)
+    mgr_lists_dir = _manager_lists_dir(ctx)
+    rt_lists_dir = _rt_lists_dir(ctx)
     resolved: list[str] = []
+    sep = "\\" if os.name == "nt" else "/"
+
     for a in args:
-        a = a.replace("{BIN}", str(exe_dir) + "\\")
-        a = a.replace("{LISTS}", str(lists_dir.resolve()) + "\\")
-        a = a.replace("{MGR_LISTS}", str(ctx.paths.lists_dir.resolve()) + "\\")
-        a = a.replace("{FAKE}", str(fake_dir.resolve()) + "\\")
+        a = a.replace("{BIN}", str(exe_dir) + sep)
+        # Canonical lists dir: DedZapretData/data/lists
+        a = a.replace("{LISTS}", str(mgr_lists_dir) + sep)
+        a = a.replace("{MGR_LISTS}", str(mgr_lists_dir) + sep)
+        # Legacy runtime lists dir: DedZapretData/runtime/zapret/lists
+        a = a.replace("{RT_LISTS}", str(rt_lists_dir) + sep)
+        a = a.replace("{FAKE}", str(fake_dir.resolve()) + sep)
         a = _resolve_fake(ctx, a)
+        # Apply compat mapping for list file names (google.txt vs list-google.txt, etc.)
+        if a.startswith("--hostlist=") or a.startswith("--hostlist-exclude=") or a.startswith("--ipset=") or a.startswith("--ipset-exclude="):
+            try:
+                key, val = a.split("=", 1)
+                a = f"{key}={_resolve_list_path_compat(ctx, val)}"
+            except Exception:
+                pass
         resolved.append(a)
     return resolved
 

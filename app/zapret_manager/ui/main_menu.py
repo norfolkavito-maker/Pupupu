@@ -8,6 +8,7 @@ from app.zapret_manager.features.system import quic_rule_exists
 from app.zapret_manager.features.zapret_runtime import (
     detect_runtime_files,
     runtime_health,
+    validate_strategy_assets,
     start_zapret_interactive,
     stop_zapret,
 )
@@ -34,10 +35,10 @@ def _status_lines(ctx: AppContext) -> list[str]:
     lines: list[str] = []
 
     h = runtime_health(ctx)
-    if h.get("ok"):
-        lines.append(f"{C.YELLOW}Runtime:{C.RESET} {C.GREEN}OK{C.RESET}")
+    if h.get("core_ok"):
+        lines.append(f"{C.YELLOW}Runtime(core):{C.RESET} {C.GREEN}OK{C.RESET}")
     else:
-        lines.append(f"{C.YELLOW}Runtime:{C.RESET} {C.RED}MISSING/BROKEN{C.RESET}")
+        lines.append(f"{C.YELLOW}Runtime(core):{C.RESET} {C.RED}MISSING/BROKEN{C.RESET}")
 
     if ctx.state.zapret.running and ctx.state.zapret.pid:
         lines.append(f"{C.YELLOW}Zapret:{C.RESET} {C.GREEN}запущен{C.RESET} (pid={ctx.state.zapret.pid})")
@@ -47,6 +48,17 @@ def _status_lines(ctx: AppContext) -> list[str]:
     strategy = ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy
     if strategy:
         lines.append(f"{C.YELLOW}Стратегия:{C.RESET} {C.CYAN}{strategy}{C.RESET}")
+        # show if selected strategy can start (assets)
+        try:
+            st = _load_selected_strategy(ctx)
+            if st:
+                probs = validate_strategy_assets(ctx, st)
+                if probs:
+                    lines.append(f"{C.YELLOW}Strategy assets:{C.RESET} {C.RED}ERROR{C.RESET}")
+                else:
+                    lines.append(f"{C.YELLOW}Strategy assets:{C.RESET} {C.GREEN}OK{C.RESET}")
+        except Exception:
+            pass
     else:
         lines.append(f"{C.YELLOW}Стратегия:{C.RESET} {C.RED}не выбрана{C.RESET}")
 

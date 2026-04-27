@@ -63,6 +63,7 @@ from app.zapret_manager.features.zapret_runtime import (
     start_zapret_interactive,
     stop_zapret,
 )
+from app.zapret_manager.features.runtime_assets import ensure_base_lists
 from app.zapret_manager.features.test_urls import prepare_urls
 from app.zapret_manager.utils.console import C, ask, clear, pause
 
@@ -818,6 +819,7 @@ def _runtime_menu(ctx: AppContext) -> None:
         print(f"{C.YELLOW}Diagnostics:{C.RESET} " + (f"{C.GREEN}ON{C.RESET}" if diag_on else f"{C.DIM}OFF{C.RESET}") + "\n")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Показать runtime diagnostics{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Запустить blockcheck{C.RESET}")
+        print(f"{C.CYAN}R){C.RESET} {C.GREEN}Repair: создать/починить базовые списки (data\\lists){C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Запустить blockcheck2{C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Toggle Diagnostics (в config.yaml){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
@@ -831,6 +833,14 @@ def _runtime_menu(ctx: AppContext) -> None:
             run_blockcheck(ctx, variant="1")
         elif c == "3":
             run_blockcheck(ctx, variant="2")
+        elif c.lower() == "r":
+            items = ensure_base_lists(ctx)
+            clear()
+            print(f"{C.MAGENTA}Repair base lists{C.RESET}\n")
+            for it in items:
+                color = C.GREEN if it.status in {"OK", "CREATED", "COPIED"} else C.RED
+                print(f"- {color}{it.status}{C.RESET} {it.name} {C.DIM}{it.details}{C.RESET}")
+            pause()
         elif c == "4":
             _toggle_diagnostics_in_config(ctx)
             pause()

@@ -13,7 +13,9 @@ def _map_linux_paths(args: list[str]) -> list[str]:
     for a in args:
         a = a.replace("/opt/zapret/files/fake/", "{FAKE:")
         a = re.sub(r"\{FAKE:([^ ]+)\.bin", r"{FAKE:\1.bin}", a)
+        # In DedZapret canonical list storage is manager lists dir.
         a = a.replace("/opt/zapret/ipset/", "{LISTS}")
+        a = a.replace("/opt/zapret/lists/", "{LISTS}")
         out.append(a)
     return out
 
