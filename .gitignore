@@ -10,6 +10,8 @@ data/*
 data/strategies/*
 !data/strategies/builtin/
 !data/strategies/builtin/**
+!data/lists/
+!data/lists/**
 dist/
 build/
 

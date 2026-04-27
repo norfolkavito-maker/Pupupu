@@ -1,0 +1,2 @@
+# RKN list placeholder.
+# If you enable RKN overlay, update this file via menu: System -> Upstreams -> Update exclude + RKN list

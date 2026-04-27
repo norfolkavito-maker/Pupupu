@@ -1,0 +1,9 @@
+# Minimal google hostlist for DedZapret builtin strategies.
+# This file is intentionally small; user can replace/extend.
+
+googlevideo.com
+youtube.com
+ytimg.com
+google.com
+gstatic.com
+ggpht.com

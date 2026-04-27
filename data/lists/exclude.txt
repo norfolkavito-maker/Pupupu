@@ -1,0 +1,2 @@
+# User exclude list (domains that should NOT be processed by hostlist/ipset logic).
+# Start empty and add domains line-by-line.
