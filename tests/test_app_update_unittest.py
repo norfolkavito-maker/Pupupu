@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,12 +15,24 @@ from app.zapret_manager.upstreams.github_release import GitHubRelease, ReleaseAs
 
 class TestAppUpdate(unittest.TestCase):
     def _fake_ctx(self):
+        td = tempfile.TemporaryDirectory(prefix="dedzapret_test_")
+        self.addCleanup(td.cleanup)
+
+        root = Path(td.name).resolve() / "DedZapretRoot"
+        cache = root / "DedZapretData" / "data" / "cache"
+        logs = root / "DedZapretData" / "data" / "logs"
+        data_root = root / "DedZapretData"
+
+        # create minimal dirs to avoid accidental real FS writes outside temp
+        logs.mkdir(parents=True, exist_ok=True)
+        cache.mkdir(parents=True, exist_ok=True)
+
         ctx = MagicMock()
         ctx.paths = MagicMock()
-        ctx.paths.root = Path("/tmp/DedZapretRoot")
-        ctx.paths.cache_dir = Path("/tmp/cache")
-        ctx.paths.logs_dir = Path("/tmp/logs")
-        ctx.paths.data_root = Path("/tmp/DedZapretRoot/DedZapretData")
+        ctx.paths.root = root
+        ctx.paths.cache_dir = cache
+        ctx.paths.logs_dir = logs
+        ctx.paths.data_root = data_root
         return ctx
 
     def test_generate_updater_bat_excludes_dedzapretdata(self):
@@ -45,7 +58,7 @@ class TestAppUpdate(unittest.TestCase):
         self.assertEqual(plan.latest_tag, "v1.2.3")
         self.assertEqual(plan.asset.name, "DedZapret-portable-v1.2.3.zip")
 
-    @patch("app.zapret_manager.features.app_update.os.name", "nt")
+    @patch("app.zapret_manager.features.app_update._is_windows", return_value=True)
     @patch("app.zapret_manager.features.app_update._write_update_log")
     @patch("app.zapret_manager.features.app_update._backup_dedzapret_data")
     @patch("app.zapret_manager.features.app_update._validate_zip")
@@ -66,37 +79,44 @@ class TestAppUpdate(unittest.TestCase):
         mock_validate,
         mock_backup,
         _mock_write_log,
+        _mock_is_windows,
     ):
         ctx = self._fake_ctx()
+        # Make plan paths relative to our temp root (avoid /tmp hardcoding which breaks on Windows)
+        plan_download = ctx.paths.cache_dir / "DedZapret-portable-v1.zip"
+        plan_log = ctx.paths.logs_dir / "update.log"
+        plan_lock = ctx.paths.data_root / "update.lock"
+        plan_updater = ctx.paths.data_root / "updater.bat"
+
         plan = MagicMock()
         plan.repo = "o/r"
         plan.current_version = "0"
         plan.latest_tag = "v1"
         plan.asset = ReleaseAsset(name="DedZapret-portable-v1.zip", url="u", size=1)
-        plan.download_path = Path("/tmp/cache/DedZapret-portable-v1.zip")
-        plan.update_log = Path("/tmp/logs/update.log")
-        plan.lock_file = Path("/tmp/lock")
-        plan.updater_bat = Path("/tmp/updater.bat")
+        plan.download_path = plan_download
+        plan.update_log = plan_log
+        plan.lock_file = plan_lock
+        plan.updater_bat = plan_updater
         mock_plan.return_value = plan
-        mock_backup.return_value = Path("/tmp/backup.zip")
+        mock_backup.return_value = ctx.paths.data_root / "backups" / "app_update" / "backup.zip"
         with patch.object(Path, "exists", return_value=True), patch.object(Path, "stat") as st:
             st.return_value.st_size = 123
             run_update(ctx)
         mock_popen.assert_called()
 
-    @patch("app.zapret_manager.features.app_update.os.name", "posix")
+    @patch("app.zapret_manager.features.app_update._is_windows", return_value=False)
     @patch("app.zapret_manager.features.app_update.build_update_plan")
-    def test_run_update_windows_only(self, mock_plan):
+    def test_run_update_windows_only(self, mock_plan, _mock_is_windows):
         ctx = self._fake_ctx()
         plan = MagicMock()
         plan.repo = "o/r"
         plan.current_version = "0"
         plan.latest_tag = "v1"
         plan.asset = ReleaseAsset(name="DedZapret-portable-v1.zip", url="u", size=1)
-        plan.download_path = Path("/tmp/cache/DedZapret-portable-v1.zip")
-        plan.update_log = Path("/tmp/logs/update.log")
-        plan.lock_file = Path("/tmp/lock")
-        plan.updater_bat = Path("/tmp/updater.bat")
+        plan.download_path = ctx.paths.cache_dir / "DedZapret-portable-v1.zip"
+        plan.update_log = ctx.paths.logs_dir / "update.log"
+        plan.lock_file = ctx.paths.data_root / "update.lock"
+        plan.updater_bat = ctx.paths.data_root / "updater.bat"
         mock_plan.return_value = plan
         with self.assertRaises(AppUpdateError):
             run_update(ctx)

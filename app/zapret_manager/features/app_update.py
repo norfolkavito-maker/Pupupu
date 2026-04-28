@@ -37,6 +37,12 @@ class AppUpdateError(RuntimeError):
     pass
 
 
+def _is_windows() -> bool:
+    # Keep OS detection behind a function so tests can patch it without
+    # mutating global os.name (which breaks pathlib on non-Windows runners).
+    return os.name == "nt"
+
+
 def _split_repo(repo: str) -> tuple[str, str]:
     repo = (repo or "").strip()
     if "/" not in repo:
@@ -195,7 +201,7 @@ def run_update(ctx: AppContext, *, github_repo: str = DEFAULT_REPO) -> AppUpdate
     It writes updater.bat into DedZapretData and starts it.
     """
     # Must not even start downloads/backups on non-Windows.
-    if os.name != "nt":
+    if not _is_windows():
         raise AppUpdateError("self-update is Windows-only")
 
     plan = build_update_plan(ctx, github_repo=github_repo)
