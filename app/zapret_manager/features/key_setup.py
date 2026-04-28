@@ -13,7 +13,7 @@ from app.zapret_manager.features.strategy_test import control_test, test_session
 from app.zapret_manager.features.test_sets import combine_domain_sets
 from app.zapret_manager.features.test_urls import prepare_urls
 from app.zapret_manager.features.zapret_runtime import require_runtime_ok, start_zapret_interactive, stop_zapret
-from app.zapret_manager.utils.console import C, ask
+from app.zapret_manager.utils.console import C, ask, safe_print
 from app.zapret_manager.features.hosts import load_blocks_from_file, set_block_enabled
 
 
@@ -96,12 +96,12 @@ def key_setup_full_check(ctx: AppContext) -> list[str]:
         lines.append("exclude: updated")
 
         # Step A: baseline control test
-        print(f"\n{C.MAGENTA}Под ключ (full-check): контрольная проверка без zapret{C.RESET}\n")
+        safe_print(f"\n{C.MAGENTA}Под ключ (full-check): контрольная проверка без zapret{C.RESET}\n")
         base_domains = combine_domain_sets(ctx, ["default", "youtube", "cdn", "amazon", "discord", "instagram", "games"])
         domains = [u.url for u in prepare_urls(base_urls=base_domains, include_default=True, include_suite=True)]
         # control_test signature: control_test(ctx, domains, ...)
         r0 = control_test(ctx, domains, parallel=8)
-        print(f"{C.YELLOW}Baseline:{C.RESET} {r0.summary_text()}\n")
+        safe_print(f"{C.YELLOW}Baseline:{C.RESET} {r0.summary_text()}\n")
         lines.append(f"baseline: {r0.summary_text()}")
 
         # Step B: choose services
@@ -113,11 +113,11 @@ def key_setup_full_check(ctx: AppContext) -> list[str]:
         }
 
         while True:
-            print(f"{C.MAGENTA}Выбор сервисов (toggle 1-4, Enter=далее){C.RESET}")
-            print(f"1) YouTube      : {'ON' if services['youtube'] else 'OFF'}")
-            print(f"2) Discord      : {'ON' if services['discord'] else 'OFF'}")
-            print(f"3) Instagram    : {'ON' if services['instagram'] else 'OFF'}")
-            print(f"4) Games        : {'ON' if services['games'] else 'OFF'}")
+            safe_print(f"{C.MAGENTA}Выбор сервисов (toggle 1-4, Enter=далее){C.RESET}")
+            safe_print(f"1) YouTube      : {'ON' if services['youtube'] else 'OFF'}")
+            safe_print(f"2) Discord      : {'ON' if services['discord'] else 'OFF'}")
+            safe_print(f"3) Instagram    : {'ON' if services['instagram'] else 'OFF'}")
+            safe_print(f"4) Games        : {'ON' if services['games'] else 'OFF'}")
             c = ask("Выбор: ").strip()
             if not c:
                 break
@@ -145,7 +145,7 @@ def key_setup_full_check(ctx: AppContext) -> list[str]:
         lines.append(f"domain_set: {','.join(keys)}")
 
         # Step C: run test session
-        print(f"\n{C.MAGENTA}Запускаю подбор стратегий (base: v + flowseal){C.RESET}\n")
+        safe_print(f"\n{C.MAGENTA}Запускаю подбор стратегий (base: v + flowseal){C.RESET}\n")
         summary = test_session(
             ctx,
             group="all",
@@ -159,9 +159,9 @@ def key_setup_full_check(ctx: AppContext) -> list[str]:
         )
         ranked = sorted(summary.results, key=lambda x: (x.ok, x.total, x.strategy), reverse=True)
         top = [r for r in ranked if r.total > 0][:3]
-        print(f"\n{C.GREEN}Top-3 стратегии:{C.RESET}")
+        safe_print(f"\n{C.GREEN}Top-3 стратегии:{C.RESET}")
         for r in top:
-            print(f"- {r.strategy}: {r.summary_text()}")
+            safe_print(f"- {r.strategy}: {r.summary_text()}")
         lines.append("top3: " + ", ".join(f"{r.strategy}({r.ok}/{r.total})" for r in top))
 
         if top:

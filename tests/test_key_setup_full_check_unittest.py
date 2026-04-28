@@ -40,18 +40,20 @@ class TestKeySetupFullCheck(unittest.TestCase):
             inst = HM.return_value
             inst.backup.return_value = None
 
-            mock_combine.return_value = ["example.com"]
-            # prepare_urls returns list of objects with .url
-            u = MagicMock()
-            u.url = "https://example.com/"
-            mock_prepare.return_value = [u]
+            # avoid save_state() on MagicMock state during exception rollback
+            with patch("app.zapret_manager.features.key_setup.save_state"):
+                mock_combine.return_value = ["example.com"]
+                # prepare_urls returns list of objects with .url
+                u = MagicMock()
+                u.url = "https://example.com/"
+                mock_prepare.return_value = [u]
 
-            res = MagicMock()
-            res.summary_text.return_value = "OK"
-            mock_control.return_value = res
+                res = MagicMock()
+                res.summary_text.return_value = "OK"
+                mock_control.return_value = res
 
-            # exercise
-            key_setup_full_check(ctx)
+                # exercise
+                key_setup_full_check(ctx)
 
         # Verify: first arg is ctx
         args, kwargs = mock_control.call_args
