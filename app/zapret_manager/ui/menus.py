@@ -87,6 +87,12 @@ from app.zapret_manager.features.problem_domains import (
     remove_resolved_domain,
 )
 
+from app.zapret_manager.features.app_update import (
+    AppUpdateError,
+    build_update_plan,
+    run_update,
+)
+
 
 log = logging.getLogger(__name__)
 
@@ -890,6 +896,7 @@ def system_menu(ctx: AppContext) -> None:
         print(f"{C.MAGENTA}Системное меню{C.RESET}\n")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Runtime / Blockcheck / Diagnostics{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Upstreams (обновления стратегий){C.RESET}")
+        print(f"{C.CYAN}A){C.RESET} {C.GREEN}DedZapret App Update (самообновление){C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Network (QUIC / TCP timestamps / Flush DNS){C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Backup / Restore{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Системная информация{C.RESET}")
@@ -901,6 +908,8 @@ def system_menu(ctx: AppContext) -> None:
                 _runtime_menu(ctx)
             elif c == "2":
                 _upstreams_menu(ctx)
+            elif c.lower() == "a":
+                _app_update_menu(ctx)
             elif c == "3":
                 _network_menu(ctx)
             elif c == "4":
@@ -911,6 +920,49 @@ def system_menu(ctx: AppContext) -> None:
                 pause()
         except Exception as e:
             log.exception("system_menu failed")
+            print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
+
+
+def _app_update_menu(ctx: AppContext) -> None:
+    while True:
+        clear()
+        from app.zapret_manager import __version__
+
+        print(f"{C.MAGENTA}DedZapret App Update (самообновление){C.RESET}\n")
+        print(f"{C.YELLOW}Текущая версия:{C.RESET} {__version__}\n")
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Check app updates (latest release){C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Download & install latest portable release{C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Открыть update.log{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        try:
+            if c == "1":
+                plan = build_update_plan(ctx)
+                print(f"\n{C.GREEN}Latest:{C.RESET} {plan.latest_tag}")
+                print(f"{C.GREEN}Asset:{C.RESET} {plan.asset.name} ({plan.asset.size} bytes)")
+                print(f"{C.GREEN}Repo:{C.RESET} {plan.repo}\n")
+                pause()
+            elif c == "2":
+                ans = ask("\nНачать обновление? Будет создан backup DedZapretData. (Y/n): ").strip().lower()
+                if ans not in {"", "y", "yes"}:
+                    continue
+                run_update(ctx)
+                # updater.bat will run in background. user can close app.
+                pause("\nНажми Enter чтобы вернуться в меню (обновление уже запущено)... ")
+            elif c == "3":
+                p = (ctx.paths.logs_dir / "update.log").resolve()
+                if not p.exists():
+                    print(f"\n{C.YELLOW}Лог обновления ещё не создан:{C.RESET} {p}\n")
+                else:
+                    print("\n" + p.read_text(encoding="utf-8", errors="replace") + "\n")
+                pause()
+        except AppUpdateError as e:
+            print(f"\n{C.RED}Update error:{C.RESET} {e}\n")
+            pause()
+        except Exception as e:
+            log.exception("app_update_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
             pause()
 
