@@ -63,8 +63,9 @@ from app.zapret_manager.features.zapret_runtime import (
     runtime_health,
     start_zapret_interactive,
     stop_zapret,
+    WinwsStartError,
 )
-from app.zapret_manager.features.runtime_assets import ensure_base_lists
+from app.zapret_manager.features.runtime_assets import repair_runtime_assets
 from app.zapret_manager.features.test_urls import prepare_urls
 from app.zapret_manager.utils.console import ask, clear, pause, safe_print
 
@@ -842,7 +843,7 @@ def _runtime_menu(ctx: AppContext) -> None:
         print(f"{C.YELLOW}Diagnostics:{C.RESET} " + (f"{C.GREEN}ON{C.RESET}" if diag_on else f"{C.DIM}OFF{C.RESET}") + "\n")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Показать runtime diagnostics{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Запустить blockcheck{C.RESET}")
-        print(f"{C.CYAN}R){C.RESET} {C.GREEN}Repair: создать/починить базовые списки (data\\lists){C.RESET}")
+        print(f"{C.CYAN}R){C.RESET} {C.GREEN}Repair runtime assets (lists + fake){C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Запустить blockcheck2{C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Toggle Diagnostics (в config.yaml){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
@@ -854,12 +855,11 @@ def _runtime_menu(ctx: AppContext) -> None:
             pause()
         elif c == "2":
             run_blockcheck(ctx, variant="1")
-        elif c == "3":
-            run_blockcheck(ctx, variant="2")
         elif c.lower() == "r":
-            items = ensure_base_lists(ctx)
+
+            items = repair_runtime_assets(ctx)
             clear()
-            print(f"{C.MAGENTA}Repair base lists{C.RESET}\n")
+            print(f"{C.MAGENTA}Repair runtime assets{C.RESET}\n")
             for it in items:
                 color = C.GREEN if it.status in {"OK", "CREATED", "COPIED"} else C.RED
                 print(f"- {color}{it.status}{C.RESET} {it.name} {C.DIM}{it.details}{C.RESET}")
@@ -1013,7 +1013,26 @@ def _restart_if_running(ctx: AppContext) -> None:
     youtube = find_strategy(ctx, ctx.state.zapret.youtube_layer, kind="youtube")
     discord = find_strategy(ctx, ctx.state.zapret.discord_layer, kind="discord")
     stop_zapret(ctx)
-    start_zapret_interactive(ctx, base, youtube=youtube, discord=discord)
+    try:
+        start_zapret_interactive(ctx, base, youtube=youtube, discord=discord)
+    except WinwsStartError as e:
+        # Preflight/validation errors should not crash the strategies menu.
+        log.exception("winws start failed")
+        clear()
+        print(f"{C.RED}Стратегия не запустилась (preflight).{C.RESET}\n")
+        # show first N lines to avoid a huge wall
+        lines = [ln.strip() for ln in str(e).splitlines() if ln.strip()]
+        if lines:
+            print(f"{C.YELLOW}Причина:{C.RESET}")
+            for ln in lines[:8]:
+                print(f"- {ln}")
+            if len(lines) > 8:
+                print(f"{C.DIM}... ({len(lines) - 8} строк скрыто; подробности в log){C.RESET}")
+        print("\nЧто сделать:")
+        print(f"1) {C.GREEN}System → Runtime → R: Repair runtime assets{C.RESET}")
+        print(f"2) {C.GREEN}Включить Games профиль, если стратегия требует игровых портов{C.RESET}")
+        print(f"3) {C.GREEN}Sync Flowseal/StressOzz стратегий{C.RESET}\n")
+        pause()
 
 
 def game_launcher_menu(ctx: AppContext) -> None:

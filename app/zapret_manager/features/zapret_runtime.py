@@ -515,6 +515,54 @@ def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> 
     resolved: list[str] = []
     sep = "\\" if os.name == "nt" else "/"
 
+    # Game filter placeholders occasionally appear in upstream scripts (Flowseal/StressOzz)
+    # as %GameFilterTCP%/%GameFilterUDP% tokens. We must never pass them to winws.
+    GAME_PORTS_UDP = "88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
+    GAME_PORTS_TCP = "2802,2302,2502,6112-6119,6695-6710,25565,27015-27030,27036-27037,50001"
+
+    def _clean_ports_expr(expr: str) -> str:
+        parts = [p.strip() for p in (expr or "").split(",") if p.strip()]
+        return ",".join(parts)
+
+    def _resolve_game_placeholders(arg: str) -> str | None:
+        # Only touch port-list options.
+        port_opts = ("--wf-tcp=", "--wf-udp=", "--filter-tcp=", "--filter-udp=")
+        opt = next((o for o in port_opts if arg.startswith(o)), None)
+        if not opt:
+            return arg
+
+        expr = arg.split("=", 1)[1]
+        # Fast path: nothing to do.
+        if "%GameFilter" not in expr:
+            return arg
+
+        want_tcp = opt in ("--wf-tcp=", "--filter-tcp=")
+        want_udp = opt in ("--wf-udp=", "--filter-udp=")
+        game_enabled = bool(getattr(ctx.state, "zapret", None) and ctx.state.zapret.games_profile)
+
+        # Split by commas and resolve placeholders token-by-token.
+        out_items: list[str] = []
+        for raw in (expr or "").split(","):
+            tok = raw.strip()
+            if not tok:
+                continue
+            if tok == "%GameFilterTCP%":
+                if game_enabled and want_tcp:
+                    out_items.extend(GAME_PORTS_TCP.split(","))
+                # else: drop token
+                continue
+            if tok == "%GameFilterUDP%":
+                if game_enabled and want_udp:
+                    out_items.extend(GAME_PORTS_UDP.split(","))
+                continue
+            out_items.append(tok)
+
+        normalized = _clean_ports_expr(",".join(out_items))
+        if not normalized:
+            # Entire filter becomes empty -> remove the whole option.
+            return None
+        return f"{opt}{normalized}"
+
     for a in args:
         a = a.replace("{BIN}", str(exe_dir) + sep)
         # Canonical lists dir: DedZapretData/data/lists
@@ -531,7 +579,10 @@ def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> 
                 a = f"{key}={_resolve_list_path_compat(ctx, val)}"
             except Exception:
                 pass
-        resolved.append(a)
+        a2 = _resolve_game_placeholders(a)
+        if a2 is None:
+            continue
+        resolved.append(a2)
     return resolved
 
 

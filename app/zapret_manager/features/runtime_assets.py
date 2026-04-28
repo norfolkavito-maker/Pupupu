@@ -17,6 +17,38 @@ class RepairItem:
     details: str = ""
 
 
+def _ensure_empty_file(path: Path) -> RepairItem:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        return RepairItem(path.name, "OK", str(path))
+    path.write_text("", encoding="utf-8")
+    return RepairItem(path.name, "CREATED", str(path))
+
+
+def _ensure_alias_copy(*, src: Path, dst: Path) -> RepairItem:
+    """Ensure dst exists by copying src if needed.
+
+    - If dst exists and non-empty -> OK
+    - Else if src exists and non-empty -> COPIED
+    - Else -> MISSING
+    """
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if dst.exists() and dst.is_file() and dst.stat().st_size > 0:
+            return RepairItem(dst.name, "OK", str(dst))
+    except Exception:
+        pass
+
+    try:
+        if src.exists() and src.is_file() and src.stat().st_size > 0:
+            dst.write_bytes(src.read_bytes())
+            return RepairItem(dst.name, "COPIED", f"{src} -> {dst}")
+    except Exception as e:
+        return RepairItem(dst.name, "MISSING", f"failed to copy from {src}: {e}")
+
+    return RepairItem(dst.name, "MISSING", f"no source for alias copy (src={src})")
+
+
 def _repo_builtin_lists_dir() -> Path:
     # We ship a minimal set of lists in repo under data/lists.
     return (Path(__file__).resolve().parents[3] / "data" / "lists").resolve()
@@ -52,21 +84,134 @@ def ensure_base_lists(ctx: AppContext) -> list[RepairItem]:
             out.append(RepairItem(name, "OK", str(dest)))
             continue
 
-        # Try to copy from repo assets (dev/source builds).
-        candidates = [
-            src_dir / name,
-            src_dir / f"list-{name}",
-        ]
-        copied = False
-        for c in candidates:
-            if c.exists() and c.is_file() and c.stat().st_size > 0:
-                dest.write_bytes(c.read_bytes())
-                out.append(RepairItem(name, "COPIED", f"{c} -> {dest}"))
-                copied = True
-                break
-        if copied:
+        # Prefer an already-present alias file in target (from a bundled runtime)
+        # before copying template lists from repo.
+        alt_in_target: dict[str, list[str]] = {
+            "google.txt": ["list-google.txt"],
+            "exclude.txt": ["list-exclude.txt", "hostlist-exclude.txt"],
+            "rkn.txt": [],
+        }
+        for alt in alt_in_target.get(name, []):
+            src_alt = (target / alt).resolve()
+            try:
+                if src_alt.exists() and src_alt.is_file() and src_alt.stat().st_size > 0:
+                    dest.write_bytes(src_alt.read_bytes())
+                    out.append(RepairItem(name, "COPIED", f"{src_alt} -> {dest}"))
+                    break
+            except Exception:
+                continue
+        else:
+            # Try to copy from repo assets (dev/source builds).
+            candidates = [
+                src_dir / name,
+                src_dir / f"list-{name}",
+            ]
+            copied = False
+            for c in candidates:
+                if c.exists() and c.is_file() and c.stat().st_size > 0:
+                    dest.write_bytes(c.read_bytes())
+                    out.append(RepairItem(name, "COPIED", f"{c} -> {dest}"))
+                    copied = True
+                    break
+            if copied:
+                continue
+
+            out.append(RepairItem(name, "MISSING", f"not found in {target} and no bundled source to copy"))
             continue
 
-        out.append(RepairItem(name, "MISSING", f"not found in {target} and no bundled source to copy"))
+        # (If alias copy was used, we already appended COPIED and should continue.)
+        continue
 
+    # Strategy compatibility aliases expected by some upstreams/bundles.
+    # If one exists, make the other exist too (copy).
+    alias_pairs = [
+        ("google.txt", "list-google.txt"),
+        ("exclude.txt", "list-exclude.txt"),
+        ("general.txt", "list-general.txt"),
+    ]
+    for a, b in alias_pairs:
+        pa = (target / a).resolve()
+        pb = (target / b).resolve()
+        if pa.exists() and not pb.exists():
+            out.append(_ensure_alias_copy(src=pa, dst=pb))
+        elif pb.exists() and not pa.exists():
+            out.append(_ensure_alias_copy(src=pb, dst=pa))
+
+    # Optional user-editable lists / ipsets (must not block startup).
+    optional_user_files = [
+        "list-general-user.txt",
+        "list-exclude-user.txt",
+        "ipset-exclude-user.txt",
+    ]
+    for name in optional_user_files:
+        out.append(_ensure_empty_file((target / name).resolve()))
+
+    return out
+
+
+def ensure_fake_assets(ctx: AppContext) -> list[RepairItem]:
+    """Ensure required fake *.bin assets are present under runtime/zapret/files/fake.
+
+    Rules:
+    - Do NOT create empty fake binaries.
+    - If asset is found elsewhere under runtime root, copy into canonical fake dir.
+    """
+    from app.zapret_manager.features.zapret_runtime import zapret_root
+
+    rt_root = ctx.paths.runtime_dir.resolve()
+    zr = zapret_root(ctx)
+    fake_dir = (zr / "files" / "fake").resolve()
+    fake_dir.mkdir(parents=True, exist_ok=True)
+
+    required = [
+        "quic_initial_www_google_com.bin",
+        "tls_clienthello_max_ru.bin",
+    ]
+
+    out: list[RepairItem] = []
+
+    def find_anywhere(name: str) -> Path | None:
+        # search under runtime root first
+        try:
+            for p in rt_root.rglob(name):
+                if p.is_file() and p.stat().st_size > 0:
+                    return p
+        except Exception:
+            pass
+        # also search under zapret root (just in case rt_root is huge/different)
+        try:
+            for p in zr.rglob(name):
+                if p.is_file() and p.stat().st_size > 0:
+                    return p
+        except Exception:
+            pass
+        return None
+
+    for name in required:
+        dst = (fake_dir / name).resolve()
+        try:
+            if dst.exists() and dst.is_file() and dst.stat().st_size > 0:
+                out.append(RepairItem(name, "OK", str(dst)))
+                continue
+        except Exception:
+            pass
+
+        found = find_anywhere(name)
+        if found:
+            try:
+                dst.write_bytes(found.read_bytes())
+                out.append(RepairItem(name, "COPIED", f"{found} -> {dst}"))
+            except Exception as e:
+                out.append(RepairItem(name, "MISSING", f"copy failed: {e}"))
+        else:
+            out.append(RepairItem(name, "MISSING", "not found anywhere under runtime"))
+
+    return out
+
+
+def repair_runtime_assets(ctx: AppContext) -> list[RepairItem]:
+    """High-level repair action used by UI/diagnostics."""
+    out: list[RepairItem] = []
+    out.extend(ensure_base_lists(ctx))
+    out.extend(ensure_fake_assets(ctx))
     return out
