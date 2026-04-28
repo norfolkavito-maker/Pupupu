@@ -76,6 +76,14 @@ from app.zapret_manager.features.game_launcher import (
     remove_profile,
     run_profile,
 )
+from app.zapret_manager.features.problem_domains import (
+    add_problem_domain,
+    clear_problem_domains,
+    get_problem_domains,
+    load_problem_domains,
+    problem_domains_summary,
+    remove_resolved_domain,
+)
 
 
 log = logging.getLogger(__name__)
@@ -409,8 +417,9 @@ def test_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}6){C.RESET} {C.GREEN}YouTube auto-test (Yv){C.RESET}")
         print(f"{C.CYAN}7){C.RESET} {C.GREEN}Выбрать набор доменов{C.RESET} (Default/YouTube/CDN/Amazon)")
         print(f"{C.CYAN}8){C.RESET} {C.GREEN}Proof-of-effect test (baseline vs strategy){C.RESET}")
+        print(f"{C.CYAN}9){C.RESET} {C.GREEN}Авто-подбор по проблемным доменам{C.RESET}")
         if have_results:
-            print(f"{C.CYAN}9){C.RESET} {C.GREEN}Результаты тестирования стратегий{C.RESET}")
+            print(f"{C.CYAN}A){C.RESET} {C.GREEN}Результаты тестирования стратегий{C.RESET}")
             print(f"{C.CYAN}D){C.RESET} {C.GREEN}Удалить результаты тестирования{C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
@@ -434,7 +443,9 @@ def test_menu(ctx: AppContext) -> None:
                 _choose_domain_set(ctx)
             elif c == "8":
                 _run_proof_of_effect_test(ctx)
-            elif c == "9" and have_results:
+            elif c == "9":
+                _problem_domains_menu(ctx)
+            elif c.lower() == "a" and have_results:
                 _show_results(ctx)
             elif c.lower() == "d" and have_results:
                 for p in ctx.paths.results_dir.glob("results_*.txt"):
@@ -1085,4 +1096,108 @@ def doh_menu(ctx: AppContext) -> None:
             log.exception("doh_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
             pause()
+
+
+def _problem_domains_menu(ctx: AppContext) -> None:
+    """Меню авто-подбора по проблемным доменам."""
+    while True:
+        clear()
+        summary = problem_domains_summary(ctx)
+        print(f"{C.MAGENTA}Авто-подбор по проблемным доменам{C.RESET}\n")
+        print(summary)
+        print()
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Запустить тест стратегий по проблемным доменам{C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Добавить домен вручную{C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Удалить домен (пометить как решённый){C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Очистить все проблемные домены{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        try:
+            if c == "1":
+                _auto_tune_by_problem_domains(ctx)
+            elif c == "2":
+                domain = ask("Введите домен (например x.com): ").strip()
+                if domain:
+                    add_problem_domain(ctx, domain=domain, source="manual", fail_reason="manual")
+                    print(f"\n{C.GREEN}Домен добавлен.{C.RESET}\n")
+                    pause()
+            elif c == "3":
+                domains = get_problem_domains(ctx)
+                if not domains:
+                    print(f"\n{C.YELLOW}Список пуст.{C.RESET}\n")
+                    pause()
+                    continue
+                for i, d in enumerate(domains, start=1):
+                    print(f"{i}) {d}")
+                num = ask("\nНомер домена для удаления: ").strip()
+                if num.isdigit():
+                    idx = int(num) - 1
+                    if 0 <= idx < len(domains):
+                        remove_resolved_domain(ctx, domains[idx])
+                        print(f"\n{C.GREEN}Домен удалён.{C.RESET}\n")
+                        pause()
+            elif c == "4":
+                clear_problem_domains(ctx)
+                print(f"\n{C.GREEN}Все проблемные домены очищены.{C.RESET}\n")
+                pause()
+        except Exception as e:
+            log.exception("problem_domains_menu failed")
+            print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
+
+
+def _auto_tune_by_problem_domains(ctx: AppContext) -> None:
+    """Run strategy tests only on problem domains."""
+    domains = get_problem_domains(ctx)
+    if not domains:
+        print(f"\n{C.YELLOW}Нет проблемных доменов. Сначала запустите тесты (control test или proof-of-effect).{C.RESET}\n")
+        pause()
+        return
+
+    # Convert domains to URLs
+    urls = [f"https://{d}/" for d in domains]
+    print(f"\n{C.MAGENTA}Авто-подбор стратегий по {len(domains)} проблемным доменам{C.RESET}\n")
+    print(f"Домены: {', '.join(domains[:5])}{'...' if len(domains) > 5 else ''}\n")
+
+    # Check if strategy is selected
+    strategy_name = ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy
+    if not strategy_name:
+        print(f"{C.YELLOW}Не выбрана стратегия. Выберите в меню 'Стратегии'.{C.RESET}\n")
+        pause()
+        return
+
+    strategy = find_strategy(ctx, strategy_name, kind="base") or find_strategy(ctx, strategy_name)
+    if not strategy:
+        print(f"{C.RED}Стратегия '{strategy_name}' не найдена.{C.RESET}\n")
+        pause()
+        return
+
+    # Run proof-of-effect test on problem domains
+    print(f"Тестируем стратегию: {strategy.name}\n")
+    try:
+        result = proof_of_effect(ctx, strategy, urls, settle_s=1.5, parallel=6)
+        # Display results
+        print(f"\n{C.CYAN}{'domain':<25} {'baseline':<10} {'strategy':<10} {'effect':<12}{C.RESET}")
+        print("-" * 70)
+        for row in result.rows:
+            baseline_status = "OK" if row.baseline_ok else "FAIL"
+            strategy_status = "OK" if row.strategy_ok else "FAIL"
+            print(f"{row.domain:<25} {baseline_status:<10} {strategy_status:<10} {row.effect:<12}")
+        print("-" * 70)
+        print(f"\n{C.MAGENTA}Сводка:{C.RESET}")
+        print(f"  improved: {result.improved}")
+        print(f"  already_ok: {result.already_ok}")
+        print(f"  no_effect: {result.no_effect}")
+        print(f"  worsened: {result.worsened}")
+        if result.strategy_effect_proven:
+            print(f"\n{C.GREEN}✓ Стратегия эффективна на проблемных доменах{C.RESET}")
+        else:
+            print(f"\n{C.YELLOW}✗ Стратегия не показала эффекта на проблемных доменах{C.RESET}")
+        print(f"\n{C.GREEN}Тест завершён.{C.RESET}\n")
+        pause()
+    except Exception as e:
+        print(f"\n{C.RED}Ошибка при выполнении теста:{C.RESET}")
+        print(f"{e}\n")
+        pause()
 

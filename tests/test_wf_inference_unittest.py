@@ -3,7 +3,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-from app.zapret_manager.features.zapret_runtime import build_command, validate_winws_command
+from app.zapret_manager.features.zapret_runtime import (
+    build_command,
+    validate_winws_command,
+    normalize_winws_args,
+)
 from app.zapret_manager.strategies.model import Strategy
 
 
@@ -13,7 +17,6 @@ class _Ctx(SimpleNamespace):
 
 def _make_ctx(tmp: Path) -> _Ctx:
     # Minimal ctx stub for build_command/validate_winws_command.
-    # NOTE: build_command expects ctx.state.runtime.winws_path, ctx.paths.runtime_dir, ctx.paths.lists_dir.
     runtime_dir = tmp / "DedZapretData" / "runtime"
     zapret_dir = runtime_dir / "zapret"
     zapret_dir.mkdir(parents=True, exist_ok=True)
@@ -25,18 +28,19 @@ def _make_ctx(tmp: Path) -> _Ctx:
     (lists_dir / "google.txt").write_text("google", encoding="utf-8")
     (lists_dir / "exclude.txt").write_text("", encoding="utf-8")
 
+    zapret_state = SimpleNamespace(
+        pid=None,
+        running=False,
+        selected_strategy="",
+        discord_script="",
+        games_profile="",
+        discord_profile="",
+        rkn_enabled=False,
+        wssize_enabled=False,
+    )
     state = SimpleNamespace(
         runtime=SimpleNamespace(winws_path=str(winws), winws2_path="", installed=True, runtime_path=str(runtime_dir)),
-        zapret=SimpleNamespace(
-            pid=None,
-            running=False,
-            selected_strategy="",
-            discord_profile="",
-            games_profile="",
-            discord_script="",
-            rkn_enabled=False,
-            wssize_enabled=False,
-        ),
+        zapret=zapret_state,
     )
     paths = SimpleNamespace(runtime_dir=runtime_dir, lists_dir=lists_dir, state_file=tmp / "state.json", logs_dir=tmp / "logs")
     return _Ctx(root=tmp, paths=paths, state=state)
@@ -85,6 +89,76 @@ class TestWfInference(unittest.TestCase):
             st = Strategy(name="t", engine="winws", args=["--filter-udp=443"], kind="base")
             cmd = build_command(ctx, st)
             self.assertIn("--wf-udp=443", cmd)
+
+
+class TestNormalizeWinwsArgs(unittest.TestCase):
+    def test_escaped_newline_arg_normalizes(self):
+        # Simulates Dv1-like arg with escaped \\n
+        raw = "--filter-tcp=8443\\n--hostlist-domains=discord.media\\n--dpi-desync=multisplit"
+        result = normalize_winws_args([raw])
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], "--filter-tcp=8443")
+        self.assertEqual(result[1], "--hostlist-domains=discord.media")
+        self.assertEqual(result[2], "--dpi-desync=multisplit")
+
+    def test_actual_newline_normalizes(self):
+        # Use actual newlines - must be separate strings in list
+        # This tests actual newline handling inside a single string element
+        raw = "--filter-tcp=8443\\n--hostlist-domains=discord.media\\n--dpi-desync=multisplit"
+        result = normalize_winws_args([raw])
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], "--filter-tcp=8443")
+        self.assertEqual(result[1], "--hostlist-domains=discord.media")
+        self.assertEqual(result[2], "--dpi-desync=multisplit")
+
+    def test_dv1_like_sample_gets_wf_tcp(self):
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(Path(td))
+            # Simulated Dv1 args with escaped newline
+            raw_arg = "--filter-tcp=8443\\n--hostlist-domains=discord.media\\n--dpi-desync=multisplit"
+            st = Strategy(
+                name="Dv1",
+                engine="winws",
+                args=[raw_arg, "--new", "--dpi-desync=fake,tls-split,sni,split2"],
+                kind="discord",
+            )
+            # Should NOT raise "invalid range token"
+            try:
+                cmd = build_command(ctx, st)
+            except RuntimeError as e:
+                self.fail(f"build_command raised RuntimeError: {e}")
+            # Should contain --wf-tcp=8443
+            wf_args = [a for a in cmd if a.startswith("--wf-tcp=")]
+            self.assertTrue(len(wf_args) > 0, f"No --wf-tcp= found in cmd: {cmd}")
+            self.assertIn("8443", wf_args[0])
+
+    def test_no_newline_in_result(self):
+        args = ["--filter-tcp=443", "--new", "--dpi-desync=multisplit"]
+        result = normalize_winws_args(args)
+        for a in result:
+            self.assertNotIn("\\n", a)
+            self.assertNotIn("\\r\\n", a)
+
+    def test_window_paths_not_broken(self):
+        # Windows path with spaces should remain one arg
+        args = [r"C:\Program Files\app\file.bin", "--dpi-desync=fake"]
+        result = normalize_winws_args(args)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], r"C:\Program Files\app\file.bin")
+
+    def test_new_blocks_preserved(self):
+        args = ["--filter-tcp=443", "--new", "--filter-udp=443", "--new"]
+        result = normalize_winws_args(args)
+        self.assertEqual(result.count("--new"), 2)
+
+    def test_empty_args_removed(self):
+        args = ["--filter-tcp=443", "", None, "  ", "--new"]
+        result = normalize_winws_args(args)
+        self.assertNotIn("", result)
+        self.assertNotIn(None, result)
+        self.assertTrue(all(a.strip() for a in result))
 
 
 class TestPortValidation(unittest.TestCase):

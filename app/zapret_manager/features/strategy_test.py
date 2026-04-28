@@ -415,7 +415,7 @@ def check_domains(domains: list[str], *, timeout_s: float = 3.0, parallel: int |
     return sum(1 for c in checks if c.ok), len(checks)
 
 
-def control_test(domains: list[str], *, parallel: int | None = None) -> TestResult:
+def control_test(ctx: "AppContext", domains: list[str], *, parallel: int | None = None) -> TestResult:
     """Legacy helper used by UI: baseline check without any strategy running."""
     checks = check_domains_detailed(domains, parallel=parallel, progress=False)
     ok = sum(1 for c in checks if c.ok)
@@ -423,7 +423,7 @@ def control_test(domains: list[str], *, parallel: int | None = None) -> TestResu
     tcp_ok = sum(1 for c in checks if c.tcp_ok)
     ping_ok = sum(1 for c in checks if c.ping_ok)
     udp_ok = sum(1 for c in checks if c.udp443 == "ok")
-    return TestResult(
+    result = TestResult(
         strategy="control",
         ok=ok,
         total=len(checks),
@@ -433,6 +433,13 @@ def control_test(domains: list[str], *, parallel: int | None = None) -> TestResu
         ping_ok=ping_ok,
         udp_ok=udp_ok,
     )
+    # Record failed domains as problem domains
+    try:
+        from app.zapret_manager.features.problem_domains import add_from_domain_checks
+        add_from_domain_checks(ctx, checks, source="control")
+    except Exception as e:
+        log.warning("Failed to record problem domains from control test: %s", e)
+    return result
 
 
 def _runtime_ready(ctx: AppContext) -> bool:
@@ -941,6 +948,27 @@ def proof_of_effect(
             except Exception as e:
                 # IMPORTANT: do not turn proof into invalid if restore failed.
                 restore_warning = f"Failed to restore previous state: {e}"
+
+    # Record failed domains from strategy checks
+    if result and result.rows:
+        try:
+            from app.zapret_manager.features.problem_domains import add_from_domain_checks
+            # We need to record domains that failed during strategy test
+            for row in result.rows:
+                if not row.strategy_ok:
+                    try:
+                        from app.zapret_manager.features.problem_domains import add_problem_domain
+                        add_problem_domain(
+                            ctx,
+                            domain=row.domain,
+                            source="strategy",
+                            fail_reason="strategy_fail",
+                            error=row.strategy_error or "",
+                        )
+                    except Exception:
+                        pass
+        except Exception as e:
+            log.warning("Failed to record problem domains from proof-of-effect: %s", e)
 
     if result is None:
         # Defensive fallback, should not happen.

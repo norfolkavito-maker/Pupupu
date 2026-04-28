@@ -197,6 +197,52 @@ def _normalize_ports_expr(expr: str) -> tuple[str, list[str]]:
     return (",".join(parts), [])
 
 
+def normalize_winws_args(args: list[str]) -> list[str]:
+    """Normalize winws argv elements.
+
+    Handles:
+    - actual newlines \\n / \\r inside one argv element → split into separate argv;
+    - escaped literal \\n / \\r\\n inside one argv element → split too;
+    - trim whitespace, remove empty lines;
+    - preserve order and --new blocks;
+    - do NOT split by normal spaces;
+    - do NOT break Windows paths like C:\\...;
+    - do NOT aggressively shell-split already prepared argv;
+    - --dpi-desync-split-seqovl-pattern=C:\\path with spaces\\file.bin must remain one argv.
+
+    After normalization, if any argv still contains actual newline or escaped newline,
+    validation should treat it as an error:
+        strategy contains multiline argv element after normalization
+    """
+    normalized: list[str] = []
+    for arg in args:
+        if arg is None:
+            continue
+        a = str(arg)
+        # Check for escaped newline literals \\n or \\r\\n
+        if "\\n" in a or "\\r\\n" in a:
+            # Split by escaped newline
+            parts = a.replace("\\r\\n", "\\n").split("\\n")
+            for part in parts:
+                part = part.strip()
+                if part:
+                    normalized.append(part)
+            continue
+        # Check for actual newlines
+        if "\n" in a or "\r" in a:
+            lines = a.splitlines()
+            for line in lines:
+                line = line.strip()
+                if line:
+                    normalized.append(line)
+            continue
+        # Normal arg - trim and keep
+        a = a.strip()
+        if a:
+            normalized.append(a)
+    return normalized
+
+
 def _infer_wf_args_from_filters(args: list[str]) -> tuple[list[str], list[str], list[str]]:
     """Infer global WinDivert capture filters (--wf-tcp/--wf-udp) from per-block filters.
 
@@ -444,6 +490,8 @@ def build_command(
         discord_profile=ctx.state.zapret.discord_profile,
         games_profile=ctx.state.zapret.games_profile,
     )
+    # Normalize: split multiline argv elements (escaped newline / actual newline)
+    args = normalize_winws_args(args)
 
     fake_dir = _runtime_fake_dir(ctx)
     lists_dir = _runtime_lists_dir(ctx)
@@ -871,6 +919,7 @@ def stop_zapret(ctx: "AppContext") -> None:
     if r.code != 0:
         # PID not found / already exited is not fatal.
         log.warning("taskkill returned code=%s err=%s", r.code, (r.err or "").strip())
+        # Always clean state on taskkill error (process likely already gone)
     ctx.state.zapret.running = False
     ctx.state.zapret.pid = None
     save_state(ctx.paths.state_file, ctx.state)

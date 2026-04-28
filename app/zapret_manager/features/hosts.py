@@ -52,6 +52,15 @@ def _default_blocks() -> List[HostsBlock]:
         HostsBlock("TGWEB", "Telegram Web", map_domains(["web.telegram.org"])),
         HostsBlock("SPOTIFY", "Spotify", map_domains(["spotify.com", "www.spotify.com"])),
         HostsBlock("SUPERCELL", "Supercell", map_domains(["store.supercell.com"])),
+        HostsBlock(
+            "DISCORD_FINLAND",
+            "Discord Finland",
+            [
+                "31.13.72.36 discord.media",
+                "31.13.73.36 discord.media",
+                "31.13.74.36 discord.media",
+            ],
+        ),
     ]
 
 
