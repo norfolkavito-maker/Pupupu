@@ -126,6 +126,123 @@ def _resolve_list_path_compat(ctx: "AppContext", path_str: str) -> str:
     return path_str
 
 
+def _parse_ports_expr(expr: str) -> tuple[list[int], list[tuple[int, int]], list[str]]:
+    """Parse port expression like "80,443,1024-65535".
+
+    Returns (ports, ranges, problems).
+    - ports: list of individual ports (dedup not guaranteed)
+    - ranges: list of (start,end)
+    - problems: human-readable errors
+
+    NOTE: This parser is strict and is used for preflight validation.
+    """
+    problems: list[str] = []
+    expr = (expr or "").strip()
+    if not expr:
+        return ([], [], ["empty port expression"])
+    if " " in expr or "\t" in expr:
+        problems.append("port expression contains spaces")
+
+    raw_items = expr.split(",")
+    if any(i == "" for i in raw_items):
+        problems.append("port expression contains empty element (e.g. '443,,80' or trailing comma)")
+
+    ports: list[int] = []
+    ranges: list[tuple[int, int]] = []
+    for item in raw_items:
+        item = item.strip()
+        if not item:
+            continue
+        if "-" in item:
+            parts = item.split("-", 1)
+            a = parts[0].strip()
+            b = parts[1].strip()
+            if not a.isdigit() or not b.isdigit():
+                problems.append(f"invalid range token: {item}")
+                continue
+            lo = int(a)
+            hi = int(b)
+            if not (1 <= lo <= 65535) or not (1 <= hi <= 65535):
+                problems.append(f"range out of bounds: {item}")
+                continue
+            if lo > hi:
+                problems.append(f"reversed range: {item}")
+                continue
+            ranges.append((lo, hi))
+        else:
+            if not item.isdigit():
+                problems.append(f"invalid port token: {item}")
+                continue
+            n = int(item)
+            if not (1 <= n <= 65535):
+                problems.append(f"port out of bounds: {n}")
+                continue
+            ports.append(n)
+    return (ports, ranges, problems)
+
+
+def _normalize_ports_expr(expr: str) -> tuple[str, list[str]]:
+    """Normalize a port list expression to stable order + dedup.
+
+    Keeps ranges intact.
+    Returns (normalized_expr, problems).
+    """
+    ports, ranges, problems = _parse_ports_expr(expr)
+    if problems:
+        return (expr, problems)
+    # dedup and sort
+    ports_u = sorted(set(ports))
+    ranges_u = sorted(set(ranges), key=lambda x: (x[0], x[1]))
+    parts: list[str] = [str(p) for p in ports_u] + [f"{a}-{b}" for a, b in ranges_u]
+    return (",".join(parts), [])
+
+
+def _infer_wf_args_from_filters(args: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """Infer global WinDivert capture filters (--wf-tcp/--wf-udp) from per-block filters.
+
+    Returns (wf_args, warnings, errors).
+    - wf_args: list like ["--wf-tcp=80,443", "--wf-udp=443"] (order tcp,udp)
+    """
+    warnings: list[str] = []
+    errors: list[str] = []
+
+    has_wf_tcp = any(a.startswith("--wf-tcp=") for a in args)
+    has_wf_udp = any(a.startswith("--wf-udp=") for a in args)
+
+    tcp_filters: list[str] = []
+    udp_filters: list[str] = []
+    for a in args:
+        if a.startswith("--filter-tcp="):
+            tcp_filters.append(a.split("=", 1)[1])
+        if a.startswith("--filter-udp="):
+            udp_filters.append(a.split("=", 1)[1])
+
+    wf_args: list[str] = []
+    if tcp_filters and not has_wf_tcp:
+        union_raw = ",".join([x for x in tcp_filters if x is not None])
+        norm, probs = _normalize_ports_expr(union_raw)
+        if probs:
+            errors.append("cannot infer --wf-tcp: " + "; ".join(probs))
+        else:
+            wf_args.append(f"--wf-tcp={norm}")
+
+    if udp_filters and not has_wf_udp:
+        union_raw = ",".join([x for x in udp_filters if x is not None])
+        norm, probs = _normalize_ports_expr(union_raw)
+        if probs:
+            errors.append("cannot infer --wf-udp: " + "; ".join(probs))
+        else:
+            wf_args.append(f"--wf-udp={norm}")
+
+    # If strategy uses per-block filters but we could not infer wf, it is a hard error.
+    if tcp_filters and not has_wf_tcp and not any(a.startswith("--wf-tcp=") for a in wf_args):
+        errors.append("missing WinDivert capture filter for TCP: add --wf-tcp=... (or fix --filter-tcp=... ports)")
+    if udp_filters and not has_wf_udp and not any(a.startswith("--wf-udp=") for a in wf_args):
+        errors.append("missing WinDivert capture filter for UDP: add --wf-udp=... (or fix --filter-udp=... ports)")
+
+    return (wf_args, warnings, errors)
+
+
 def runtime_health(ctx: "AppContext") -> dict[str, object]:
     """Checks that bundled runtime exists and has required files.
 
@@ -332,7 +449,15 @@ def build_command(
     lists_dir = _runtime_lists_dir(ctx)
 
     resolved = resolve_winws_args(ctx, exe_dir=exe.parent, args=args)
-    return [str(exe)] + resolved
+
+    # Preflight: infer global WinDivert capture filters if missing.
+    wf_args, _wf_warn, wf_err = _infer_wf_args_from_filters(resolved)
+    if wf_err:
+        # Bubble up to caller; start_zapret_interactive will convert to WinwsStartError.
+        raise RuntimeError("; ".join(wf_err))
+
+    # Important: --wf-* must be placed at the beginning of argv after exe.
+    return [str(exe)] + wf_args + resolved
 
 
 def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> list[str]:
@@ -476,6 +601,13 @@ def validate_winws_command(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> l
     if re.search(r"%[A-Za-z0-9_]+%", joined):
         problems.append("command contains unresolved %VAR% placeholder(s)")
 
+    # --new sanity
+    if cmd and cmd[-1] == "--new":
+        problems.append("command ends with --new (empty block)")
+    for i in range(1, len(cmd)):
+        if cmd[i] == "--new" and cmd[i - 1] == "--new":
+            problems.append("command contains duplicate --new --new (empty block)")
+
     def check_file(opt: str, val: str) -> None:
         v = _strip_quotes(val)
         if not v:
@@ -486,6 +618,38 @@ def validate_winws_command(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> l
             p = (cwd / p).resolve()
         if not p.exists():
             problems.append(f"missing file for {opt}: {p} (cwd={cwd})")
+
+    def check_file_warn_empty(opt: str, val: str) -> None:
+        """Check that file exists; if exists but empty -> warn (non-fatal).
+
+        Used for hostlist-exclude where empty file is allowed.
+        """
+        v = _strip_quotes(val)
+        if not v:
+            problems.append(f"{opt} value is empty")
+            return
+        p = Path(v)
+        if not p.is_absolute():
+            p = (cwd / p).resolve()
+        if not p.exists():
+            problems.append(f"missing file for {opt}: {p} (cwd={cwd})")
+            return
+        try:
+            if p.is_file() and p.stat().st_size == 0:
+                # WARNING encoded inside problems list (caller can render separately).
+                # start_zapret_interactive() treats "WARN:" entries as non-fatal.
+                problems.append(f"WARN: file for {opt} is empty: {p}")
+        except Exception:
+            pass
+
+    def check_ports_opt(opt: str, val: str) -> None:
+        v = _strip_quotes(val)
+        if not v:
+            problems.append(f"{opt} port expression is empty")
+            return
+        _ports, _ranges, probs = _parse_ports_expr(v)
+        if probs:
+            problems.append(f"invalid {opt} ports: {v} ({'; '.join(probs)})")
 
     def looks_like_path(v: str) -> bool:
         vv = _strip_quotes(v).strip()
@@ -501,9 +665,20 @@ def validate_winws_command(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> l
     for a in cmd[1:]:
         if a.startswith("--hostlist-domains="):
             continue
+        if a.startswith("--wf-tcp="):
+            check_ports_opt("--wf-tcp", a.split("=", 1)[1])
+        if a.startswith("--wf-udp="):
+            check_ports_opt("--wf-udp", a.split("=", 1)[1])
+        if a.startswith("--filter-tcp="):
+            check_ports_opt("--filter-tcp", a.split("=", 1)[1])
+        if a.startswith("--filter-udp="):
+            check_ports_opt("--filter-udp", a.split("=", 1)[1])
         for opt in ("--hostlist=", "--ipset=", "--ipset-exclude="):
             if a.startswith(opt):
                 check_file(opt[:-1], a.split("=", 1)[1])
+        if a.startswith("--hostlist-exclude="):
+            # Missing exclude list is error, but empty file should not block start.
+            check_file_warn_empty("--hostlist-exclude", a.split("=", 1)[1])
         # Fake/pattern arguments that point to a file.
         if "=" in a and a.startswith("--"):
             key, val = a.split("=", 1)
@@ -516,7 +691,73 @@ def validate_winws_command(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> l
             if key_l.endswith("-pattern") and looks_like_path(val):
                 check_file(key, val)
 
+    # Capture filter sanity: if per-block filters exist, global wf must exist.
+    has_filter_tcp = any(a.startswith("--filter-tcp=") for a in cmd)
+    has_filter_udp = any(a.startswith("--filter-udp=") for a in cmd)
+    has_wf_tcp = any(a.startswith("--wf-tcp=") for a in cmd)
+    has_wf_udp = any(a.startswith("--wf-udp=") for a in cmd)
+    if has_filter_tcp and not has_wf_tcp:
+        problems.append("missing WinDivert capture filter: add --wf-tcp=... (inferred normally)")
+    if has_filter_udp and not has_wf_udp:
+        problems.append("missing WinDivert capture filter: add --wf-udp=... (inferred normally)")
+
     return problems
+
+
+def preflight_summary(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> dict[str, object]:
+    """Build a machine-readable preflight summary for diagnostics logs."""
+    # collect wf values
+    wf_tcp = next((a.split("=", 1)[1] for a in cmd if a.startswith("--wf-tcp=")), "")
+    wf_udp = next((a.split("=", 1)[1] for a in cmd if a.startswith("--wf-udp=")), "")
+    blocks = sum(1 for a in cmd if a == "--new")
+
+    def _collect_files() -> list[dict[str, object]]:
+        items: list[dict[str, object]] = []
+
+        def add(kind: str, opt: str, raw: str) -> None:
+            v = _strip_quotes(raw)
+            p = Path(v)
+            if not p.is_absolute():
+                p = (cwd / p).resolve()
+            exists = p.exists()
+            size = None
+            try:
+                if exists and p.is_file():
+                    size = int(p.stat().st_size)
+            except Exception:
+                size = None
+            items.append({"kind": kind, "opt": opt, "path": str(p), "exists": exists, "size": size})
+
+        for a in cmd[1:]:
+            if a.startswith("--hostlist-domains="):
+                continue
+            if a.startswith("--hostlist="):
+                add("list", "--hostlist", a.split("=", 1)[1])
+            if a.startswith("--hostlist-exclude="):
+                add("list", "--hostlist-exclude", a.split("=", 1)[1])
+            if a.startswith("--ipset="):
+                add("list", "--ipset", a.split("=", 1)[1])
+            if a.startswith("--ipset-exclude="):
+                add("list", "--ipset-exclude", a.split("=", 1)[1])
+            if "=" in a and a.startswith("--"):
+                k, v = a.split("=", 1)
+                kl = k.lower()
+                if kl.startswith("--dpi-desync-fake"):
+                    add("fake", k, v)
+                if kl.endswith("-pattern"):
+                    add("pattern", k, v)
+        return items
+
+    return {
+        "strategy": getattr(getattr(ctx, "state", None), "zapret", None).selected_strategy
+        if getattr(ctx, "state", None)
+        else "",
+        "cwd": str(cwd),
+        "wf_tcp": wf_tcp,
+        "wf_udp": wf_udp,
+        "new_blocks": blocks,
+        "files": _collect_files(),
+    }
 
 
 def start_zapret_interactive(
@@ -561,16 +802,43 @@ def start_zapret_interactive(
         engine_override = composed.engine
         warnings = list(composed.warnings)
 
-    cmd = build_command(ctx, strategy, args_override=args_override, engine_override=engine_override)
+    # Preflight: stale PID cleanup (do not trust state blindly).
+    if ctx.state.zapret.pid and not is_pid_alive(int(ctx.state.zapret.pid)):
+        log.warning("state has stale winws pid=%s; clearing", ctx.state.zapret.pid)
+        ctx.state.zapret.running = False
+        ctx.state.zapret.pid = None
+        save_state(ctx.paths.state_file, ctx.state)
+        warnings.append("state had stale winws pid; cleared")
 
-    # Log final argv for diagnostics.
+    try:
+        cmd = build_command(ctx, strategy, args_override=args_override, engine_override=engine_override)
+    except Exception as e:
+        # Convert build/preflight errors into WinwsStartError so UI renders as INVALID.
+        raise WinwsStartError(f"winws preflight failed: {e}")
+
+    # Log final argv + summary for diagnostics.
     log.info("winws command (argv):\n%s", dump_winws_command(cmd))
 
     # Validate BEFORE start.
     cwd = zapret_root(ctx)
     problems = validate_winws_command(ctx, cmd=cmd, cwd=cwd)
-    if problems:
-        raise WinwsStartError("winws command is invalid:\n- " + "\n- ".join(problems))
+    warn_lines = [p for p in problems if str(p).startswith("WARN:")]
+    err_lines = [p for p in problems if not str(p).startswith("WARN:")]
+
+    # add warnings into returned warnings (and log)
+    if warn_lines:
+        for w in warn_lines:
+            log.warning("preflight warning: %s", w)
+        warnings.extend([w.replace("WARN:", "").strip() for w in warn_lines])
+
+    if err_lines:
+        raise WinwsStartError("winws command is invalid:\n- " + "\n- ".join(err_lines))
+
+    try:
+        summary = preflight_summary(ctx, cmd=cmd, cwd=cwd)
+        log.info("winws preflight summary: %s", summary)
+    except Exception:
+        pass
 
     logs = winws_log_paths(ctx)
     p = popen_detached(cmd, cwd=str(cwd), stdout_path=logs.stdout, stderr_path=logs.stderr)
