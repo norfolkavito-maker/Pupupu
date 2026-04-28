@@ -496,7 +496,12 @@ def _choose_domain_set(ctx: AppContext) -> None:
 
 def _run_control_test(ctx: AppContext) -> None:
     domains = _domains_for_current_set(ctx)
-    r = control_test(domains, parallel=8)
+    if not domains:
+        print(f"\n{C.RED}Ошибка:{C.RESET} Набор доменов пуст. Выберите набор в меню тестов (пункт 7) или добавьте домены.\n")
+        pause()
+        return
+    # control_test now requires ctx and domains (updated signature)
+    r = control_test(ctx, domains, parallel=8)
     out = write_results(ctx, [r], "results_control.txt")
     print(f"\n{C.GREEN}Control test:{C.RESET} {r.summary_text()}\n{C.DIM}{out}{C.RESET}\n")
     pause()
@@ -515,7 +520,7 @@ def _run_test_group(ctx: AppContext, *, group: str) -> None:
     urls = prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)
     domains = [u.url for u in urls]
     parallel = 8
-    results: list[TestResult] = [control_test(domains, parallel=parallel)]
+    results: list[TestResult] = [control_test(ctx, domains, parallel=parallel)]
 
     if group == "v":
         out_name = "results_versions.txt"
@@ -579,7 +584,11 @@ def _run_test_by_domain(ctx: AppContext) -> None:
         if not d:
             continue
         domains.append(f"https://{d}/")
-    results: list[TestResult] = [control_test(domains, parallel=8)]
+    if not domains:
+        print(f"\n{C.RED}Ошибка:{C.RESET} Нет валидных доменов.\n")
+        pause()
+        return
+    results: list[TestResult] = [control_test(ctx, domains, parallel=8)]
     strategies = _bases_v(ctx) + _bases_flowseal(ctx)
     if not strategies:
         raise RuntimeError("Стратегий нет. Сделай sync.")
