@@ -53,7 +53,8 @@ class TestControlTestMenuCall(unittest.TestCase):
     @patch("app.zapret_manager.ui.menus.control_test")
     @patch("app.zapret_manager.ui.menus._domains_for_current_set")
     @patch("app.zapret_manager.ui.menus.pause")
-    def test_empty_domain_set_shows_error(self, mock_pause, mock_domains, mock_control):
+    @patch("app.zapret_manager.ui.menus.safe_print")
+    def test_empty_domain_set_shows_error(self, mock_safe_print, mock_pause, mock_domains, mock_control):
         """Test that empty domain set shows error message, not traceback."""
         ctx = self._make_ctx()
         mock_domains.return_value = []  # Empty domains
@@ -62,6 +63,7 @@ class TestControlTestMenuCall(unittest.TestCase):
         
         # control_test should NOT be called
         mock_control.assert_not_called()
+        mock_safe_print.assert_called()
         # pause should be called to let user read the message
         mock_pause.assert_called_once()
 

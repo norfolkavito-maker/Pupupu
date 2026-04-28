@@ -7,6 +7,7 @@ import yaml
 
 from app.zapret_manager.core.app_context import AppContext
 from app.zapret_manager.core.state import save_state
+from app.zapret_manager.ui.colors import C
 from app.zapret_manager.features.blockcheck import run_blockcheck
 from app.zapret_manager.features.key_setup import key_setup, key_setup_full_check
 from app.zapret_manager.features.lists import update_exclude, update_rkn
@@ -65,7 +66,7 @@ from app.zapret_manager.features.zapret_runtime import (
 )
 from app.zapret_manager.features.runtime_assets import ensure_base_lists
 from app.zapret_manager.features.test_urls import prepare_urls
-from app.zapret_manager.utils.console import C, ask, clear, pause
+from app.zapret_manager.utils.console import ask, clear, pause, safe_print
 
 from app.zapret_manager.features.doh import PROFILES, start_doh, stop_doh
 from app.zapret_manager.features.game_launcher import (
@@ -497,7 +498,9 @@ def _choose_domain_set(ctx: AppContext) -> None:
 def _run_control_test(ctx: AppContext) -> None:
     domains = _domains_for_current_set(ctx)
     if not domains:
-        print(f"\n{C.RED}Ошибка:{C.RESET} Набор доменов пуст. Выберите набор в меню тестов (пункт 7) или добавьте домены.\n")
+        safe_print(
+            f"\n{C.RED}Ошибка:{C.RESET} Набор доменов пуст. Выберите набор в меню тестов (пункт 7) или добавьте домены.\n"
+        )
         pause()
         return
     # control_test now requires ctx and domains (updated signature)
