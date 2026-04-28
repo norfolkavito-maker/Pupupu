@@ -99,7 +99,8 @@ def key_setup_full_check(ctx: AppContext) -> list[str]:
         print(f"\n{C.MAGENTA}Под ключ (full-check): контрольная проверка без zapret{C.RESET}\n")
         base_domains = combine_domain_sets(ctx, ["default", "youtube", "cdn", "amazon", "discord", "instagram", "games"])
         domains = [u.url for u in prepare_urls(base_urls=base_domains, include_default=True, include_suite=True)]
-        r0 = control_test(domains, parallel=8)
+        # control_test signature: control_test(ctx, domains, ...)
+        r0 = control_test(ctx, domains, parallel=8)
         print(f"{C.YELLOW}Baseline:{C.RESET} {r0.summary_text()}\n")
         lines.append(f"baseline: {r0.summary_text()}")
 

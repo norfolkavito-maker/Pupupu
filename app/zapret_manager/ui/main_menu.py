@@ -14,14 +14,11 @@ from app.zapret_manager.features.zapret_runtime import (
 )
 from app.zapret_manager.strategies.store import list_strategies
 from app.zapret_manager.ui.menus import (
-    discord_menu,
-    doh_menu,
-    game_launcher_menu,
-    hosts_menu,
+    auto_setup_menu,
+    extras_menu,
+    service_menu,
     strategies_menu,
-    system_menu,
     test_menu,
-    tg_menu,
 )
 from app.zapret_manager.utils.console import C, ask, clear, pause
 from app.zapret_manager import __version__
@@ -89,15 +86,13 @@ def run_main_menu(ctx: AppContext) -> int:
             print(ln)
         print()
 
+        # New logical structure (StressOzz-like). We keep backward-compatible keys too.
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Старт/Стоп{C.RESET} Zapret")
-        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Меню стратегий{C.RESET}")
-        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Меню тестирования стратегий{C.RESET}")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Меню{C.RESET} TG WS Proxy")
-        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Меню{C.RESET} DNS over HTTPS")
-        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Меню настройки{C.RESET} Discord")
-        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Меню управления доменами в{C.RESET} hosts")
-        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Запустить игру / программу{C.RESET}")
-        print(f"{C.CYAN}0){C.RESET} {C.GREEN}Системное меню{C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Автоматическая настройка{C.RESET} (мастер)")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Стратегии{C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Тесты и автоподбор{C.RESET}")
+        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Дополнительные режимы{C.RESET} (YouTube/Discord/Games/TG/DNS/Hosts)")
+        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Настройки / обслуживание{C.RESET} (Runtime/Updates/Network/Backup)")
         choice = ask(f"\n{C.CYAN}Enter){C.RESET} выход\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not choice:
             return 0
@@ -119,21 +114,42 @@ def run_main_menu(ctx: AppContext) -> int:
                     print(f"{C.YELLOW}Стратегия:{C.RESET} {st.name}\n")
                     pause()
             elif choice == "2":
-                strategies_menu(ctx)
+                auto_setup_menu(ctx)
             elif choice == "3":
-                test_menu(ctx)
+                strategies_menu(ctx)
             elif choice == "4":
-                tg_menu(ctx)
+                test_menu(ctx)
             elif choice == "5":
-                doh_menu(ctx)
+                extras_menu(ctx)
             elif choice == "6":
-                discord_menu(ctx)
+                service_menu(ctx)
+
+            # Backward-compatible shortcuts (old main menu numbering)
+            elif choice == "0":
+                service_menu(ctx)
             elif choice == "7":
+                # old: hosts
+                from app.zapret_manager.ui.menus import hosts_menu
+
                 hosts_menu(ctx)
             elif choice == "8":
+                # old: game launcher
+                from app.zapret_manager.ui.menus import game_launcher_menu
+
                 game_launcher_menu(ctx)
-            elif choice == "0":
-                system_menu(ctx)
+            elif choice == "9":
+                # old: discord
+                from app.zapret_manager.ui.menus import discord_menu
+
+                discord_menu(ctx)
+            elif choice.lower() == "tg":
+                from app.zapret_manager.ui.menus import tg_menu
+
+                tg_menu(ctx)
+            elif choice.lower() == "doh":
+                from app.zapret_manager.ui.menus import doh_menu
+
+                doh_menu(ctx)
             else:
                 continue
         except Exception as e:

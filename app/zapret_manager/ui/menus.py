@@ -91,6 +91,89 @@ from app.zapret_manager.features.problem_domains import (
 log = logging.getLogger(__name__)
 
 
+def auto_setup_menu(ctx: AppContext) -> None:
+    """Автоматическая настройка (мастер).
+
+    В рамках реорганизации меню: переносим "под ключ" и full-check в отдельный раздел.
+    """
+    while True:
+        clear()
+        print(f"{C.MAGENTA}Автоматическая настройка{C.RESET}\n")
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Быстрая автонастройка «под ключ»{C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Под ключ + полная проверка/подбор (мастер){C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Просмотр проблемных доменов{C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Очистить проблемные домены{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        try:
+            if c == "1":
+                lines = key_setup(ctx)
+                print()
+                for ln in lines:
+                    print(ln)
+                print()
+                pause()
+            elif c == "2":
+                lines = key_setup_full_check(ctx)
+                print()
+                for ln in lines:
+                    print(ln)
+                print()
+                pause()
+            elif c == "3":
+                _problem_domains_menu(ctx)
+            elif c == "4":
+                clear_problem_domains(ctx)
+                print(f"\n{C.GREEN}Все проблемные домены очищены.{C.RESET}\n")
+                pause()
+        except Exception as e:
+            log.exception("auto_setup_menu failed")
+            print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
+
+
+def extras_menu(ctx: AppContext) -> None:
+    """Дополнительные режимы (YouTube/Discord/Games/TG/DNS/Hosts/Launcher)."""
+    while True:
+        clear()
+        print(f"{C.MAGENTA}Дополнительные режимы{C.RESET}\n")
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}YouTube слой{C.RESET} (в меню стратегий)")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Discord{C.RESET}")
+        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Games{C.RESET} (профили Gv1..Gv4 в меню стратегий)")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}TG WS Proxy{C.RESET}")
+        print(f"{C.CYAN}5){C.RESET} {C.GREEN}DNS over HTTPS{C.RESET}")
+        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Hosts{C.RESET}")
+        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Запуск игры / программы{C.RESET}")
+        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+        try:
+            if c == "2":
+                discord_menu(ctx)
+            elif c == "4":
+                tg_menu(ctx)
+            elif c == "5":
+                doh_menu(ctx)
+            elif c == "6":
+                hosts_menu(ctx)
+            elif c == "7":
+                game_launcher_menu(ctx)
+        except Exception as e:
+            log.exception("extras_menu failed")
+            print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
+
+
+def service_menu(ctx: AppContext) -> None:
+    """Настройки / обслуживание.
+
+    Пока является оболочкой над существующим system_menu(), чтобы сохранить функционал
+    и постепенно перегруппировать пункты.
+    """
+    system_menu(ctx)
+
+
 def strategies_menu(ctx: AppContext) -> None:
     """
     StressOzz-like menu_str():
