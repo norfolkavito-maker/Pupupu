@@ -36,5 +36,24 @@ class TestRuntimeAssetsFakeRepair(unittest.TestCase):
             self.assertEqual(dst.read_bytes(), b"abc")
 
 
+    def test_stun_bin_is_supported(self):
+        with tempfile.TemporaryDirectory() as td:
+            rt = Path(td) / "runtime"
+            target = rt / "zapret" / "files" / "fake"
+            target.mkdir(parents=True, exist_ok=True)
+
+            # put stun.bin in a non-canonical place
+            src = rt / "zapret" / "blockcheck" / "zapret" / "files" / "fake"
+            src.mkdir(parents=True, exist_ok=True)
+            (src / "stun.bin").write_bytes(b"zzz")
+
+            ctx = self._make_ctx(rt)
+            ensure_fake_assets(ctx)
+
+            dst = target / "stun.bin"
+            self.assertTrue(dst.exists())
+            self.assertEqual(dst.read_bytes(), b"zzz")
+
+
 if __name__ == "__main__":
     unittest.main()

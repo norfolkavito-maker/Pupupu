@@ -138,13 +138,35 @@ def ensure_base_lists(ctx: AppContext) -> list[RepairItem]:
             out.append(_ensure_alias_copy(src=pb, dst=pa))
 
     # Optional user-editable lists / ipsets (must not block startup).
+    #
+    # Note: validate_winws_command() treats --ipset/--ipset-exclude as required files.
+    # An empty file is OK for our use-cases, but the file must exist to avoid
+    # WinwsStartError(preflight).
     optional_user_files = [
         "list-general-user.txt",
         "list-exclude-user.txt",
         "ipset-exclude-user.txt",
+        # Common upstream file names (keep empty placeholders to satisfy preflight)
+        "ipset-exclude.txt",
+        "list-ipset-exclude.txt",
+        "ipset-all.txt",
+        "list-ipset-all.txt",
     ]
     for name in optional_user_files:
         out.append(_ensure_empty_file((target / name).resolve()))
+
+    # ipset alias compatibility pairs.
+    ipset_alias_pairs = [
+        ("ipset-exclude.txt", "list-ipset-exclude.txt"),
+        ("ipset-all.txt", "list-ipset-all.txt"),
+    ]
+    for a, b in ipset_alias_pairs:
+        pa = (target / a).resolve()
+        pb = (target / b).resolve()
+        if pa.exists() and not pb.exists():
+            out.append(_ensure_alias_copy(src=pa, dst=pb))
+        elif pb.exists() and not pa.exists():
+            out.append(_ensure_alias_copy(src=pb, dst=pa))
 
     return out
 
@@ -166,6 +188,8 @@ def ensure_fake_assets(ctx: AppContext) -> list[RepairItem]:
     required = [
         "quic_initial_www_google_com.bin",
         "tls_clienthello_max_ru.bin",
+        # Used by some overlays (e.g. split-seqovl-pattern={FAKE:stun.bin})
+        "stun.bin",
     ]
 
     out: list[RepairItem] = []

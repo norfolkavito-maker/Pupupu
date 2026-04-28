@@ -234,6 +234,59 @@ def _udp443_probe(ip: str, *, timeout_s: float = 1.0) -> tuple[str, str]:
         return "fail", type(e).__name__
 
 
+def _fetch_one_quick(url: str, *, timeout_s: float) -> DomainCheck:
+    """Quick probe: HTTP(S) GET with Range, no DNS/TCP/PING/UDP helpers.
+
+    Requirements (per UX spec):
+    - GET (not HEAD)
+    - Range bytes=0-65535
+    - short timeout
+    - 2xx-4xx = OK
+    - 5xx/timeout/exception = FAIL
+    """
+    display = _display_domain(url)
+    start = time.perf_counter()
+
+    if requests is None:
+        return DomainCheck(
+            domain=display,
+            url=url,
+            ok=False,
+            elapsed_ms=int((time.perf_counter() - start) * 1000),
+            error="requests module not available",
+        )
+
+    try:
+        r = requests.get(
+            url,
+            timeout=timeout_s,
+            allow_redirects=True,
+            headers={"Range": "bytes=0-65535"},
+        )
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        ok = 200 <= r.status_code < 500
+        return DomainCheck(
+            domain=display,
+            url=url,
+            ok=ok,
+            elapsed_ms=elapsed_ms,
+            status_code=r.status_code,
+            error="" if ok else f"http {r.status_code}",
+        )
+    except requests.exceptions.Timeout:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error="timeout")
+    except requests.exceptions.SSLError:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error="tls error")
+    except requests.exceptions.ConnectionError:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error="connection error")
+    except Exception as e:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        return DomainCheck(display, url, False, elapsed_ms, error=type(e).__name__)
+
+
 def _fetch_one_detail(url: str, *, timeout_s: float) -> DomainCheck:
     display = _display_domain(url)
     host = _host_for_probes(url)
@@ -380,11 +433,14 @@ def check_domains_detailed(
     timeout_s: float = 3.0,
     parallel: int | None = None,
     progress: bool = False,
+    mode: str = "full",  # full|quick
 ) -> list[DomainCheck]:
     cleaned = [_normalize_url(d) for d in domains if d.strip()]
     cleaned = [u for u in cleaned if u]
     if not cleaned:
         return []
+
+    fetch = _fetch_one_detail if mode != "quick" else _fetch_one_quick
 
     # If progress is requested, keep sequential order so the user sees exactly
     # which domain is being tested now. This is slower but much more readable.
@@ -394,30 +450,38 @@ def check_domains_detailed(
         for i, url in enumerate(cleaned, start=1):
             domain = _display_domain(url)
             if progress:
-                print(f"[{i:02d}/{total:02d}] Проверяю {domain:<42} ... ", end="", flush=True)
-            check = _fetch_one_detail(url, timeout_s=timeout_s)
+                try:
+                    from app.zapret_manager.ui.colors import C
+                except Exception:  # pragma: no cover
+                    class _C:
+                        GREEN = RED = YELLOW = DIM = RESET = ""
+
+                    C = _C()  # type: ignore
+                print(f"[{i:02d}/{total:02d}] {domain:<42} ... ", end="", flush=True)
+            check = fetch(url, timeout_s=timeout_s)
             checks.append(check)
             if progress:
                 suffix = f"{check.elapsed_ms} ms"
                 if check.error:
                     suffix += f", {check.error}"
-                print(f"{check.status_text:<5} {suffix}")
+                color = C.GREEN if check.ok else C.RED
+                print(f"{color}{check.status_text:<5}{C.RESET} {suffix}")
         return checks
 
     from concurrent.futures import ThreadPoolExecutor
 
     with ThreadPoolExecutor(max_workers=int(parallel)) as ex:
-        return list(ex.map(lambda u: _fetch_one_detail(u, timeout_s=timeout_s), cleaned))
+        return list(ex.map(lambda u: fetch(u, timeout_s=timeout_s), cleaned))
 
 
 def check_domains(domains: list[str], *, timeout_s: float = 3.0, parallel: int | None = None) -> tuple[int, int]:
-    checks = check_domains_detailed(domains, timeout_s=timeout_s, parallel=parallel, progress=False)
+    checks = check_domains_detailed(domains, timeout_s=timeout_s, parallel=parallel, progress=False, mode="full")
     return sum(1 for c in checks if c.ok), len(checks)
 
 
 def control_test(ctx: "AppContext", domains: list[str], *, parallel: int | None = None) -> TestResult:
     """Legacy helper used by UI: baseline check without any strategy running."""
-    checks = check_domains_detailed(domains, parallel=parallel, progress=False)
+    checks = check_domains_detailed(domains, parallel=parallel, progress=False, mode="full")
     ok = sum(1 for c in checks if c.ok)
     dns_ok = sum(1 for c in checks if c.dns_ok)
     tcp_ok = sum(1 for c in checks if c.tcp_ok)
@@ -436,6 +500,48 @@ def control_test(ctx: "AppContext", domains: list[str], *, parallel: int | None 
     # Record failed domains as problem domains
     try:
         from app.zapret_manager.features.problem_domains import add_from_domain_checks
+        add_from_domain_checks(ctx, checks, source="control")
+    except Exception as e:
+        log.warning("Failed to record problem domains from control test: %s", e)
+    return result
+
+
+def control_test_mode(
+    ctx: "AppContext",
+    domains: list[str],
+    *,
+    mode: str = "full",
+    parallel: int | None = None,
+    progress: bool = True,
+    timeout_s: float | None = None,
+) -> TestResult:
+    """Baseline test without zapret in either quick or full mode.
+
+    - quick: GET+Range only, short timeout
+    - full: existing detailed probes
+    """
+    t = timeout_s
+    if t is None:
+        t = 2.5 if mode == "quick" else 3.0
+    checks = check_domains_detailed(domains, parallel=parallel, progress=progress, mode=mode, timeout_s=t)
+    ok = sum(1 for c in checks if c.ok)
+    dns_ok = sum(1 for c in checks if c.dns_ok)
+    tcp_ok = sum(1 for c in checks if c.tcp_ok)
+    ping_ok = sum(1 for c in checks if c.ping_ok)
+    udp_ok = sum(1 for c in checks if c.udp443 == "ok")
+    result = TestResult(
+        strategy="control",
+        ok=ok,
+        total=len(checks),
+        checks=checks,
+        dns_ok=dns_ok,
+        tcp_ok=tcp_ok,
+        ping_ok=ping_ok,
+        udp_ok=udp_ok,
+    )
+    try:
+        from app.zapret_manager.features.problem_domains import add_from_domain_checks
+
         add_from_domain_checks(ctx, checks, source="control")
     except Exception as e:
         log.warning("Failed to record problem domains from control test: %s", e)
@@ -546,6 +652,7 @@ def test_strategy(
     settle_s: float = 1.5,
     parallel: int | None = None,
     show_progress: bool = True,
+    mode: str = "full",
 ) -> TestResult:
     was_running = ctx.state.zapret.running
     prev_base = ctx.state.zapret.base_strategy
@@ -562,7 +669,7 @@ def test_strategy(
             # Strategy is not active. Do not run domain checks.
             return TestResult(strategy=strategy.name, ok=0, total=0, checks=[], status="invalid", error=str(e))
         time.sleep(settle_s)
-        checks = check_domains_detailed(domains, parallel=parallel, progress=show_progress)
+        checks = check_domains_detailed(domains, parallel=parallel, progress=show_progress, mode=mode)
         ok = sum(1 for c in checks if c.ok)
         dns_ok = sum(1 for c in checks if c.dns_ok)
         tcp_ok = sum(1 for c in checks if c.tcp_ok)
@@ -701,6 +808,7 @@ def test_session(
     ensure_runtime: bool = True,
     ensure_flowseal: bool = False,
     ensure_stressozz: bool = False,
+    mode: str = "full",
 ) -> TestSessionSummary:
     """Runs a human-readable strategy test session."""
     if ensure_runtime:
@@ -734,7 +842,17 @@ def test_session(
         results: list[TestResult] = []
         for st in session_strategies:
             log.info("testing strategy %s", st.name)
-            results.append(test_strategy(ctx, st, domains, settle_s=settle_s, parallel=parallel, show_progress=True))
+            results.append(
+                test_strategy(
+                    ctx,
+                    st,
+                    domains,
+                    settle_s=settle_s,
+                    parallel=parallel,
+                    show_progress=True,
+                    mode=mode,
+                )
+            )
 
         _print_session_table(results)
         results_file = write_results(ctx, results, out_name)
@@ -799,7 +917,8 @@ def proof_of_effect(
     domains: list[str], 
     *, 
     settle_s: float = 1.5, 
-    parallel: int = 6
+    parallel: int = 6,
+    mode: str = "full",
 ) -> ProofResult:
     """Proof-of-effect test: baseline vs strategy with winws evidence."""
     
@@ -819,7 +938,7 @@ def proof_of_effect(
         winws_alive_at_start = False
 
         # Phase 2: Run baseline check (without winws)
-        baseline_checks = check_domains_detailed(domains, parallel=parallel, progress=False)
+        baseline_checks = check_domains_detailed(domains, parallel=parallel, progress=False, mode=mode)
 
         # Phase 3: Start strategy and verify winws is alive
         start_zapret_interactive(ctx, strategy)
@@ -841,7 +960,7 @@ def proof_of_effect(
             raise WinwsStartError("WinWS process is not alive after start")
 
         # Phase 4: Run strategy check (with winws)
-        strategy_checks = check_domains_detailed(domains, parallel=parallel, progress=False)
+        strategy_checks = check_domains_detailed(domains, parallel=parallel, progress=False, mode=mode)
 
         # Phase 5: Compare baseline vs strategy
         rows: list[ProofRow] = []

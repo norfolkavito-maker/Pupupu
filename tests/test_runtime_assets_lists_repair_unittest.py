@@ -22,7 +22,16 @@ class TestRuntimeAssetsListsRepair(unittest.TestCase):
             items = ensure_base_lists(ctx)
 
             # optional files should exist now
-            for name in ["list-general-user.txt", "list-exclude-user.txt", "ipset-exclude-user.txt"]:
+            for name in [
+                "list-general-user.txt",
+                "list-exclude-user.txt",
+                "ipset-exclude-user.txt",
+                # ipset placeholders for preflight compatibility
+                "ipset-exclude.txt",
+                "list-ipset-exclude.txt",
+                "ipset-all.txt",
+                "list-ipset-all.txt",
+            ]:
                 p = lists_dir / name
                 self.assertTrue(p.exists(), name)
                 self.assertEqual(p.read_text(encoding="utf-8"), "")

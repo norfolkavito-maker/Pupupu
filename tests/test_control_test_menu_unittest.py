@@ -26,31 +26,32 @@ class TestControlTestMenuCall(unittest.TestCase):
         ctx.state.tg = {"domain_set": domain_set}
         return ctx
 
-    @patch("app.zapret_manager.ui.menus.control_test")
+    @patch("app.zapret_manager.ui.menus.control_test_mode")
     @patch("app.zapret_manager.ui.menus._domains_for_current_set")
     @patch("app.zapret_manager.ui.menus.write_results")
     @patch("app.zapret_manager.ui.menus.pause")
-    def test_control_test_passes_domains(self, mock_pause, mock_write, mock_domains, mock_control):
-        """Test that _run_control_test passes domains to control_test."""
+    @patch("app.zapret_manager.ui.menus.ask", return_value="1")
+    def test_control_test_passes_domains(self, _mock_ask, mock_pause, mock_write, mock_domains, mock_control):
+        """Test that _run_control_test passes domains to control_test_mode."""
         ctx = self._make_ctx()
         test_domains = ["https://example.com/", "https://test.com/"]
         mock_domains.return_value = test_domains
         
-        # Mock control_test return value
+        # Mock control_test_mode return value
         mock_result = MagicMock()
         mock_result.summary_text.return_value = "OK 10/10"
         mock_control.return_value = mock_result
         
         _run_control_test(ctx)
         
-        # Verify control_test was called with ctx and domains
-        mock_control.assert_called_once_with(ctx, test_domains, parallel=8)
+        # Verify control_test_mode was called with ctx and domains
+        mock_control.assert_called_once_with(ctx, test_domains, mode="quick", parallel=8, progress=True)
         # Verify write_results was called
         mock_write.assert_called_once()
         # Verify pause was called
         mock_pause.assert_called_once()
 
-    @patch("app.zapret_manager.ui.menus.control_test")
+    @patch("app.zapret_manager.ui.menus.control_test_mode")
     @patch("app.zapret_manager.ui.menus._domains_for_current_set")
     @patch("app.zapret_manager.ui.menus.pause")
     @patch("app.zapret_manager.ui.menus.safe_print")
@@ -61,18 +62,19 @@ class TestControlTestMenuCall(unittest.TestCase):
         
         _run_control_test(ctx)
         
-        # control_test should NOT be called
+        # control_test_mode should NOT be called
         mock_control.assert_not_called()
         mock_safe_print.assert_called()
         # pause should be called to let user read the message
         mock_pause.assert_called_once()
 
-    @patch("app.zapret_manager.ui.menus.control_test")
+    @patch("app.zapret_manager.ui.menus.control_test_mode")
     @patch("app.zapret_manager.ui.menus._domains_for_current_set")
     @patch("app.zapret_manager.ui.menus.write_results")
     @patch("app.zapret_manager.ui.menus.pause")
-    def test_control_test_with_selected_domain_set(self, mock_pause, mock_write, mock_domains, mock_control):
-        """Test that control_test uses the selected domain set."""
+    @patch("app.zapret_manager.ui.menus.ask", return_value="1")
+    def test_control_test_with_selected_domain_set(self, _mock_ask, mock_pause, mock_write, mock_domains, mock_control):
+        """Test that control_test_mode uses the selected domain set."""
         ctx = self._make_ctx(domain_set="youtube")
         test_domains = ["https://youtube.com/", "https://googlevideo.com/"]
         mock_domains.return_value = test_domains
@@ -86,7 +88,7 @@ class TestControlTestMenuCall(unittest.TestCase):
         # Verify _domains_for_current_set was called
         mock_domains.assert_called_once_with(ctx)
         # Verify control_test received the domains
-        mock_control.assert_called_once_with(ctx, test_domains, parallel=8)
+        mock_control.assert_called_once_with(ctx, test_domains, mode="quick", parallel=8, progress=True)
 
     def test_no_old_call_control_test_ctx_only(self):
         """Verify there are no old-style control_test(ctx) calls in menus.py."""

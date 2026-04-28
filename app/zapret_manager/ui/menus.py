@@ -17,6 +17,7 @@ from app.zapret_manager.features.strategy_test import (
     TestResult,
     ProofResult,
     control_test,
+    control_test_mode,
     test_strategy,
     test_session,
     proof_of_effect,
@@ -93,8 +94,23 @@ from app.zapret_manager.features.app_update import (
     run_update,
 )
 
+from app.zapret_manager.core.menu_actions import menu_handler
+from app.zapret_manager.core.current_state import load_current_state
+from app.zapret_manager.core.report import generate_bug_report_zip
+
 
 log = logging.getLogger(__name__)
+
+
+def _choose_test_mode() -> str:
+    """Ask user for quick/full test mode."""
+    print(f"\n{C.YELLOW}Режим проверки:{C.RESET}")
+    print(f"{C.CYAN}1){C.RESET} Быстрая проверка доступа (HTTP GET + Range)")
+    print(f"{C.CYAN}2){C.RESET} Полная диагностика (DNS/TCP/PING/UDP/HTTP)")
+    ans = ask(f"\n{C.YELLOW}Выберите режим:{C.RESET} ").strip()
+    if ans == "1":
+        return "quick"
+    return "full"
 
 
 def auto_setup_menu(ctx: AppContext) -> None:
@@ -593,8 +609,17 @@ def _run_control_test(ctx: AppContext) -> None:
         )
         pause()
         return
-    # control_test now requires ctx and domains (updated signature)
-    r = control_test(ctx, domains, parallel=8)
+    mode = _choose_test_mode()
+    # baseline must be WITHOUT zapret
+    try:
+        from app.zapret_manager.utils.platform import is_windows
+
+        if is_windows():
+            stop_zapret(ctx)
+    except Exception:
+        # In tests / non-Windows environments stop_zapret may be unsupported.
+        pass
+    r = control_test_mode(ctx, domains, mode=mode, parallel=8, progress=True)
     out = write_results(ctx, [r], "results_control.txt")
     print(f"\n{C.GREEN}Control test:{C.RESET} {r.summary_text()}\n{C.DIM}{out}{C.RESET}\n")
     pause()
@@ -613,7 +638,8 @@ def _run_test_group(ctx: AppContext, *, group: str) -> None:
     urls = prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)
     domains = [u.url for u in urls]
     parallel = 8
-    results: list[TestResult] = [control_test(ctx, domains, parallel=parallel)]
+    mode = _choose_test_mode()
+    results: list[TestResult] = [control_test_mode(ctx, domains, parallel=parallel, progress=False, mode=mode)]
 
     if group == "v":
         out_name = "results_versions.txt"
@@ -644,6 +670,7 @@ def _run_test_group(ctx: AppContext, *, group: str) -> None:
         ensure_runtime=True,
         ensure_flowseal=ensure_flowseal,
         ensure_stressozz=True,
+        mode=mode,
     )
     out = summary.results_file
     print(f"\n{C.GREEN}Готово:{C.RESET} {out}")
@@ -661,7 +688,8 @@ def _run_test_current(ctx: AppContext) -> None:
         raise RuntimeError("Базовая стратегия не выбрана (выбери в меню стратегий).")
     base_urls = _domains_for_current_set(ctx)
     domains = [u.url for u in prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)]
-    r = test_strategy(ctx, base, domains, parallel=8)
+    mode = _choose_test_mode()
+    r = test_strategy(ctx, base, domains, parallel=8, mode=mode)
     out = write_results(ctx, [r], "results_current.txt")
     print(f"\n{C.GREEN}Результат:{C.RESET} {r.summary_text()}\n{C.DIM}{out}{C.RESET}\n")
     pause()
@@ -681,19 +709,21 @@ def _run_test_by_domain(ctx: AppContext) -> None:
         print(f"\n{C.RED}Ошибка:{C.RESET} Нет валидных доменов.\n")
         pause()
         return
-    results: list[TestResult] = [control_test(ctx, domains, parallel=8)]
+    mode = _choose_test_mode()
+    results: list[TestResult] = [control_test_mode(ctx, domains, parallel=8, progress=False, mode=mode)]
     strategies = _bases_v(ctx) + _bases_flowseal(ctx)
     if not strategies:
         raise RuntimeError("Стратегий нет. Сделай sync.")
     for st in strategies:
         print(f"\n{C.CYAN}Тест:{C.RESET} {st.name}")
-        results.append(test_strategy(ctx, st, domains, parallel=8))
+        results.append(test_strategy(ctx, st, domains, parallel=8, mode=mode))
     out = write_results(ctx, results, "results_domain.txt")
     print(f"\n{C.GREEN}Готово:{C.RESET} {out}\n")
     pause()
 
 
 def _youtube_auto_test(ctx: AppContext) -> None:
+    mode = _choose_test_mode()
     base = find_strategy(ctx, ctx.state.zapret.base_strategy, kind="base")
     if not base:
         raise RuntimeError("Выбери базовую стратегию (меню стратегий).")
@@ -714,7 +744,7 @@ def _youtube_auto_test(ctx: AppContext) -> None:
         domains = _domains_for_current_set(ctx)
         if not domains:
             domains = [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
-        r = test_strategy(ctx, base, domains, youtube=yv, parallel=4)
+        r = test_strategy(ctx, base, domains, youtube=yv, parallel=4, mode=mode)
         print(f"{C.YELLOW}Результат:{C.RESET} {r.summary_text()}")
         if r.ok == r.total and r.total > 0:
             ans = ask("Enter=применить, N=дальше, S=стоп: ").strip().lower()
@@ -757,6 +787,7 @@ def _show_results(ctx: AppContext) -> None:
 
 def _run_proof_of_effect_test(ctx: AppContext) -> None:
     """Run proof-of-effect test: baseline vs strategy."""
+    mode = _choose_test_mode()
     # Check if strategy is selected
     strategy_name = ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy
     if not strategy_name:
@@ -786,7 +817,7 @@ def _run_proof_of_effect_test(ctx: AppContext) -> None:
     
     try:
         # Run proof-of-effect test
-        result = proof_of_effect(ctx, strategy, domains, settle_s=1.5, parallel=6)
+        result = proof_of_effect(ctx, strategy, domains, settle_s=1.5, parallel=6, mode=mode)
         
         # Display results
         print(f"\n{C.CYAN}{'domain':<25} {'baseline':<10} {'strategy':<10} {'effect':<12} {'error':<15}{C.RESET}")
@@ -900,6 +931,7 @@ def system_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Network (QUIC / TCP timestamps / Flush DNS){C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Backup / Restore{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Системная информация{C.RESET}")
+        print(f"{C.CYAN}S){C.RESET} {C.GREEN}Support: Generate bug report{C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -918,10 +950,37 @@ def system_menu(ctx: AppContext) -> None:
                 clear()
                 print("\n" + system_info_text(ctx) + "\n")
                 pause()
+            elif c.lower() == "s":
+                _support_generate_bug_report(ctx)
         except Exception as e:
             log.exception("system_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
             pause()
+
+
+@menu_handler("support.generate_bug_report")
+def _support_generate_bug_report(ctx: AppContext) -> None:
+    """Generate a masked bug report zip without leaking secrets."""
+    clear()
+    print(f"{C.MAGENTA}Support: Generate bug report{C.RESET}\n")
+    print("Будет создан zip-архив с логами/диагностикой/состоянием.")
+    print(f"{C.YELLOW}Важно:{C.RESET} секреты маскируются (UUID, пароли, приватные ключи, ссылки).\n")
+    ans = ask("Создать bug report? (Y/n): ").strip().lower()
+    if ans not in {"", "y", "yes"}:
+        return
+
+    cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+    load_current_state(cur_path)  # ensure file exists
+
+    out = generate_bug_report_zip(
+        out_dir=(ctx.paths.data_dir / "reports").resolve(),
+        logs_dir=ctx.paths.logs_dir,
+        state_file=ctx.paths.state_file,
+        current_state_file=cur_path,
+        config_file=ctx.paths.config_file,
+    )
+    print(f"\n{C.GREEN}Bug report создан:{C.RESET} {out}\n")
+    pause()
 
 
 def _app_update_menu(ctx: AppContext) -> None:
@@ -1276,12 +1335,15 @@ def _problem_domains_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Добавить домен вручную{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Удалить домен (пометить как решённый){C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Очистить все проблемные домены{C.RESET}")
+        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Авто-подбор TOP-5 стратегий по проблемным доменам{C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
         try:
             if c == "1":
                 _auto_tune_by_problem_domains(ctx)
+            elif c == "5":
+                _auto_tune_top5_by_problem_domains(ctx)
             elif c == "2":
                 domain = ask("Введите домен (например x.com): ").strip()
                 if domain:
@@ -1341,8 +1403,9 @@ def _auto_tune_by_problem_domains(ctx: AppContext) -> None:
 
     # Run proof-of-effect test on problem domains
     print(f"Тестируем стратегию: {strategy.name}\n")
+    mode = _choose_test_mode()
     try:
-        result = proof_of_effect(ctx, strategy, urls, settle_s=1.5, parallel=6)
+        result = proof_of_effect(ctx, strategy, urls, settle_s=1.5, parallel=6, mode=mode)
         # Display results
         print(f"\n{C.CYAN}{'domain':<25} {'baseline':<10} {'strategy':<10} {'effect':<12}{C.RESET}")
         print("-" * 70)
@@ -1366,4 +1429,135 @@ def _auto_tune_by_problem_domains(ctx: AppContext) -> None:
         print(f"\n{C.RED}Ошибка при выполнении теста:{C.RESET}")
         print(f"{e}\n")
         pause()
+
+
+def _auto_tune_top5_by_problem_domains(ctx: AppContext) -> None:
+    """Sweep strategy groups on problem domains, show TOP-5 and optionally apply."""
+    from app.zapret_manager.features.runtime_assets import repair_runtime_assets
+    from app.zapret_manager.features.zapret_runtime import WinwsStartError
+
+    domains = get_problem_domains(ctx)
+    if not domains:
+        print(f"\n{C.YELLOW}Нет проблемных доменов. Сначала запусти Control test или Proof-of-effect.{C.RESET}\n")
+        pause()
+        return
+
+    urls = [f"https://{d}/" for d in domains]
+    mode = _choose_test_mode()
+
+    clear()
+    print(f"{C.MAGENTA}Авто-подбор TOP-5 по проблемным доменам{C.RESET}\n")
+    print(f"Доменов: {len(domains)}")
+    print(f"Режим: {mode}\n")
+
+    print(f"{C.YELLOW}Группы стратегий:{C.RESET}")
+    print(f"{C.CYAN}1){C.RESET} v (v1-v9)")
+    print(f"{C.CYAN}2){C.RESET} flowseal")
+    print(f"{C.CYAN}3){C.RESET} v + flowseal (all)")
+    g = ask(f"\n{C.YELLOW}Выберите группу:{C.RESET} ").strip()
+    group = "all"
+    ensure_flowseal = True
+    if g == "1":
+        group = "v"
+        ensure_flowseal = False
+    elif g == "2":
+        group = "flowseal"
+        ensure_flowseal = True
+
+    print(f"\n{C.MAGENTA}Запускаю sweep...{C.RESET}\n")
+    try:
+        summary = test_session(
+            ctx,
+            group=group,
+            domains=urls,
+            out_name=f"results_problem_domains_{group}.txt",
+            top_n=5,
+            parallel=8,
+            ensure_runtime=True,
+            ensure_flowseal=ensure_flowseal,
+            ensure_stressozz=True,
+            mode=mode,
+        )
+    except WinwsStartError as e:
+        # Offer repair and retry
+        print(f"\n{C.RED}Не удалось запустить winws (preflight).{C.RESET}\n{e}\n")
+        ans = ask("Repair runtime assets и повторить? (Y/n): ").strip().lower()
+        if ans not in {"", "y", "yes"}:
+            pause()
+            return
+        items = repair_runtime_assets(ctx)
+        print(f"\n{C.MAGENTA}Repair runtime assets{C.RESET}")
+        for it in items:
+            color = C.GREEN if it.status in {"OK", "CREATED", "COPIED"} else C.RED
+            print(f"- {color}{it.status}{C.RESET} {it.name} {C.DIM}{it.details}{C.RESET}")
+        print()
+        pause("Enter чтобы повторить sweep...")
+        summary = test_session(
+            ctx,
+            group=group,
+            domains=urls,
+            out_name=f"results_problem_domains_{group}.txt",
+            top_n=5,
+            parallel=8,
+            ensure_runtime=True,
+            ensure_flowseal=ensure_flowseal,
+            ensure_stressozz=True,
+            mode=mode,
+        )
+
+    ranked = sorted(
+        summary.results,
+        key=lambda r: (
+            0 if r.status == "ok" else -1,
+            r.ok,
+            r.total,
+            r.strategy,
+        ),
+        reverse=True,
+    )
+    ok_ranked = [r for r in ranked if r.status == "ok" and r.total > 0]
+    invalid = [r for r in ranked if r.status != "ok"]
+
+    top5 = ok_ranked[:5]
+    clear()
+    print(f"{C.MAGENTA}TOP-5 стратегии ({group}){C.RESET}\n")
+    if not top5:
+        print(f"{C.YELLOW}Нет валидных результатов (все INVALID или 0 доменов).{C.RESET}\n")
+        if invalid:
+            print(f"{C.RED}INVALID:{C.RESET}")
+            for r in invalid[:10]:
+                print(f"- {r.strategy}: {r.error}")
+        pause()
+        return
+
+    for i, r in enumerate(top5, start=1):
+        print(f"{C.CYAN}{i}){C.RESET} {C.GREEN}{r.strategy}{C.RESET} -> {r.summary_text()}")
+    print(f"\n{C.DIM}Результаты: {summary.results_file}{C.RESET}")
+    if summary.pinned:
+        print(f"{C.DIM}Закреплено в custom: {len(summary.pinned)}{C.RESET}")
+
+    ans = ask("\nПрименить стратегию из TOP-5? (1-5 / Enter=лучшую / N=нет): ").strip().lower()
+    if ans in {"n", "no"}:
+        return
+    pick = 1
+    if ans.isdigit():
+        pick = int(ans)
+    if pick < 1 or pick > len(top5):
+        pick = 1
+    best_name = top5[pick - 1].strategy
+    base = find_strategy(ctx, best_name, kind="base") or find_strategy(ctx, best_name)
+    if not base:
+        print(f"\n{C.RED}Не нашёл стратегию:{C.RESET} {best_name}\n")
+        pause()
+        return
+    ctx.state.zapret.base_strategy = base.name
+    ctx.state.zapret.selected_strategy = base.name
+    save_state(ctx.paths.state_file, ctx.state)
+    try:
+        stop_zapret(ctx)
+        start_zapret_interactive(ctx, base)
+        print(f"\n{C.GREEN}Применено и запущено:{C.RESET} {base.name}\n")
+    except Exception as e:
+        print(f"\n{C.RED}Не удалось запустить с выбранной стратегией:{C.RESET} {e}\n")
+    pause()
 
