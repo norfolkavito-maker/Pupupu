@@ -30,8 +30,8 @@ class TestControlTestMenuCall(unittest.TestCase):
     @patch("app.zapret_manager.ui.menus._domains_for_current_set")
     @patch("app.zapret_manager.ui.menus.write_results")
     @patch("app.zapret_manager.ui.menus.pause")
-    @patch("app.zapret_manager.ui.menus.ask", return_value="1")
-    def test_control_test_passes_domains(self, _mock_ask, mock_pause, mock_write, mock_domains, mock_control):
+    @patch("app.zapret_manager.ui.menus._choose_test_mode", return_value="quick")
+    def test_control_test_passes_domains(self, _mock_mode, mock_pause, mock_write, mock_domains, mock_control):
         """Test that _run_control_test passes domains to control_test_mode."""
         ctx = self._make_ctx()
         test_domains = ["https://example.com/", "https://test.com/"]
@@ -72,8 +72,8 @@ class TestControlTestMenuCall(unittest.TestCase):
     @patch("app.zapret_manager.ui.menus._domains_for_current_set")
     @patch("app.zapret_manager.ui.menus.write_results")
     @patch("app.zapret_manager.ui.menus.pause")
-    @patch("app.zapret_manager.ui.menus.ask", return_value="1")
-    def test_control_test_with_selected_domain_set(self, _mock_ask, mock_pause, mock_write, mock_domains, mock_control):
+    @patch("app.zapret_manager.ui.menus._choose_test_mode", return_value="quick")
+    def test_control_test_with_selected_domain_set(self, _mock_mode, mock_pause, mock_write, mock_domains, mock_control):
         """Test that control_test_mode uses the selected domain set."""
         ctx = self._make_ctx(domain_set="youtube")
         test_domains = ["https://youtube.com/", "https://googlevideo.com/"]

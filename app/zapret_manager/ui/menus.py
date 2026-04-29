@@ -104,9 +104,11 @@ log = logging.getLogger(__name__)
 
 def _choose_test_mode() -> str:
     """Ask user for quick/full test mode."""
-    print(f"\n{C.YELLOW}Режим проверки:{C.RESET}")
-    print(f"{C.CYAN}1){C.RESET} Быстрая проверка доступа (HTTP GET + Range)")
-    print(f"{C.CYAN}2){C.RESET} Полная диагностика (DNS/TCP/PING/UDP/HTTP)")
+    # IMPORTANT: use safe_print for Cyrillic output. Windows CI stdout can be
+    # cp1252/cp866 and a raw print may crash with UnicodeEncodeError.
+    safe_print(f"\n{C.YELLOW}Режим проверки:{C.RESET}")
+    safe_print(f"{C.CYAN}1){C.RESET} Быстрая проверка доступа (HTTP GET + Range)")
+    safe_print(f"{C.CYAN}2){C.RESET} Полная диагностика (DNS/TCP/PING/UDP/HTTP)")
     ans = ask(f"\n{C.YELLOW}Выберите режим:{C.RESET} ").strip()
     if ans == "1":
         return "quick"
