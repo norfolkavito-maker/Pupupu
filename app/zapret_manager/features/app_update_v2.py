@@ -147,7 +147,7 @@ def build_update_plan_v2(ctx: AppContext, *, github_repo: str = "norfolkavito-ma
     )
 
 
-def generate_updater_bat_v2(*, root_dir: Path, zip_path: Path, log_path: Path) -> str:
+def generate_updater_bat_v2(*, root_dir: Path, zip_path: Path, log_path: Path, lock_path: Path) -> str:
     """
     GENERATE UPDATER V2 WITH PROCESS WAITING AND LOCK RETRY
     This bat will run OUTSIDE app folder, wait for DedZapret.exe to exit, then replace files
@@ -155,14 +155,16 @@ def generate_updater_bat_v2(*, root_dir: Path, zip_path: Path, log_path: Path) -
     root = str(root_dir)
     z = str(zip_path)
     log = str(log_path)
+    lock = str(lock_path)
 
     return "\r\n".join(
         [
             "@echo off",
             "setlocal enableextensions",
-            f"set ROOT={root}",
-            f"set ZIP={z}",
-            f"set LOG={log}",
+            f"set \"ROOT={root}\"",
+            f"set \"ZIP={z}\"",
+            f"set \"LOG={log}\"",
+            f"set \"LOCK={lock}\"",
             "set TMP=%TEMP%\\DedZapretUpdate_%RANDOM%_%RANDOM%",
             "",
             "echo [updater] starting > \"%LOG%\"",
@@ -193,6 +195,7 @@ def generate_updater_bat_v2(*, root_dir: Path, zip_path: Path, log_path: Path) -
             "start \"\" \"%ROOT%\\DedZapret.exe\"",
             "",
             "echo [updater] done >> \"%LOG%\"",
+            "del /f /q \"%LOCK%\" 2>nul",
             "rmdir /S /Q \"%TMP%\" 2>nul",
             "exit /b 0",
         ]
@@ -208,6 +211,7 @@ def run_update_v2(ctx: AppContext, *, github_repo: str = "norfolkavito-maker/Pup
     # Acquire lock
     if plan.lock_file.exists():
         raise AppUpdateV2Error(f"update already in progress: {plan.lock_file}")
+    plan.lock_file.parent.mkdir(parents=True, exist_ok=True)
     plan.lock_file.write_text(str(time.time()), encoding="utf-8")
 
     try:
@@ -229,7 +233,12 @@ def run_update_v2(ctx: AppContext, *, github_repo: str = "norfolkavito-maker/Pup
         backup_path = Path(shutil.make_archive(backup_base, "zip", root_dir=str(ctx.paths.data_root), verbose=0)).resolve()
 
         # Write updater bat
-        txt = generate_updater_bat_v2(root_dir=ctx.paths.root, zip_path=plan.download_path, log_path=plan.update_log)
+        txt = generate_updater_bat_v2(
+            root_dir=ctx.paths.root,
+            zip_path=plan.download_path,
+            log_path=plan.update_log,
+            lock_path=plan.lock_file,
+        )
         plan.updater_bat.write_text(txt, encoding="utf-8")
 
         # Start updater in detached process and exit
@@ -241,4 +250,8 @@ def run_update_v2(ctx: AppContext, *, github_repo: str = "norfolkavito-maker/Pup
     except Exception as e:
         raise
     finally:
-        plan.lock_file.unlink(missing_ok=True)
+        # Important: do NOT delete lock here.
+        # The app will typically exit right after spawning updater.bat, and we
+        # still want to prevent a second update attempt until the updater
+        # finishes (it removes the lock at the end).
+        pass
