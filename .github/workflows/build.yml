@@ -53,6 +53,25 @@ jobs:
             Copy-Item -Recurse -Force (Join-Path $blockcheck "*") runtime\zapret\blockcheck\
           }
 
+      - name: Fetch sing-box runtime (windows amd64)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path runtime\singbox | Out-Null
+
+          $api = "https://api.github.com/repos/SagerNet/sing-box/releases/latest"
+          $release = Invoke-RestMethod -Uri $api
+          $asset = $release.assets | Where-Object { $_.name -match "windows-amd64\.zip$" } | Select-Object -First 1
+          if (-not $asset) { throw "cannot find sing-box windows-amd64 zip in latest release" }
+
+          $zip = "sing-box-windows-amd64.zip"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
+          Expand-Archive -Force $zip -DestinationPath runtime\singbox
+
+          $exe = Get-ChildItem -Path runtime\singbox -Recurse -File -Filter "sing-box.exe" | Select-Object -First 1
+          if (-not $exe) { throw "sing-box.exe not found after extraction" }
+          New-Item -ItemType Directory -Force -Path runtime\singbox\bin\sing-box | Out-Null
+          Copy-Item -Force $exe.FullName runtime\singbox\bin\sing-box\sing-box.exe
+
       - name: Run tests
         env:
           PYTHONPATH: .
@@ -80,6 +99,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\backups | Out-Null
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\profiles | Out-Null
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\lists | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\bin\sing-box | Out-Null
 
           Copy-Item -Force dist\DedZapret.exe bundle\DedZapret\
           Copy-Item -Force README_FIRST.txt bundle\DedZapret\
@@ -97,6 +117,9 @@ jobs:
           if (Test-Path data\lists) {
             Copy-Item -Recurse -Force data\lists\* bundle\DedZapret\DedZapretData\data\lists\
           }
+          if (Test-Path runtime\singbox\bin\sing-box\sing-box.exe) {
+            Copy-Item -Force runtime\singbox\bin\sing-box\sing-box.exe bundle\DedZapret\bin\sing-box\sing-box.exe
+          }
 
       - name: Validate portable bundle contains required assets
         shell: pwsh
@@ -105,6 +128,9 @@ jobs:
           if (-not (Test-Path "$root\data\lists")) { throw "missing $root\\data\\lists" }
           foreach ($f in @("google.txt","exclude.txt")) {
             if (-not (Test-Path "$root\data\lists\$f")) { throw "missing list file: $f" }
+          }
+          if (-not (Test-Path "bundle\DedZapret\bin\sing-box\sing-box.exe")) {
+            throw "missing bundle\\DedZapret\\bin\\sing-box\\sing-box.exe"
           }
 
       - name: Upload artifact

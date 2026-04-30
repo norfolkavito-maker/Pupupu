@@ -24,6 +24,7 @@ def _run_ci_smoke() -> int:
         from app.zapret_manager.core.paths import Paths
         from app.zapret_manager.features.zapret_runtime import runtime_health
         from app.zapret_manager import __version__
+        from app.zapret_manager.core.singbox.binary import detect_singbox_binary, singbox_version
 
         root = Paths.detect_root()
         print(f"[ci-smoke] version: {__version__}")
@@ -36,6 +37,14 @@ def _run_ci_smoke() -> int:
         print(f"[ci-smoke] runtime ok: {bool(h.get('ok'))}")
         if h.get("problems"):
             print(f"[ci-smoke] runtime problems: {h.get('problems')}")
+
+        sb = detect_singbox_binary(root)
+        print(f"[ci-smoke] sing-box binary: {'OK' if sb else 'MISSING'}")
+        if sb:
+            ver = singbox_version(sb.path)
+            first = (ver.splitlines()[0].strip() if ver else "")
+            print(f"[ci-smoke] sing-box version: {first or 'unknown'}")
+
         print("[ci-smoke] OK")
         return 0
     except Exception as e:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,6 +9,10 @@ from app.zapret_manager.core.diagnostics import SessionRecorder, set_global_reco
 from app.zapret_manager.core.log import setup_logging
 from app.zapret_manager.core.paths import Paths
 from app.zapret_manager.core.state import AppState, load_state
+from app.zapret_manager.strategies.manager import StrategyManager
+
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -17,6 +22,11 @@ class AppContext:
     config: AppConfig
     state: AppState
     diagnostics: SessionRecorder
+    
+    # Strategy Managers
+    strategies_builtin: StrategyManager
+    strategies_generated: StrategyManager
+    strategies_custom: StrategyManager
 
     @staticmethod
     def bootstrap(argv: list[str]) -> "AppContext":
@@ -49,20 +59,51 @@ class AppContext:
         )
         set_global_recorder(rec)
 
-        ctx = AppContext(root=root, paths=paths, config=config, state=state, diagnostics=rec)
+        ctx = AppContext(
+            root=root,
+            paths=paths,
+            config=config,
+            state=state,
+            diagnostics=rec,
+            strategies_builtin=StrategyManager(paths.strategies_builtin_dir),
+            strategies_generated=StrategyManager(paths.strategies_generated_dir),
+            strategies_custom=StrategyManager(paths.strategies_custom_dir)
+        )
+        
+        # Авто-синхронизация при запуске (не блокирует старт)
+        try:
+            ctx.auto_sync()
+        except Exception as e:
+            log.warning("Auto-sync failed during bootstrap: %s", e)
+
         try:
             from app.zapret_manager.features.test_sets import ensure_domain_sets
-
             ensure_domain_sets(ctx)
-        except Exception:
-            pass
-        # Ensure bundled runtime exists. (Portable app should ship with runtime.)
-        try:
-            from app.zapret_manager.features.zapret_runtime import require_runtime_ok
-
-            require_runtime_ok(ctx)
         except Exception:
             # Do not crash bootstrap; UI will show status/error on start actions.
             pass
         return ctx
+
+    def auto_sync(self) -> None:
+        """Автоматически обновляет стратегии и списки из апстримов."""
+        from app.zapret_manager.features.upstreams import sync_flowseal, sync_stressozz_strategies
+        from app.zapret_manager.features.lists import update_exclude, update_rkn
+        
+        log.info("Starting background auto-sync...")
+        # Обновляем стратегии
+        try:
+            sync_flowseal(self)
+            sync_stressozz_strategies(self)
+            # Перестраиваем индексы после загрузки новых файлов
+            self.strategies_generated.rebuild_index()
+        except Exception as e:
+            log.error("Failed to sync upstreams: %s", e)
+            
+        # Обновляем списки
+        try:
+            update_exclude(self)
+            if self.state.zapret.rkn_enabled:
+                update_rkn(self)
+        except Exception as e:
+            log.error("Failed to update lists: %s", e)
 

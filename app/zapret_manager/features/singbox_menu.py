@@ -9,7 +9,21 @@ from app.zapret_manager.core.menu_actions import menu_handler
 from app.zapret_manager.core.process_supervisor import ProcessSupervisor
 from app.zapret_manager.core.singbox.binary import detect_singbox_binary, singbox_version
 from app.zapret_manager.core.singbox.config_builder import SingBoxBuildOptions, build_config, write_config
+from app.zapret_manager.core.singbox.health import singbox_health_summary
 from app.zapret_manager.core.singbox.nodes import import_node_from_link, load_nodes, save_nodes
+from app.zapret_manager.core.singbox.subscriptions import (
+    add_subscription,
+    download_subscription_text,
+    load_subscriptions,
+    masked_subscription_label,
+    merge_subscription_nodes,
+    parse_subscription_payload,
+    save_subscriptions,
+)
+from app.zapret_manager.core.singbox.system_proxy_win import (
+    enable_local_proxy_with_backup,
+    restore_system_proxy,
+)
 from app.zapret_manager.core.singbox.process import SingBoxProcess
 from app.zapret_manager.ui.colors import C
 from app.zapret_manager.utils.console import ask, clear, pause, safe_print
@@ -32,12 +46,16 @@ def singbox_menu(ctx: AppContext) -> None:
         print(f"{C.YELLOW}DNS mode:{C.RESET} {cur.singbox_dns_mode}\n")
         print(f"{C.CYAN}1){C.RESET} Status / diagnostics")
         print(f"{C.CYAN}2){C.RESET} Import single link (vless/vmess/trojan/ss)")
-        print(f"{C.CYAN}3){C.RESET} List nodes")
-        print(f"{C.CYAN}4){C.RESET} Select active node")
-        print(f"{C.CYAN}5){C.RESET} Generate config preview")
-        print(f"{C.CYAN}6){C.RESET} Start local proxy")
-        print(f"{C.CYAN}7){C.RESET} Stop sing-box")
-        print(f"{C.CYAN}8){C.RESET} Restart sing-box")
+        print(f"{C.CYAN}3){C.RESET} Add subscription URL")
+        print(f"{C.CYAN}4){C.RESET} Update subscriptions")
+        print(f"{C.CYAN}5){C.RESET} List nodes")
+        print(f"{C.CYAN}6){C.RESET} Select active node")
+        print(f"{C.CYAN}7){C.RESET} Generate config preview")
+        print(f"{C.CYAN}8){C.RESET} Start local proxy")
+        print(f"{C.CYAN}9){C.RESET} Enable system proxy (explicit confirm)")
+        print(f"{C.CYAN}10){C.RESET} Restore system proxy")
+        print(f"{C.CYAN}11){C.RESET} Stop sing-box")
+        print(f"{C.CYAN}12){C.RESET} Restart sing-box")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -46,30 +64,41 @@ def singbox_menu(ctx: AppContext) -> None:
         elif c == "2":
             _sb_import_link(ctx)
         elif c == "3":
-            _sb_list_nodes(ctx)
+            _sb_add_subscription(ctx)
         elif c == "4":
-            _sb_select_node(ctx)
+            _sb_update_subscriptions(ctx)
         elif c == "5":
-            _sb_preview_config(ctx)
+            _sb_list_nodes(ctx)
         elif c == "6":
-            _sb_start(ctx)
+            _sb_select_node(ctx)
         elif c == "7":
-            _sb_stop(ctx)
+            _sb_preview_config(ctx)
         elif c == "8":
+            _sb_start(ctx)
+        elif c == "9":
+            _sb_enable_system_proxy(ctx)
+        elif c == "10":
+            _sb_restore_system_proxy(ctx)
+        elif c == "11":
+            _sb_stop(ctx)
+        elif c == "12":
             _sb_restart(ctx)
 
 
 @menu_handler("singbox.status")
 def _sb_status(ctx: AppContext) -> None:
     clear()
+    hs = singbox_health_summary((ctx.paths.data_dir / "state" / "current.json").resolve())
     bin = detect_singbox_binary(ctx.paths.root)
     if not bin:
         safe_print(f"\n{C.RED}sing-box.exe не найден.{C.RESET}\nОжидается: bin/sing-box/sing-box.exe\n")
+        safe_print(f"Health: running={hs.get('running')} pid={hs.get('pid')} ports={hs.get('ports')}\n")
         pause()
         return
     v = singbox_version(bin.path)
     safe_print(f"\n{C.GREEN}sing-box found:{C.RESET} {bin.path}\n")
     safe_print(v + "\n")
+    safe_print(f"Health: running={hs.get('running')} pid={hs.get('pid')} ports={hs.get('ports')} ok={hs.get('ok')}\n")
     pause()
 
 
@@ -79,6 +108,111 @@ def _nodes_path(ctx: AppContext) -> Path:
 
 def _config_path(ctx: AppContext) -> Path:
     return (ctx.paths.data_dir / "singbox" / "generated_config.json").resolve()
+
+
+def _subscriptions_path(ctx: AppContext) -> Path:
+    return (ctx.paths.data_dir / "singbox" / "subscriptions.json").resolve()
+
+
+def _system_proxy_backup_path(ctx: AppContext) -> Path:
+    return (ctx.paths.data_dir / "singbox" / "system_proxy_backup.json").resolve()
+
+
+@menu_handler("singbox.enable_system_proxy")
+def _sb_enable_system_proxy(ctx: AppContext) -> None:
+    clear()
+    ans = ask("\nВключить системный прокси 127.0.0.1:2081? (y/N): ").strip().lower()
+    if ans not in {"y", "yes", "д", "да"}:
+        return
+    try:
+        enable_local_proxy_with_backup(_system_proxy_backup_path(ctx), host="127.0.0.1", port=2081)
+        safe_print(f"\n{C.GREEN}System proxy включен.{C.RESET}\n")
+    except Exception as e:
+        safe_print(f"\n{C.RED}Не удалось включить system proxy:{C.RESET} {e}\n")
+    pause()
+
+
+@menu_handler("singbox.restore_system_proxy")
+def _sb_restore_system_proxy(ctx: AppContext) -> None:
+    clear()
+    try:
+        restore_system_proxy(_system_proxy_backup_path(ctx))
+        safe_print(f"\n{C.GREEN}System proxy восстановлен.{C.RESET}\n")
+    except Exception as e:
+        safe_print(f"\n{C.RED}Не удалось восстановить system proxy:{C.RESET} {e}\n")
+    pause()
+
+
+@menu_handler("singbox.add_subscription")
+def _sb_add_subscription(ctx: AppContext) -> None:
+    clear()
+    name = ask("\nИмя подписки: ").strip()
+    url = ask("URL подписки: ").strip()
+    if not name or not url:
+        return
+    subs = load_subscriptions(_subscriptions_path(ctx))
+    subs = add_subscription(subs, name=name, url=url)
+    save_subscriptions(_subscriptions_path(ctx), subs)
+    safe_print(f"\n{C.GREEN}Добавлено:{C.RESET} {name}\n")
+    pause()
+
+
+@menu_handler("singbox.update_subscriptions")
+def _sb_update_subscriptions(ctx: AppContext) -> None:
+    clear()
+    subs = load_subscriptions(_subscriptions_path(ctx))
+    if not subs:
+        safe_print(f"\n{C.YELLOW}Нет подписок.{C.RESET}\n")
+        pause()
+        return
+
+    nodes = load_nodes(_nodes_path(ctx))
+    total_imported = 0
+    total_skipped = 0
+    total_errors = 0
+    updated: list = []
+
+    for s in subs:
+        if not s.enabled:
+            updated.append(s)
+            continue
+        try:
+            txt = download_subscription_text(s.url)
+            links = parse_subscription_payload(txt)
+            nodes, stats = merge_subscription_nodes(current_nodes=nodes, links=links)
+            total_imported += stats.get("imported", 0)
+            total_skipped += stats.get("skipped", 0)
+            total_errors += stats.get("errors", 0)
+            updated.append(type(s)(
+                subscription_id=s.subscription_id,
+                name=s.name,
+                url=s.url,
+                enabled=s.enabled,
+                last_update_at="ok",
+                last_error="",
+                node_count=len(links),
+            ))
+        except Exception as e:
+            updated.append(type(s)(
+                subscription_id=s.subscription_id,
+                name=s.name,
+                url=s.url,
+                enabled=s.enabled,
+                last_update_at=s.last_update_at,
+                last_error=str(e),
+                node_count=s.node_count,
+            ))
+            total_errors += 1
+
+    save_nodes(_nodes_path(ctx), nodes)
+    save_subscriptions(_subscriptions_path(ctx), updated)
+
+    safe_print(f"\n{C.GREEN}Subscriptions updated.{C.RESET}")
+    safe_print(f"Imported: {total_imported}, skipped: {total_skipped}, errors: {total_errors}")
+    for s in updated:
+        safe_print(f"- {masked_subscription_label(s)}")
+    safe_print("")
+    pause()
 
 
 @menu_handler("singbox.import_link")
@@ -212,6 +346,11 @@ def _sb_stop(ctx: AppContext) -> None:
         log_file=(ctx.paths.logs_dir / "singbox.log").resolve(),
     )
     proc.stop(pid)
+    try:
+        # rollback path: restore previous proxy settings if backup exists
+        restore_system_proxy(_system_proxy_backup_path(ctx))
+    except Exception:
+        pass
     safe_print(f"\n{C.GREEN}sing-box остановлен.{C.RESET}\n")
     pause()
 
