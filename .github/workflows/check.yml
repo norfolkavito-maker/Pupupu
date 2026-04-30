@@ -59,12 +59,18 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path tests) {
-            # tests import "app.*" so repo root must be on sys.path
             $env:PYTHONPATH = "${env:GITHUB_WORKSPACE}"
-            python -m pytest -q
+            python -m pytest -q --tb=long | Tee-Object -FilePath pytest.log
           } else {
             Write-Host "No tests/ directory. Skipping."
           }
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log-windows
+          path: pytest.log
 
       - name: Smoke check (non-interactive)
         shell: pwsh
@@ -127,8 +133,14 @@ jobs:
       - name: Unit tests (pytest)
         run: |
           if [ -d tests ]; then
-            # tests import "app.*" so repo root must be on sys.path
-            PYTHONPATH="$GITHUB_WORKSPACE" python -m pytest -q
+            PYTHONPATH="$GITHUB_WORKSPACE" python -m pytest -q --tb=long 2>&1 | tee pytest.log
           else
             echo "No tests/ directory. Skipping."
           fi
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log-ubuntu
+          path: pytest.log
