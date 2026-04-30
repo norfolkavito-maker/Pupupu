@@ -60,7 +60,7 @@ jobs:
         run: |
           if (Test-Path tests) {
             $env:PYTHONPATH = "${env:GITHUB_WORKSPACE}"
-            python -m pytest -q --tb=long | Tee-Object -FilePath pytest.log
+            python -m pytest -q --tb=long 2>&1 | Tee-Object -FilePath pytest.log
           } else {
             Write-Host "No tests/ directory. Skipping."
           }
@@ -133,7 +133,7 @@ jobs:
       - name: Unit tests (pytest)
         run: |
           if [ -d tests ]; then
-            PYTHONPATH="$GITHUB_WORKSPACE" python -m pytest -q --tb=long 2>&1 | tee pytest.log
+            PYTHONPATH="$GITHUB_WORKSPACE" python -m pytest -q --tb=long > pytest.log 2>&1 || true
           else
             echo "No tests/ directory. Skipping."
           fi

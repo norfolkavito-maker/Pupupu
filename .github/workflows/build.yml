@@ -77,7 +77,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m pytest -q --tb=long | Tee-Object -FilePath pytest.log
+          python -m pytest -q --tb=long 2>&1 | Tee-Object -FilePath pytest.log
 
       - name: Upload pytest log
         if: always()
