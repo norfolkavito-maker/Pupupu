@@ -320,3 +320,27 @@ python3 -m unittest tests/test_diagnostics_artifacts_unittest.py tests/test_bug_
 
 ### Next step
 - Commit changes: "feat(diagnostics): add runtime flowseal and ranking artifacts"
+
+## 2026-05-01 19:56 — docs(audit): add post-P1 project map
+
+### Scope
+- Add `docs/project_map_after_p1.md` (post-P1 architecture snapshot) as a tracked audit artifact.
+
+### Files changed
+- docs/project_map_after_p1.md
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -m unittest discover -s tests -p 'test_*_unittest.py' -v
+git status --porcelain
+```
+
+### Results
+- Project map is now tracked for future audits/reviews.
+
+### Not verified
+- Manual Windows E2E run (project map is documentation-only).
+
+### Next step
+- Commit as: `docs(audit): add post-P1 project map`.
