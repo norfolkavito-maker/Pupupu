@@ -22,6 +22,7 @@ from app.zapret_manager.features.strategy_test import (
     test_session,
     proof_of_effect,
     write_results,
+    test_all_strategies_with_progress,
 )
 from app.zapret_manager.features.test_sets import DOMAIN_SETS, read_domain_set_file, combine_domain_sets
 from app.zapret_manager.features.sysinfo import system_info_text
@@ -528,6 +529,7 @@ def test_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}7){C.RESET} {C.GREEN}Выбрать набор доменов{C.RESET} (Default/YouTube/CDN/Amazon)")
         print(f"{C.CYAN}8){C.RESET} {C.GREEN}Proof-of-effect test (baseline vs strategy){C.RESET}")
         print(f"{C.CYAN}9){C.RESET} {C.GREEN}Авто-подбор по проблемным доменам{C.RESET}")
+        print(f"{C.CYAN}T){C.RESET} {C.GREEN}Тест всех стратегий{C.RESET} (с прогрессом и рейтингом)")
         if have_results:
             print(f"{C.CYAN}A){C.RESET} {C.GREEN}Результаты тестирования стратегий{C.RESET}")
             print(f"{C.CYAN}D){C.RESET} {C.GREEN}Удалить результаты тестирования{C.RESET}")
@@ -555,6 +557,8 @@ def test_menu(ctx: AppContext) -> None:
                 _run_proof_of_effect_test(ctx)
             elif c == "9":
                 _problem_domains_menu(ctx)
+            elif c.lower() == "t":
+                _test_all_strategies_menu(ctx)
             elif c.lower() == "a" and have_results:
                 _show_results(ctx)
             elif c.lower() == "d" and have_results:
@@ -579,6 +583,123 @@ def _domains_for_current_set(ctx: AppContext) -> list[str]:
     ds = next((d for d in DOMAIN_SETS if d.key == key), next((d for d in DOMAIN_SETS if d.key == "default"), DOMAIN_SETS[0]))
     domains = read_domain_set_file(ds.file_path(ctx))
     return domains or [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
+
+
+def _choose_domain_set_extended(ctx: AppContext) -> tuple[str, list[str]]:
+    """Extended domain set chooser for the sweep "test all strategies".
+
+    Supported options:
+      - Default
+      - YouTube
+      - Discord
+      - Games
+      - Problem domains (from problem_domains.json)
+      - All (combine)
+      - Custom file
+    """
+    clear()
+    safe_print(f"{C.MAGENTA}Наборы доменов для теста стратегий{C.RESET}\n")
+    safe_print(f"{C.CYAN}1){C.RESET} Default")
+    safe_print(f"{C.CYAN}2){C.RESET} YouTube")
+    safe_print(f"{C.CYAN}3){C.RESET} Discord")
+    safe_print(f"{C.CYAN}4){C.RESET} Games")
+    safe_print(f"{C.CYAN}5){C.RESET} Problem domains")
+    safe_print(f"{C.CYAN}6){C.RESET} All")
+    safe_print(f"{C.CYAN}7){C.RESET} Custom file")
+    ans = ask(f"\n{C.YELLOW}Выберите набор:{C.RESET} ").strip()
+    key = "default"
+    domains: list[str] = []
+
+    if ans == "1":
+        key = "default"
+        domains = read_domain_set_file(next(d for d in DOMAIN_SETS if d.key == "default").file_path(ctx))
+    elif ans == "2":
+        key = "youtube"
+        domains = read_domain_set_file(next(d for d in DOMAIN_SETS if d.key == "youtube").file_path(ctx))
+    elif ans == "3":
+        key = "discord"
+        domains = read_domain_set_file(next(d for d in DOMAIN_SETS if d.key == "discord").file_path(ctx))
+    elif ans == "4":
+        key = "games"
+        domains = read_domain_set_file(next(d for d in DOMAIN_SETS if d.key == "games").file_path(ctx))
+    elif ans == "5":
+        key = "problem"
+        # Keep current format; no migration. Just reuse existing helper.
+        domains = get_problem_domains(ctx)
+    elif ans == "6":
+        key = "all"
+        keys = ["default", "youtube", "discord", "games"]
+        domains = combine_domain_sets(ctx, keys)
+    elif ans == "7":
+        key = "custom"
+        p = ask("\nПуть к файлу со списком доменов: ").strip()
+        if p:
+            domains = read_domain_set_file(Path(p))
+    else:
+        # fallback to current selected set
+        key = (ctx.state.tg.get("domain_set") or "default") if isinstance(ctx.state.tg, dict) else "default"
+        domains = _domains_for_current_set(ctx)
+
+    # Fallback if empty: default hardcoded.
+    if not domains:
+        domains = [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
+    return key, domains
+
+
+def _choose_sweep_mode() -> str:
+    clear()
+    safe_print(f"{C.MAGENTA}Режим теста всех стратегий{C.RESET}\n")
+    safe_print(f"{C.CYAN}1){C.RESET} Quick (builtin/base only)")
+    safe_print(f"{C.CYAN}2){C.RESET} Full (builtin + generated + packs if available)")
+    safe_print(f"{C.CYAN}3){C.RESET} Exhaustive (может быть очень долго)")
+    ans = ask(f"\n{C.YELLOW}Выберите режим:{C.RESET} ").strip()
+    if ans == "1":
+        return "quick"
+    if ans == "2":
+        return "full"
+    if ans == "3":
+        warn = ask(f"\n{C.RED}ВНИМАНИЕ:{C.RESET} exhaustive может идти долго. Введите YES чтобы продолжить: ").strip()
+        if warn == "YES":
+            return "exhaustive"
+        return "full"
+    return "full"
+
+
+def _test_all_strategies_menu(ctx: AppContext) -> None:
+    # Domain set
+    domain_set_key, base_urls = _choose_domain_set_extended(ctx)
+    urls = prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)
+    domains = [u.url for u in urls]
+    if not domains:
+        safe_print(f"\n{C.RED}Ошибка:{C.RESET} список доменов пуст.\n")
+        pause()
+        return
+
+    mode = _choose_sweep_mode()
+    parallel = 8
+
+    # NOTE: We intentionally don't run baseline control test here; user can run it separately.
+    safe_print(f"\n{C.MAGENTA}Запуск теста всех стратегий...{C.RESET}\n")
+    summary, rows, ranking_json = test_all_strategies_with_progress(
+        ctx,
+        domains=domains,
+        domain_set=domain_set_key,
+        mode=mode,
+        parallel=parallel,
+        top_n_pin=5,
+    )
+
+    safe_print(f"\n{C.GREEN}Готово.{C.RESET}")
+    safe_print(f"{C.DIM}Results file:{C.RESET} {summary.results_file}")
+    safe_print(f"{C.DIM}Ranking json:{C.RESET} {ranking_json}")
+    telem = (ctx.paths.data_dir / "telemetry" / "strategy_runs.jsonl").resolve()
+    safe_print(f"{C.DIM}JSONL telemetry:{C.RESET} {telem}")
+    if summary.pinned:
+        safe_print(f"\n{C.YELLOW}Закреплено (top 5) в custom:{C.RESET}")
+        for p in summary.pinned:
+            safe_print(f"- {p}")
+    safe_print("")
+    pause()
 
 
 def _choose_domain_set(ctx: AppContext) -> None:

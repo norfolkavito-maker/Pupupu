@@ -198,6 +198,41 @@ Create focused commit for sing-box phases implemented in this iteration, push br
   - tests passed
 - not verified:
   - Real-world parsing of full Clash YAML variants and sing-box JSON variants beyond minimal cases
+
+## 2026-05-01 13:03 (Europe/Moscow) — P0 feat(strategies): test all strategies with progress
+
+### Scope
+- Add "Test all strategies" sweep with console progress per strategy and per-domain (reusing existing tester).
+- Add domain set selection including Problem domains (no migration) + custom file.
+- Add simple ranking/scoring, persist JSONL telemetry and latest ranking JSON.
+
+### Files changed
+- app/zapret_manager/features/strategy_test.py
+- app/zapret_manager/ui/menus.py
+- tests/test_test_all_strategies_with_progress_unittest.py
+
+### Commands run
+```text
+python3 -m unittest tests/test_test_all_strategies_with_progress_unittest.py -v
+```
+
+### Results
+- New menu entry: Test menu → `T) Тест всех стратегий (с прогрессом и рейтингом)`.
+- Progress output format now includes:
+  - `[Strategy 03/42] v7`
+  - `  [Domain 01/80] discord.com ... OK 824 ms`
+- Domain sets supported for sweep: Default/YouTube/Discord/Games/Problem domains/All/Custom file.
+- Modes supported: Quick (builtin/base only), Full (builtin+generated+packs), Exhaustive (explicit YES).
+- JSONL telemetry written to `DedZapretData/data/telemetry/strategy_runs.jsonl`.
+- Ranking persisted to `DedZapretData/data/telemetry/latest_strategy_ranking.json`.
+- Unit tests cover: domain set selection, quick mode strategy inclusion, stable score/ranking, jsonl creation, empty problem-domains safety.
+
+### Not verified
+- Real long-running network sweep on Windows host (unit tests mock network and winws).
+- Real presence/absence of Flowseal/StressOzz packs in portable bundle (relies on existing sync).
+
+### Next step
+- Run full unit test suite and commit changes as `feat(strategies): add test all strategies with progress`.
   - Real network download from subscription URL on Windows host
 - next step:
   - commit as: "fix(singbox): improve subscription import and auto-select active node"

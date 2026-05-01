@@ -5,9 +5,12 @@ import shutil
 import socket
 import tempfile
 import time
+import json
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
+from typing import Any
 
 try:
     import requests
@@ -457,7 +460,9 @@ def check_domains_detailed(
                         GREEN = RED = YELLOW = DIM = RESET = ""
 
                     C = _C()  # type: ignore
-                print(f"[{i:02d}/{total:02d}] {domain:<42} ... ", end="", flush=True)
+                # UX: keep format stable for parsing and readability.
+                # Caller is responsible for higher-level progress (strategy index/name).
+                print(f"  [Domain {i:02d}/{total:02d}] {domain:<42} ... ", end="", flush=True)
             check = fetch(url, timeout_s=timeout_s)
             checks.append(check)
             if progress:
@@ -703,6 +708,297 @@ def test_strategy(
                     start_zapret_interactive(ctx, prev_strategy, youtube=youtube, discord=discord)
                 except Exception:
                     log.exception("failed to restore previous zapret state after strategy test")
+
+
+def _telemetry_jsonl_path(ctx: AppContext) -> Path:
+    p = (ctx.paths.data_dir / "telemetry" / "strategy_runs.jsonl").resolve()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _safe_domain_set_key(key: str) -> str:
+    return (key or "unknown").strip().lower().replace(" ", "_")
+
+
+@dataclass(frozen=True)
+class StrategyRunRecord:
+    ts: str
+    mode: str
+    domain_set: str
+    strategy_id: str
+    ok: int
+    fail: int
+    avg_ms: int
+    score: int
+    missing_assets: list[str]
+    error: str
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "ts": self.ts,
+            "mode": self.mode,
+            "domain_set": self.domain_set,
+            "strategy_id": self.strategy_id,
+            "ok": self.ok,
+            "fail": self.fail,
+            "avg_ms": self.avg_ms,
+            "score": self.score,
+            "missing_assets": self.missing_assets,
+            "error": self.error,
+        }
+
+
+@dataclass(frozen=True)
+class StrategyRankingRow:
+    rank: int
+    strategy: str
+    ok: int
+    fail: int
+    avg_ms: int
+    missing_assets: list[str]
+    score: int
+    status: str
+    error: str
+
+
+def _avg_ms_from_checks(checks: list[DomainCheck]) -> int:
+    if not checks:
+        return 0
+    return int(sum(c.elapsed_ms for c in checks) / max(1, len(checks)))
+
+
+def _score_run(
+    *,
+    ok: int,
+    total: int,
+    missing_assets: int,
+    crashed: bool,
+    avg_ms: int,
+) -> int:
+    """Simple, explainable scoring.
+
+    score = success_rate*100 - penalties
+    - missing_assets penalty: 3 pts each
+    - crash/start error penalty: 30 pts
+    - latency penalty: 0..10 pts (avg_ms / 200)
+    """
+
+    if total <= 0:
+        base = 0
+    else:
+        base = int((ok / total) * 100)
+    penalty = 0
+    penalty += int(missing_assets) * 3
+    if crashed:
+        penalty += 30
+    penalty += min(10, int(max(0, avg_ms) / 200))
+    return max(0, min(100, base - penalty))
+
+
+def _detect_missing_assets_from_error(err: str) -> list[str]:
+    # Best-effort heuristic; keep stable and simple.
+    e = (err or "")
+    out: list[str] = []
+    for key in ["hostlist", "ipset", "bin", "quic", "stun", "fake", "exclude", "rkn"]:
+        if key in e.lower():
+            out.append(key)
+    # de-dup
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for x in out:
+        if x in seen:
+            continue
+        seen.add(x)
+        uniq.append(x)
+    return uniq
+
+
+def _append_strategy_run_jsonl(ctx: AppContext, rec: StrategyRunRecord) -> None:
+    p = _telemetry_jsonl_path(ctx)
+    p.write_text("", encoding="utf-8") if not p.exists() else None
+    with p.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(rec.to_json(), ensure_ascii=False) + "\n")
+
+
+def _save_latest_ranking_json(ctx: AppContext, rows: list[StrategyRankingRow], *, domain_set: str, mode: str) -> Path:
+    out_dir = (ctx.paths.data_dir / "telemetry").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    p = (out_dir / "latest_strategy_ranking.json").resolve()
+    payload = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "domain_set": domain_set,
+        "rows": [
+            {
+                "rank": r.rank,
+                "strategy": r.strategy,
+                "ok": r.ok,
+                "fail": r.fail,
+                "avg_ms": r.avg_ms,
+                "missing_assets": r.missing_assets,
+                "score": r.score,
+                "status": r.status,
+                "error": r.error,
+            }
+            for r in rows
+        ],
+    }
+    p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
+
+
+def _print_ranking_table(rows: list[StrategyRankingRow]) -> None:
+    print()
+    print("Rank | Strategy | OK | FAIL | Avg ms | Missing assets | Score")
+    print("-" * 78)
+    for r in rows:
+        miss = ",".join(r.missing_assets) if r.missing_assets else "-"
+        print(f"{r.rank:>4} | {r.strategy:<16} | {r.ok:>3} | {r.fail:>4} | {r.avg_ms:>6} | {miss:<14} | {r.score:>3}")
+    print("-" * 78)
+
+
+def _strategies_for_mode(ctx: AppContext, *, mode: str) -> tuple[list[Strategy], bool, bool]:
+    """Return (candidates, ensure_flowseal, ensure_stressozz)."""
+    m = (mode or "").strip().lower()
+    if m == "quick":
+        # builtin/base only
+        return (list_strategies(ctx.paths.strategies_builtin_dir, kind="base"), False, False)
+    if m == "full":
+        # builtin + generated + packs (if available / can be synced)
+        return (
+            list_strategies(ctx.paths.strategies_builtin_dir, kind="base")
+            + list_strategies(ctx.paths.strategies_generated_dir, kind="base")
+            + list_strategies(ctx.paths.strategies_custom_dir, kind="base"),
+            True,
+            True,
+        )
+    if m == "exhaustive":
+        # same as full, but we also force include tmp pack candidates group(all)
+        # NOTE: this may be slow.
+        return (_select_candidates(ctx, "all"), True, True)
+    raise ValueError(f"Unknown test mode: {mode}")
+
+
+def test_all_strategies_with_progress(
+    ctx: AppContext,
+    *,
+    domains: list[str],
+    domain_set: str,
+    mode: str,
+    parallel: int | None = None,
+    settle_s: float = 1.5,
+    top_n_pin: int = 5,
+) -> tuple[TestSessionSummary, list[StrategyRankingRow], Path]:
+    """Run strategies sweep with progress, scoring, ranking, and JSONL telemetry.
+
+    Reuses:
+      - test_session(...) to execute strategies sequentially
+      - check_domains_detailed(..., progress=True) inside test_strategy()
+    """
+
+    candidates, ensure_flowseal, ensure_stressozz = _strategies_for_mode(ctx, mode=mode)
+    # Best-effort pack sync if requested.
+    if ensure_flowseal or ensure_stressozz:
+        _ensure_pack_strategies(ctx, need_flowseal=ensure_flowseal, need_stressozz=ensure_stressozz)
+
+    # De-dup candidates by name, preserve order.
+    seen: set[str] = set()
+    uniq: list[Strategy] = []
+    for st in candidates:
+        if st.name in seen:
+            continue
+        seen.add(st.name)
+        uniq.append(st)
+    candidates = uniq
+
+    if not candidates:
+        raise RuntimeError("No strategies for this mode.")
+
+    # Patch in strategy-level progress header by wrapping test_strategy.
+    results: list[TestResult] = []
+
+    total_strategies = len(candidates)
+    for idx, st in enumerate(candidates, start=1):
+        print(f"[Strategy {idx:02d}/{total_strategies:02d}] {st.name}")
+        r = test_strategy(
+            ctx,
+            st,
+            domains,
+            settle_s=settle_s,
+            parallel=parallel,
+            show_progress=True,
+            mode="quick" if mode == "quick" else "full",
+        )
+        results.append(r)
+
+        missing_assets = _detect_missing_assets_from_error(r.error) if r.status != "ok" else []
+        avg_ms = _avg_ms_from_checks(r.checks)
+        fail = max(0, r.total - r.ok)
+        crashed = r.status != "ok"
+        score = _score_run(ok=r.ok, total=r.total, missing_assets=len(missing_assets), crashed=crashed, avg_ms=avg_ms)
+        rec = StrategyRunRecord(
+            ts=datetime.now(timezone.utc).isoformat(),
+            mode=mode,
+            domain_set=_safe_domain_set_key(domain_set),
+            strategy_id=st.name,
+            ok=r.ok,
+            fail=fail,
+            avg_ms=avg_ms,
+            score=score,
+            missing_assets=missing_assets,
+            error=r.error if r.status != "ok" else "",
+        )
+        _append_strategy_run_jsonl(ctx, rec)
+
+    # Persist classic results (txt + pin) by reusing existing helper.
+    # We keep this behavior by building a minimal TestSessionSummary.
+    out_name = f"results_all_strategies_{_safe_domain_set_key(domain_set)}_{mode}.txt"
+    results_file = write_results(ctx, results, out_name)
+    tmp_dir = _tmp_dir(ctx, f"all_strategies_{now_utc_iso().replace(':','-').replace('T','_')}")
+    try:
+        for st in candidates:
+            save_strategy(tmp_dir, st)
+        pinned = _pin_top_results(ctx, results, tmp_dir, top_n=top_n_pin)
+    finally:
+        _cleanup_tmp(tmp_dir)
+
+    # Ranking
+    ranking_src: list[tuple[str, TestResult, int, int, list[str]]] = []
+    for r in results:
+        missing_assets = _detect_missing_assets_from_error(r.error) if r.status != "ok" else []
+        avg_ms = _avg_ms_from_checks(r.checks)
+        fail = max(0, r.total - r.ok)
+        crashed = r.status != "ok"
+        score = _score_run(ok=r.ok, total=r.total, missing_assets=len(missing_assets), crashed=crashed, avg_ms=avg_ms)
+        ranking_src.append((r.strategy, r, score, avg_ms, missing_assets))
+
+    ranking_src.sort(key=lambda x: (x[2], x[1].ok, -x[3], x[0]), reverse=True)
+    rows: list[StrategyRankingRow] = []
+    for i, (name, r, score, avg_ms, missing_assets) in enumerate(ranking_src, start=1):
+        rows.append(
+            StrategyRankingRow(
+                rank=i,
+                strategy=name,
+                ok=r.ok,
+                fail=max(0, r.total - r.ok),
+                avg_ms=avg_ms,
+                missing_assets=missing_assets,
+                score=score,
+                status=r.status,
+                error=r.error,
+            )
+        )
+
+    _print_ranking_table(rows)
+    ranking_json = _save_latest_ranking_json(ctx, rows, domain_set=domain_set, mode=mode)
+
+    # Recommended strategy = best row with status ok and total>0, else best by score.
+    recommended = next((r for r in rows if r.status == "ok" and (r.ok + r.fail) > 0), rows[0] if rows else None)
+    if recommended:
+        print(f"Recommended strategy: {recommended.strategy} (score={recommended.score}, ok={recommended.ok}, fail={recommended.fail})")
+
+    summary = TestSessionSummary(results=results, pinned=pinned, results_file=results_file)
+    return summary, rows, ranking_json
 
 
 # Prevent pytest from collecting this helper as a test function.
