@@ -83,15 +83,30 @@ def menu_handler(action_id: str) -> Callable[[F], F]:
                     try:
                         from app.zapret_manager.core.report import generate_bug_report_zip
                         from app.zapret_manager.core.current_state import load_current_state
+                        from app.zapret_manager.features.singbox_health import (
+                            build_singbox_health_report,
+                            write_singbox_health_artifacts,
+                        )
 
                         if ctx is not None:
                             cur = load_current_state(ctx.paths.data_dir / "state" / "current.json")
+
+                            # Include sing-box health artifacts (best-effort).
+                            extra: list[Path] = []
+                            try:
+                                rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
+                                p_json, p_txt = write_singbox_health_artifacts(data_dir=ctx.paths.data_dir, report=rep)
+                                extra.extend([p_json, p_txt])
+                            except Exception:
+                                pass
+
                             out = generate_bug_report_zip(
                                 out_dir=ctx.paths.data_dir / "reports",
                                 logs_dir=ctx.paths.logs_dir,
                                 state_file=ctx.paths.state_file,
                                 current_state_file=ctx.paths.data_dir / "state" / "current.json",
                                 config_file=ctx.paths.config_file,
+                                extra_files=extra,
                             )
                             safe_print(f"\n{C.GREEN}Bug report создан:{C.RESET} {out}\n")
                     except Exception:

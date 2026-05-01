@@ -26,6 +26,7 @@ from app.zapret_manager.core.singbox.system_proxy_win import (
     restore_system_proxy,
 )
 from app.zapret_manager.core.singbox.process import SingBoxProcess
+from app.zapret_manager.features.singbox_health import build_singbox_health_report, format_singbox_health_text
 from app.zapret_manager.ui.colors import C
 from app.zapret_manager.utils.console import ask, clear, pause, safe_print
 
@@ -41,49 +42,68 @@ def singbox_menu(ctx: AppContext) -> None:
         cur = load_current_state(cur_path)
         proc = cur.processes.get("singbox")
         running = bool(proc and proc.running)
+        # short status line
+        bin = detect_singbox_binary(ctx.paths.root)
+        nodes_count = len(load_nodes(_nodes_path(ctx)))
+        active_yes = "yes" if (cur.active_singbox_node_id or "").strip() else "no"
+        installed = "installed" if bin else "missing"
+        running_yes = "yes" if running else "no"
+
         print(f"{C.MAGENTA}sing-box (experimental, local proxy){C.RESET}\n")
+        print(f"sing-box: {installed} | nodes: {nodes_count} | active: {active_yes} | running: {running_yes}\n")
         print(f"{C.YELLOW}Status:{C.RESET} {'RUNNING' if running else 'STOPPED'} pid={proc.pid if proc else '-'}")
         print(f"{C.YELLOW}Active node:{C.RESET} {cur.active_singbox_node_id or '-'}")
         print(f"{C.YELLOW}DNS mode:{C.RESET} {cur.singbox_dns_mode}\n")
-        print(f"{C.CYAN}1){C.RESET} Status / diagnostics")
-        print(f"{C.CYAN}2){C.RESET} Import single link (vless/vmess/trojan/ss)")
-        print(f"{C.CYAN}3){C.RESET} Add subscription URL")
-        print(f"{C.CYAN}4){C.RESET} Update subscriptions")
-        print(f"{C.CYAN}5){C.RESET} List nodes")
-        print(f"{C.CYAN}6){C.RESET} Select active node")
-        print(f"{C.CYAN}7){C.RESET} Generate config preview")
-        print(f"{C.CYAN}8){C.RESET} Start local proxy")
-        print(f"{C.CYAN}9){C.RESET} Enable system proxy (explicit confirm)")
-        print(f"{C.CYAN}10){C.RESET} Restore system proxy")
-        print(f"{C.CYAN}11){C.RESET} Stop sing-box")
-        print(f"{C.CYAN}12){C.RESET} Restart sing-box")
+        print(f"{C.CYAN}1){C.RESET} Диагностика sing-box / Health check")
+        print(f"{C.CYAN}2){C.RESET} Status / diagnostics")
+        print(f"{C.CYAN}3){C.RESET} Import single link (vless/vmess/trojan/ss)")
+        print(f"{C.CYAN}4){C.RESET} Add subscription URL")
+        print(f"{C.CYAN}5){C.RESET} Update subscriptions")
+        print(f"{C.CYAN}6){C.RESET} List nodes")
+        print(f"{C.CYAN}7){C.RESET} Select active node")
+        print(f"{C.CYAN}8){C.RESET} Generate config preview")
+        print(f"{C.CYAN}9){C.RESET} Start local proxy")
+        print(f"{C.CYAN}10){C.RESET} Enable system proxy (explicit confirm)")
+        print(f"{C.CYAN}11){C.RESET} Restore system proxy")
+        print(f"{C.CYAN}12){C.RESET} Stop sing-box")
+        print(f"{C.CYAN}13){C.RESET} Restart sing-box")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
         if c == "1":
-            _sb_status(ctx)
+            _sb_health_check(ctx)
         elif c == "2":
-            _sb_import_link(ctx)
+            _sb_status(ctx)
         elif c == "3":
-            _sb_add_subscription(ctx)
+            _sb_import_link(ctx)
         elif c == "4":
-            _sb_update_subscriptions(ctx)
+            _sb_add_subscription(ctx)
         elif c == "5":
-            _sb_list_nodes(ctx)
+            _sb_update_subscriptions(ctx)
         elif c == "6":
-            _sb_select_node(ctx)
+            _sb_list_nodes(ctx)
         elif c == "7":
-            _sb_preview_config(ctx)
+            _sb_select_node(ctx)
         elif c == "8":
-            _sb_start(ctx)
+            _sb_preview_config(ctx)
         elif c == "9":
-            _sb_enable_system_proxy(ctx)
+            _sb_start(ctx)
         elif c == "10":
-            _sb_restore_system_proxy(ctx)
+            _sb_enable_system_proxy(ctx)
         elif c == "11":
-            _sb_stop(ctx)
+            _sb_restore_system_proxy(ctx)
         elif c == "12":
+            _sb_stop(ctx)
+        elif c == "13":
             _sb_restart(ctx)
+
+
+@menu_handler("singbox.health_check")
+def _sb_health_check(ctx: AppContext) -> None:
+    clear()
+    rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
+    safe_print("\n" + format_singbox_health_text(rep))
+    pause()
 
 
 @menu_handler("singbox.status")

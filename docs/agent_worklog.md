@@ -202,3 +202,25 @@ Create focused commit for sing-box phases implemented in this iteration, push br
 - next step:
   - commit as: "fix(singbox): improve subscription import and auto-select active node"
   - optional: extend sing-box json parser to handle v2ray/vmess outbounds
+
+### 2026-05-01 12:25 (Europe/Moscow)
+- task: feat(singbox): add health check report
+- scope: Add sing-box health aggregator/formatter, menu integration, and bug report artifacts
+- files changed:
+  - app/zapret_manager/features/singbox_health.py
+  - app/zapret_manager/features/singbox_menu.py
+  - app/zapret_manager/core/menu_actions.py
+  - app/zapret_manager/ui/menus.py
+  - tests/test_singbox_health_report_unittest.py
+- commands run:
+  - python3 -m unittest tests/test_singbox_health_unittest.py -v
+  - python3 -m unittest tests/test_singbox_health_report_unittest.py -v
+  - python3 -m unittest tests/test_bug_report_unittest.py -v
+  - python3 -m unittest tests/test_singbox_binary_unittest.py tests/test_singbox_nodes_unittest.py tests/test_singbox_config_builder_unittest.py tests/test_singbox_subscriptions_unittest.py tests/test_singbox_menu_import_single_link_unittest.py tests/test_singbox_autoselect_active_node_unittest.py tests/test_singbox_health_unittest.py tests/test_singbox_health_report_unittest.py tests/test_bug_report_unittest.py -v
+- results:
+  - tests passed
+- not verified:
+  - Real sing-box.exe invocation (version/config) on a live Windows host
+  - Real port openness checks when sing-box is actually running (ports mocked in tests)
+- next step:
+  - commit as: "feat(singbox): add health check report"

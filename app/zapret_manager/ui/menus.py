@@ -96,6 +96,7 @@ from app.zapret_manager.features.app_update import (
 
 from app.zapret_manager.core.menu_actions import menu_handler
 from app.zapret_manager.core.current_state import load_current_state
+from app.zapret_manager.features.singbox_health import build_singbox_health_report, write_singbox_health_artifacts
 from app.zapret_manager.core.report import generate_bug_report_zip
 
 
@@ -974,12 +975,22 @@ def _support_generate_bug_report(ctx: AppContext) -> None:
     cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
     load_current_state(cur_path)  # ensure file exists
 
+    # Include sing-box health artifacts (best-effort).
+    extra = []
+    try:
+        rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
+        p_json, p_txt = write_singbox_health_artifacts(data_dir=ctx.paths.data_dir, report=rep)
+        extra = [p_json, p_txt]
+    except Exception:
+        extra = []
+
     out = generate_bug_report_zip(
         out_dir=(ctx.paths.data_dir / "reports").resolve(),
         logs_dir=ctx.paths.logs_dir,
         state_file=ctx.paths.state_file,
         current_state_file=cur_path,
         config_file=ctx.paths.config_file,
+        extra_files=extra,
     )
     print(f"\n{C.GREEN}Bug report создан:{C.RESET} {out}\n")
     pause()
