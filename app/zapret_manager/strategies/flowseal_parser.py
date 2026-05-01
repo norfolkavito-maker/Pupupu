@@ -118,9 +118,12 @@ def extract_winws_command(bat_text: str) -> ParsedCommand | None:
         # Normalize placeholders commonly used by Flowseal
         args2: list[str] = []
         for a in args:
+            # Legacy placeholders
             a = a.replace("%BIN%", "{BIN}")
             a = a.replace("%LISTS%", "{LISTS}")
             a = a.replace("%~dp0", "{UPSTREAM_ROOT}\\")
+            # Explicit Flowseal placeholders (preferred)
+            a = a.replace("{UPSTREAM_ROOT}", "{FLOWSEAL_ROOT}")
             args2.append(a)
 
         return ParsedCommand(engine=engine, args=args2, raw_exe=exe)

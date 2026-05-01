@@ -20,6 +20,129 @@ from app.zapret_manager.utils.subprocessx import popen_detached, run
 log = logging.getLogger(__name__)
 
 
+def _mask_cmd_preview(cmd: list[str], *, limit: int = 120) -> str:
+    """Return a safe, masked multiline preview of argv.
+
+    IMPORTANT: must not leak secrets from subscription/proxy links.
+    """
+    try:
+        from app.zapret_manager.core.mask import mask_secrets
+    except Exception:  # pragma: no cover
+        mask_secrets = lambda s: s  # type: ignore
+
+    lines = []
+    for i, a in enumerate(cmd[:limit]):
+        lines.append(f"[{i}] {a}")
+    if len(cmd) > limit:
+        lines.append(f"... <truncated: {len(cmd) - limit} args>")
+    return str(mask_secrets("\n".join(lines)))
+
+
+def _parse_missing_from_problem_line(line: str) -> tuple[str, str] | None:
+    # line example: "missing file for --hostlist: C:\\... (cwd=...)"
+    s = str(line)
+    if not s.startswith("missing file for "):
+        return None
+    try:
+        rest = s[len("missing file for ") :]
+        opt, tail = rest.split(":", 1)
+        path = tail.strip()
+        if " (cwd=" in path:
+            path = path.split(" (cwd=", 1)[0].strip()
+        return opt.strip(), path
+    except Exception:
+        return None
+
+
+def format_preflight_diagnostics_ru(
+    *,
+    strategy_name: str,
+    cmd: list[str],
+    problems: list[str],
+    warnings: list[str],
+    ctx: "AppContext",
+) -> str:
+    """Format a user-facing preflight report in Russian.
+
+    This is used to avoid "silent INVALID": user sees exact missing assets.
+    """
+    missing_lists: list[str] = []
+    missing_fake: list[str] = []
+    missing_other: list[str] = []
+
+    for p in problems:
+        parsed = _parse_missing_from_problem_line(str(p))
+        if not parsed:
+            continue
+        opt, path = parsed
+        opt_l = opt.lower()
+        # categorize
+        if opt_l in {"--hostlist", "--hostlist-exclude", "--ipset", "--ipset-exclude"}:
+            missing_lists.append(path)
+        elif opt_l.startswith("--dpi-desync") or opt_l.endswith("-pattern"):
+            missing_fake.append(path)
+        else:
+            missing_other.append(f"{opt}: {path}")
+
+    # runtime core binaries
+    missing_bins: list[str] = []
+    try:
+        rh = runtime_health(ctx)
+        for key in ("winws", "windivert_dll", "windivert_sys"):
+            v = str(rh.get(key) or "")
+            if not v:
+                continue
+            if not Path(v).exists():
+                missing_bins.append(v)
+    except Exception:
+        pass
+
+    lines: list[str] = []
+    lines.append(f"Стратегия: {strategy_name}")
+    lines.append("Статус: INVALID")
+    lines.append("")
+
+    if missing_bins:
+        lines.append("Не хватает бинарников runtime:")
+        for p in missing_bins:
+            lines.append(f"- {p}")
+        lines.append("")
+
+    if missing_lists:
+        lines.append("Не хватает списков (lists):")
+        for p in sorted(set(missing_lists)):
+            lines.append(f"- {p}")
+        lines.append("")
+
+    if missing_fake:
+        lines.append("Не хватает fake/pattern файлов:")
+        for p in sorted(set(missing_fake)):
+            lines.append(f"- {p}")
+        lines.append("")
+
+    # other problems
+    other = [p for p in problems if not str(p).startswith("missing file for ") and not str(p).startswith("WARN:")]
+    if other:
+        lines.append("Ошибки preflight:")
+        for p in other[:50]:
+            lines.append(f"- {p}")
+        if len(other) > 50:
+            lines.append(f"... <truncated: {len(other) - 50} lines>")
+        lines.append("")
+
+    if warnings:
+        lines.append("Предупреждения:")
+        for w in warnings[:50]:
+            lines.append(f"- {w}")
+        if len(warnings) > 50:
+            lines.append(f"... <truncated: {len(warnings) - 50} lines>")
+        lines.append("")
+
+    lines.append("Preview команды (masked):")
+    lines.append(_mask_cmd_preview(cmd))
+    return "\n".join(lines)
+
+
 @dataclass(frozen=True)
 class WinwsLogs:
     stdout: Path
@@ -515,6 +638,11 @@ def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> 
     resolved: list[str] = []
     sep = "\\" if os.name == "nt" else "/"
 
+    # Upstream roots
+    flowseal_root = (ctx.paths.upstreams_dir / "flowseal").resolve()
+    flowseal_bin = flowseal_root / "bin"
+    flowseal_lists = flowseal_root / "lists"
+
     # Game filter placeholders occasionally appear in upstream scripts (Flowseal/StressOzz)
     # as %GameFilterTCP%/%GameFilterUDP% tokens. We must never pass them to winws.
     GAME_PORTS_UDP = "88,1024-2407,2409-4499,4502-19293,19345-49999,50101-65535"
@@ -565,6 +693,10 @@ def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> 
 
     for a in args:
         a = a.replace("{BIN}", str(exe_dir) + sep)
+        # Explicit Flowseal placeholders
+        a = a.replace("{FLOWSEAL_ROOT}", str(flowseal_root) + sep)
+        a = a.replace("{FLOWSEAL_BIN}", str(flowseal_bin) + sep)
+        a = a.replace("{FLOWSEAL_LISTS}", str(flowseal_lists) + sep)
         # Canonical lists dir: DedZapretData/data/lists
         a = a.replace("{LISTS}", str(mgr_lists_dir) + sep)
         a = a.replace("{MGR_LISTS}", str(mgr_lists_dir) + sep)
@@ -931,7 +1063,14 @@ def start_zapret_interactive(
         warnings.extend([w.replace("WARN:", "").strip() for w in warn_lines])
 
     if err_lines:
-        raise WinwsStartError("winws command is invalid:\n- " + "\n- ".join(err_lines))
+        report = format_preflight_diagnostics_ru(
+            strategy_name=strategy.name,
+            cmd=cmd,
+            problems=problems,
+            warnings=warnings,
+            ctx=ctx,
+        )
+        raise WinwsStartError("winws command is invalid:\n- " + "\n- ".join(err_lines) + "\n\n" + report)
 
     try:
         summary = preflight_summary(ctx, cmd=cmd, cwd=cwd)

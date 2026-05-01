@@ -22,6 +22,14 @@ _SKIP_BAT_NAMES = {
 }
 
 
+class FlowsealImportStats(dict):
+    """Small dict-like stats container."""
+
+
+def _stats_inc(stats: dict[str, int], key: str) -> None:
+    stats[key] = int(stats.get(key, 0)) + 1
+
+
 def _is_probably_strategy_bat(path: Path, text: str) -> bool:
     """Best-effort filter to avoid importing helper .bat files as winws strategies."""
     name = path.name.lower()
@@ -39,7 +47,7 @@ def _is_probably_strategy_bat(path: Path, text: str) -> bool:
         "setup",
         "readme",
     )
-    if any(name.startswith(p + "_") or name.startswith(p + "-") or name.startswith(p) and name.endswith(".bat") for p in helper_prefixes):
+    if any(name.startswith(p + "_") or name.startswith(p + "-") or (name.startswith(p) and name.endswith(".bat")) for p in helper_prefixes):
         # allow real strategies like yvNN/dvNN/vNN even if they contain these tokens
         stem = path.stem.lower()
         if stem.startswith("yv") or stem.startswith("dv") or (stem.startswith("v") and stem[1:].isdigit()):
@@ -67,12 +75,37 @@ def import_flowseal_strategies(
     Сканирует .bat в корне Flowseal и генерирует Strategy json.
     """
     count = 0
+    stats: dict[str, int] = {
+        "imported": 0,
+        "skipped_helpers": 0,
+        "skipped_no_winws": 0,
+        "skipped_no_interesting_args": 0,
+        "skipped_no_cmd": 0,
+    }
     for bat in sorted(flowseal_root.glob("*.bat")):
         text = bat.read_text(encoding="utf-8", errors="replace")
+        low = (text or "").lower()
+        if bat.name.lower() in _SKIP_BAT_NAMES:
+            _stats_inc(stats, "skipped_helpers")
+            log.debug("flowseal import: skipped helper %s", bat)
+            continue
+        if ("winws.exe" not in low and "winws2.exe" not in low):
+            _stats_inc(stats, "skipped_no_winws")
+            log.debug("flowseal import: skipped no-winws %s", bat)
+            continue
+        interesting = ("--filter-", "--dpi-desync", "--wf-", "--hostlist", "--ipset")
+        if not any(tok in low for tok in interesting):
+            _stats_inc(stats, "skipped_no_interesting_args")
+            log.debug("flowseal import: skipped no-interesting-args %s", bat)
+            continue
         if not _is_probably_strategy_bat(bat, text):
+            _stats_inc(stats, "skipped_helpers")
+            log.debug("flowseal import: skipped helper-like %s", bat)
             continue
         cmd = extract_winws_command(text)
         if not cmd:
+            _stats_inc(stats, "skipped_no_cmd")
+            log.debug("flowseal import: skipped no-command %s", bat)
             continue
         name = bat.stem
         kind = "base"
@@ -91,7 +124,16 @@ def import_flowseal_strategies(
         )
         save_strategy(generated_dir, st)
         count += 1
+        _stats_inc(stats, "imported")
 
-    log.info("imported %s strategies from %s", count, flowseal_root)
+    log.info(
+        "flowseal import summary: imported=%s skipped_helpers=%s skipped_no_winws=%s skipped_no_interesting_args=%s skipped_no_cmd=%s root=%s",
+        stats.get("imported", 0),
+        stats.get("skipped_helpers", 0),
+        stats.get("skipped_no_winws", 0),
+        stats.get("skipped_no_interesting_args", 0),
+        stats.get("skipped_no_cmd", 0),
+        flowseal_root,
+    )
     return count
 
