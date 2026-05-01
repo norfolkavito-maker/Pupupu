@@ -244,4 +244,48 @@ def repair_runtime_assets(ctx: AppContext) -> list[RepairItem]:
     out: list[RepairItem] = []
     out.extend(ensure_base_lists(ctx))
     out.extend(ensure_fake_assets(ctx))
+    out.extend(ensure_winws2_binary(ctx))
     return out
+
+
+def ensure_winws2_binary(ctx: AppContext) -> list[RepairItem]:
+    """Best-effort ensure winws2.exe exists if it is present somewhere under runtime.
+
+    Guardrails:
+    - Do NOT download anything.
+    - Do NOT create empty exe.
+    - Only copy an existing non-empty winws2.exe into canonical zapret root.
+    """
+    from app.zapret_manager.features.zapret_runtime import zapret_root
+
+    rt_root = ctx.paths.runtime_dir.resolve()
+    zr = zapret_root(ctx)
+    dst = (zr / "winws2.exe").resolve()
+
+    try:
+        if dst.exists() and dst.is_file() and dst.stat().st_size > 0:
+            return [RepairItem("winws2.exe", "OK", str(dst))]
+    except Exception:
+        pass
+
+    found: Path | None = None
+    try:
+        for p in rt_root.rglob("winws2.exe"):
+            try:
+                if p.is_file() and p.stat().st_size > 0:
+                    found = p
+                    break
+            except Exception:
+                continue
+    except Exception:
+        found = None
+
+    if found:
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(found.read_bytes())
+            return [RepairItem("winws2.exe", "COPIED", f"{found} -> {dst}")]
+        except Exception as e:
+            return [RepairItem("winws2.exe", "MISSING", f"copy failed: {e}")]
+
+    return [RepairItem("winws2.exe", "MISSING", "not found anywhere under runtime")]

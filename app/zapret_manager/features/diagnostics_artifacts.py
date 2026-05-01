@@ -161,9 +161,15 @@ def build_runtime_asset_report(ctx: AppContext) -> dict[str, Any]:
 
     # binaries
     winws = (zapret_dir / "winws.exe").resolve()
+    winws2 = (zapret_dir / "winws2.exe").resolve()
     wd_dll = (zapret_dir / "WinDivert.dll").resolve()
     wd_sys = (zapret_dir / "WinDivert64.sys").resolve()
-    for key, p in [("winws.exe", winws), ("WinDivert.dll", wd_dll), ("WinDivert64.sys", wd_sys)]:
+    for key, p in [
+        ("winws.exe", winws),
+        ("winws2.exe", winws2),
+        ("WinDivert.dll", wd_dll),
+        ("WinDivert64.sys", wd_sys),
+    ]:
         ok = _safe_exists(p)
         rep["checks"][key] = {"path": str(p), "exists": ok}
         if not ok:
@@ -189,11 +195,37 @@ def build_runtime_asset_report(ctx: AppContext) -> dict[str, Any]:
         if not ok:
             rep["missing"]["lists"].append(name)
 
+    # requested engine (best-effort; doesn't crash if state fields are absent)
+    requested_engine = "auto"
+    try:
+        zap = getattr(getattr(ctx, "state", None), "zapret", None)
+        base = getattr(zap, "base_strategy", "") if zap else ""
+        selected = getattr(zap, "selected_strategy", "") if zap else ""
+        # prefer the selected strategy if present
+        st_name = (selected or base or "").strip()
+        if st_name:
+            try:
+                from app.zapret_manager.features.selection import find_strategy
+
+                st = find_strategy(ctx, st_name)
+                if st and (st.engine or "").strip().lower() == "winws2":
+                    requested_engine = "winws2"
+            except Exception:
+                pass
+    except Exception:
+        pass
+    rep["requested_engine"] = requested_engine
+
     # suggested actions (simple heuristic)
     if rep["missing"]["fake"] or rep["missing"]["lists"]:
         rep["suggested_actions"].append("Repair runtime assets")
     if rep["missing"]["binaries"]:
         rep["suggested_actions"].append("Reinstall runtime")
+    # If current/selected strategy explicitly requires winws2, missing winws2 is actionable.
+    if requested_engine == "winws2" and not _safe_exists(winws2):
+        rep["suggested_actions"].append(
+            "Runtime неполный: отсутствует winws2.exe. Выполните Repair runtime assets или переустановите runtime."
+        )
 
     rep["ok"] = not (rep["missing"]["fake"] or rep["missing"]["lists"] or rep["missing"]["binaries"])
     return rep
@@ -218,6 +250,11 @@ def runtime_asset_report_text(rep: dict[str, Any]) -> str:
         lines.append("Missing runtime binaries:")
         for p in bins:
             lines.append(f"- {p}")
+        lines.append("")
+
+    req = str(rep.get("requested_engine") or "")
+    if req:
+        lines.append(f"requested_engine: {req}")
         lines.append("")
     if lists:
         lines.append("Missing lists:")

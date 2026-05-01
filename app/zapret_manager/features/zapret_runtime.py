@@ -85,10 +85,15 @@ def format_preflight_diagnostics_ru(
             missing_other.append(f"{opt}: {path}")
 
     # runtime core binaries
+    # NOTE: we must report missing binary precisely: winws.exe vs winws2.exe.
     missing_bins: list[str] = []
     try:
-        rh = runtime_health(ctx)
-        for key in ("winws", "windivert_dll", "windivert_sys"):
+        exe0 = Path(str(cmd[0] if cmd else "")).name.lower()
+        requested_engine = "winws2" if exe0 == "winws2.exe" else "winws"
+        rh = runtime_health(ctx, requested_engine=requested_engine)
+
+        # Check selected exe + WinDivert.
+        for key in ("selected_binary", "windivert_dll", "windivert_sys"):
             v = str(rh.get(key) or "")
             if not v:
                 continue
@@ -412,7 +417,7 @@ def _infer_wf_args_from_filters(args: list[str]) -> tuple[list[str], list[str], 
     return (wf_args, warnings, errors)
 
 
-def runtime_health(ctx: "AppContext") -> dict[str, object]:
+def runtime_health(ctx: "AppContext", *, requested_engine: str = "auto") -> dict[str, object]:
     """Checks that bundled runtime exists and has required files.
 
     Core bypass readiness requires winws.exe and WinDivert files. Extra assets
@@ -471,16 +476,40 @@ def runtime_health(ctx: "AppContext") -> dict[str, object]:
     if not rt_lists_dir.exists():
         problems.append(f"runtime lists dir not found (optional): {rt_lists_dir}")
 
+    # Selected binary (for explicit winws2 compatibility diagnostics).
+    # Backward compatibility: the "ok" status still reflects winws.exe readiness.
+    req = str(requested_engine or "").strip().lower()
+    if req not in {"", "auto", "winws", "winws2"}:
+        req = "auto"
+
+    if req == "winws2":
+        selected_engine = "winws2"
+        selected_binary = str(winws2 or (zr / "winws2.exe"))
+    else:
+        # auto + winws default
+        selected_engine = "winws"
+        selected_binary = str(winws or (zr / "winws.exe"))
+
     return {
         # Backward compatible flag (core runtime)
         "ok": core_ok,
         "core_ok": core_ok,
         "runtime_dir": str(rt),
         "zapret_dir": str(zr),
+        # canonical binaries
         "winws": str(winws) if winws else "",
         "winws2": str(winws2) if winws2 else "",
+        "winws_exists": bool(winws and Path(winws).exists()),
+        "winws2_exists": bool(winws2 and Path(winws2).exists()),
+        # selection diagnostics
+        "requested_engine": ("auto" if req in {"", "auto"} else req),
+        "selected_engine": selected_engine,
+        "selected_binary": selected_binary,
+        "strategy_requested_binary": ("winws2.exe" if req == "winws2" else "winws.exe" if req == "winws" else "auto"),
         "windivert_dll": str(windivert_dll),
         "windivert_sys": str(windivert_sys),
+        "windivert_dll_exists": bool(windivert_dll.exists()),
+        "windivert_sys_exists": bool(windivert_sys.exists()),
         "fake_dir": str(fake_dir),
         "lists_dir": str(mgr_lists_dir),
         "rt_lists_dir": str(rt_lists_dir),
@@ -512,7 +541,12 @@ def runtime_diagnostics_text(ctx: "AppContext") -> str:
     lines.append(f"zapret root:  {zr} ({okflag(zr)})")
     lines.append("")
     winws = Path(str(h.get("winws") or "")) if h.get("winws") else (zr / "winws.exe")
+    winws2 = Path(str(h.get("winws2") or "")) if h.get("winws2") else (zr / "winws2.exe")
     lines.append(f"winws.exe:        {winws} ({okflag(winws)})")
+    lines.append(f"winws2.exe:       {winws2} ({okflag(winws2)})")
+    lines.append(f"requested_engine: {h.get('requested_engine')}")
+    lines.append(f"selected_engine:  {h.get('selected_engine')}")
+    lines.append(f"selected_binary:  {h.get('selected_binary')}")
     wdd = Path(str(h.get("windivert_dll") or (zr / 'WinDivert.dll')))
     wds = Path(str(h.get("windivert_sys") or (zr / 'WinDivert64.sys')))
     lines.append(f"WinDivert.dll:    {wdd} ({okflag(wdd)})")
@@ -639,7 +673,13 @@ def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> 
     sep = "\\" if os.name == "nt" else "/"
 
     # Upstream roots
-    flowseal_root = (ctx.paths.upstreams_dir / "flowseal").resolve()
+    # NOTE: Some unit tests use a minimal ctx.paths SimpleNamespace without upstreams_dir.
+    # In that case we still want {LISTS}/{FAKE} resolution to work.
+    upstreams_dir = getattr(getattr(ctx, "paths", None), "upstreams_dir", None)
+    if upstreams_dir:
+        flowseal_root = (Path(str(upstreams_dir)) / "flowseal").resolve()
+    else:
+        flowseal_root = Path(".").resolve() / "__missing_upstreams__" / "flowseal"
     flowseal_bin = flowseal_root / "bin"
     flowseal_lists = flowseal_root / "lists"
 
