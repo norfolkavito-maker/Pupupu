@@ -55,5 +55,33 @@ class TestRuntimeAssetsFakeRepair(unittest.TestCase):
             self.assertEqual(dst.read_bytes(), b"zzz")
 
 
+    def test_v3_v8_fake_assets_are_supported(self):
+        with tempfile.TemporaryDirectory() as td:
+            rt = Path(td) / "runtime"
+            target = rt / "zapret" / "files" / "fake"
+            target.mkdir(parents=True, exist_ok=True)
+
+            # put a few v3/v8 assets in a non-canonical place
+            src = rt / "zapret" / "blockcheck" / "zapret" / "files" / "fake"
+            src.mkdir(parents=True, exist_ok=True)
+            (src / "tls_clienthello_vk_com.bin").write_bytes(b"vk")
+            (src / "tls_clienthello_gosuslugi_ru.bin").write_bytes(b"gos")
+            (src / "4pda.bin").write_bytes(b"4pda")
+            (src / "t2.bin").write_bytes(b"t2")
+
+            ctx = self._make_ctx(rt)
+            ensure_fake_assets(ctx)
+
+            for name, expected in [
+                ("tls_clienthello_vk_com.bin", b"vk"),
+                ("tls_clienthello_gosuslugi_ru.bin", b"gos"),
+                ("4pda.bin", b"4pda"),
+                ("t2.bin", b"t2"),
+            ]:
+                dst = target / name
+                self.assertTrue(dst.exists(), name)
+                self.assertEqual(dst.read_bytes(), expected, name)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -186,8 +186,14 @@ def ensure_fake_assets(ctx: AppContext) -> list[RepairItem]:
     fake_dir.mkdir(parents=True, exist_ok=True)
 
     required = [
+        # Common QUIC/TLS fakes used by bundled strategies (incl. builtin v3/v8).
         "quic_initial_www_google_com.bin",
         "tls_clienthello_max_ru.bin",
+        "tls_clienthello_www_google_com.bin",
+        "tls_clienthello_vk_com.bin",
+        "tls_clienthello_gosuslugi_ru.bin",
+        "4pda.bin",
+        "t2.bin",
         # Used by some overlays (e.g. split-seqovl-pattern={FAKE:stun.bin})
         "stun.bin",
     ]

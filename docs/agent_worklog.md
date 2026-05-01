@@ -163,3 +163,19 @@ date '+%Y-%m-%d %H:%M %Z' && git status --porcelain
 
 ### Next step
 Create focused commit for sing-box phases implemented in this iteration, push branch, and create next test tag for CI release verification.
+
+### 2026-05-01 11:26 (Europe/Moscow)
+- task: P0 fix(strategies/runtime): diagnose bundled v3/v8 fake assets
+- scope: Add bundled v3/v8 fake assets into runtime asset repair/manifest and tests
+- files changed:
+  - app/zapret_manager/features/runtime_assets.py
+  - tests/test_runtime_assets_fake_repair_unittest.py
+- commands run:
+  - python3 -m unittest tests/test_runtime_assets_fake_repair_unittest.py -v
+- results:
+  - tests passed
+- not verified:
+  - Real Windows bundle assets presence and repair behavior on actual release ZIP
+- next step:
+  - commit as: "fix(strategies/runtime): diagnose bundled v3/v8 fake assets"
+  - run related runtime_assets test suites
