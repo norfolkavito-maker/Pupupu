@@ -674,7 +674,12 @@ def _test_all_strategies_menu(ctx: AppContext) -> None:
         )
         pause()
         return
-    urls = prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)
+    # NOTE: For problem domains set we do NOT auto-append default/suite.
+    # It must stay strictly user-derived, otherwise it stops being a "problem" set.
+    if domain_set_key == "problem":
+        urls = prepare_urls(base_urls=base_urls, include_default=False, include_suite=False)
+    else:
+        urls = prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)
     domains = [u.url for u in urls]
     if not domains:
         safe_print(f"\n{C.RED}Ошибка:{C.RESET} список доменов пуст.\n")
