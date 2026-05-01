@@ -104,7 +104,7 @@ class TestAllStrategiesWithProgress(unittest.TestCase):
         bad_score = _score_run(ok=0, total=0, missing_assets=0, crashed=True, avg_ms=0)
         self.assertGreater(ok_score, bad_score)
 
-    @patch("app.zapret_manager.ui.menus.get_problem_domains", return_value=[])
+    @patch("app.zapret_manager.ui.menus.get_problem_domain_list", return_value=[])
     def test_problem_domains_empty_does_not_crash(self, _mock_pd):
         from app.zapret_manager.ui.menus import _choose_domain_set_extended
 
@@ -113,11 +113,11 @@ class TestAllStrategiesWithProgress(unittest.TestCase):
         ctx.paths = MagicMock(); ctx.paths.data_dir = Path("/tmp")
 
         with patch("app.zapret_manager.ui.menus.ask", side_effect=["5"]):
-            # selecting Problem domains, but file is empty -> fallback to DEFAULT_TEST_DOMAINS
+            # selecting Problem domains, but list is empty -> do not fallback here
             key, domains = _choose_domain_set_extended(ctx)
             self.assertEqual(key, "problem")
             self.assertIsInstance(domains, list)
-            self.assertGreater(len(domains), 0)
+            self.assertEqual(len(domains), 0)
 
 
 if __name__ == "__main__":

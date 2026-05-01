@@ -83,10 +83,11 @@ from app.zapret_manager.features.game_launcher import (
 from app.zapret_manager.features.problem_domains import (
     add_problem_domain,
     clear_problem_domains,
-    get_problem_domains,
+    get_problem_domain_list,
     load_problem_domains,
     problem_domains_summary,
     remove_resolved_domain,
+    write_problem_domains_summary_artifacts,
 )
 
 from app.zapret_manager.features.app_update import (
@@ -624,8 +625,7 @@ def _choose_domain_set_extended(ctx: AppContext) -> tuple[str, list[str]]:
         domains = read_domain_set_file(next(d for d in DOMAIN_SETS if d.key == "games").file_path(ctx))
     elif ans == "5":
         key = "problem"
-        # Keep current format; no migration. Just reuse existing helper.
-        domains = get_problem_domains(ctx)
+        domains = [f"https://{d}/" for d in get_problem_domain_list(ctx)]
     elif ans == "6":
         key = "all"
         keys = ["default", "youtube", "discord", "games"]
@@ -640,8 +640,8 @@ def _choose_domain_set_extended(ctx: AppContext) -> tuple[str, list[str]]:
         key = (ctx.state.tg.get("domain_set") or "default") if isinstance(ctx.state.tg, dict) else "default"
         domains = _domains_for_current_set(ctx)
 
-    # Fallback if empty: default hardcoded.
-    if not domains:
+    # Fallback if empty: default hardcoded (but NOT for explicit problem domains).
+    if not domains and key != "problem":
         domains = [f"https://{d}/" for d in DEFAULT_TEST_DOMAINS]
     return key, domains
 
@@ -668,6 +668,12 @@ def _choose_sweep_mode() -> str:
 def _test_all_strategies_menu(ctx: AppContext) -> None:
     # Domain set
     domain_set_key, base_urls = _choose_domain_set_extended(ctx)
+    if domain_set_key == "problem" and not base_urls:
+        safe_print(
+            f"\n{C.YELLOW}Список проблемных доменов пуст.{C.RESET} Сначала запустите обычный тест или добавьте домены вручную.\n"
+        )
+        pause()
+        return
     urls = prepare_urls(base_urls=base_urls, include_default=True, include_suite=True)
     domains = [u.url for u in urls]
     if not domains:
@@ -688,6 +694,33 @@ def _test_all_strategies_menu(ctx: AppContext) -> None:
         parallel=parallel,
         top_n_pin=5,
     )
+
+    # Offer collecting failing domains into Problem Domains.
+    failed = []
+    for r in rows:
+        checks = getattr(r, "checks", None)
+        if not checks:
+            continue
+        for c in checks:
+            if getattr(c, "ok", True):
+                continue
+            dom = getattr(c, "domain", "")
+            if dom:
+                failed.append(dom)
+    if failed:
+        ans = ask("\nДобавить провалившиеся домены в «Проблемные домены»? [Y/n]: ").strip().lower()
+        if ans in {"", "y", "yes"}:
+            from app.zapret_manager.features.problem_domains import add_problem_domains_from_results
+
+            n = add_problem_domains_from_results(ctx, rows)
+            safe_print(f"\n{C.GREEN}Добавлено/обновлено проблемных доменов:{C.RESET} {n}\n")
+            # refresh artifacts (best-effort)
+            try:
+                write_problem_domains_summary_artifacts(ctx)
+            except Exception:
+                pass
+    else:
+        safe_print(f"\n{C.GREEN}Провалившихся доменов нет.{C.RESET}\n")
 
     safe_print(f"\n{C.GREEN}Готово.{C.RESET}")
     safe_print(f"{C.DIM}Results file:{C.RESET} {summary.results_file}")
@@ -1470,6 +1503,7 @@ def _problem_domains_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Удалить домен (пометить как решённый){C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Очистить все проблемные домены{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Авто-подбор TOP-5 стратегий по проблемным доменам{C.RESET}")
+        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Экспортировать summary (diagnostics){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -1481,11 +1515,11 @@ def _problem_domains_menu(ctx: AppContext) -> None:
             elif c == "2":
                 domain = ask("Введите домен (например x.com): ").strip()
                 if domain:
-                    add_problem_domain(ctx, domain=domain, source="manual", fail_reason="manual")
+                    add_problem_domain(ctx, domain, error="manual", strategy="")
                     print(f"\n{C.GREEN}Домен добавлен.{C.RESET}\n")
                     pause()
             elif c == "3":
-                domains = get_problem_domains(ctx)
+                domains = get_problem_domain_list(ctx)
                 if not domains:
                     print(f"\n{C.YELLOW}Список пуст.{C.RESET}\n")
                     pause()
@@ -1503,6 +1537,13 @@ def _problem_domains_menu(ctx: AppContext) -> None:
                 clear_problem_domains(ctx)
                 print(f"\n{C.GREEN}Все проблемные домены очищены.{C.RESET}\n")
                 pause()
+            elif c == "6":
+                paths = write_problem_domains_summary_artifacts(ctx)
+                print(f"\n{C.GREEN}Готово:{C.RESET}")
+                for p in paths:
+                    print(f"- {p}")
+                print()
+                pause()
         except Exception as e:
             log.exception("problem_domains_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
@@ -1511,7 +1552,7 @@ def _problem_domains_menu(ctx: AppContext) -> None:
 
 def _auto_tune_by_problem_domains(ctx: AppContext) -> None:
     """Run strategy tests only on problem domains."""
-    domains = get_problem_domains(ctx)
+    domains = get_problem_domain_list(ctx)
     if not domains:
         print(f"\n{C.YELLOW}Нет проблемных доменов. Сначала запустите тесты (control test или proof-of-effect).{C.RESET}\n")
         pause()
@@ -1570,7 +1611,7 @@ def _auto_tune_top5_by_problem_domains(ctx: AppContext) -> None:
     from app.zapret_manager.features.runtime_assets import repair_runtime_assets
     from app.zapret_manager.features.zapret_runtime import WinwsStartError
 
-    domains = get_problem_domains(ctx)
+    domains = get_problem_domain_list(ctx)
     if not domains:
         print(f"\n{C.YELLOW}Нет проблемных доменов. Сначала запусти Control test или Proof-of-effect.{C.RESET}\n")
         pause()
