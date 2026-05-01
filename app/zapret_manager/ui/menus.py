@@ -1134,14 +1134,25 @@ def _support_generate_bug_report(ctx: AppContext) -> None:
     cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
     load_current_state(cur_path)  # ensure file exists
 
-    # Include sing-box health artifacts (best-effort).
-    extra = []
+    # Include extra diagnostics artifacts (best-effort).
+    extra: list[Path] = []
     try:
         rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
         p_json, p_txt = write_singbox_health_artifacts(data_dir=ctx.paths.data_dir, report=rep)
         extra = [p_json, p_txt]
     except Exception:
         extra = []
+
+    # Include problem domains artifacts (best-effort, masked in report writer).
+    try:
+        # Canonical storage file.
+        pd = (ctx.paths.data_dir / "problem_domains.json").resolve()
+        if pd.exists():
+            extra.append(pd)
+        # Summary artifacts.
+        extra.extend(write_problem_domains_summary_artifacts(ctx))
+    except Exception:
+        pass
 
     out = generate_bug_report_zip(
         out_dir=(ctx.paths.data_dir / "reports").resolve(),

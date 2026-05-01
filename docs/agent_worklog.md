@@ -1,5 +1,34 @@
 # Agent Worklog
 
+## 2026-05-01 13:37 (Europe/Moscow)
+- task: Problem domains v2 storage + integration into sweep/menus and bug report
+- scope:
+  - canonical `problem_domains.json` v2 storage with migration + corruption recovery;
+  - strict "Problem domains" domain-set behavior (no implicit default/suite fallback);
+  - ability to collect failed domains after "test all strategies" sweep;
+  - export summary artifacts into `DedZapretData/data/diagnostics/`;
+  - include problem domains artifacts into bug report zip (as extra files).
+- files changed:
+  - app/zapret_manager/utils/jsonx.py
+  - app/zapret_manager/features/problem_domains.py
+  - app/zapret_manager/ui/menus.py
+  - tests/test_test_all_strategies_with_progress_unittest.py
+  - tests/test_bug_report_unittest.py
+  - docs/agent_worklog.md
+- commands run:
+  - python3 -m unittest tests/test_test_all_strategies_with_progress_unittest.py -v
+  - python3 -m unittest tests/test_control_test_menu_unittest.py tests/test_test_all_strategies_with_progress_unittest.py -v
+  - python3 -m unittest tests/test_bug_report_unittest.py -v
+  - git commit -m "feat(problem-domains): canonical v2 storage + sweep integration"
+  - git commit -m "fix(problem-domains): keep sweep strict for problem set"
+- results:
+  - unit tests: OK
+  - commits created: fabc24c, a9f3714
+- not verified:
+  - end-to-end run on Windows with real winws/blockcheck bundle.
+- next step:
+  - commit bug report extras integration + worklog (pending), then extend diagnostics artifacts set if needed.
+
 Rules:
 - append only;
 - do not delete previous entries;
