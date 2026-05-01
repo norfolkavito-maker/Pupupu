@@ -18,6 +18,7 @@ from app.zapret_manager.core.singbox.subscriptions import (
     masked_subscription_label,
     merge_subscription_nodes,
     parse_subscription_payload,
+    parse_subscription_payload_detailed,
     save_subscriptions,
 )
 from app.zapret_manager.core.singbox.system_proxy_win import (
@@ -170,7 +171,11 @@ def _sb_update_subscriptions(ctx: AppContext) -> None:
     total_imported = 0
     total_skipped = 0
     total_errors = 0
+    total_unsupported = 0
     updated: list = []
+
+    cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+    cur = load_current_state(cur_path)
 
     for s in subs:
         if not s.enabled:
@@ -178,11 +183,15 @@ def _sb_update_subscriptions(ctx: AppContext) -> None:
             continue
         try:
             txt = download_subscription_text(s.url)
-            links = parse_subscription_payload(txt)
+            links, counters, last_err = parse_subscription_payload_detailed(txt)
             nodes, stats = merge_subscription_nodes(current_nodes=nodes, links=links)
             total_imported += stats.get("imported", 0)
             total_skipped += stats.get("skipped", 0)
             total_errors += stats.get("errors", 0)
+            total_unsupported += counters.get("unsupported_lines", 0)
+            if stats.get("imported", 0) == 0 and not links:
+                # fully unsupported/empty payload
+                raise RuntimeError(last_err or "unsupported subscription payload")
             updated.append(type(s)(
                 subscription_id=s.subscription_id,
                 name=s.name,
@@ -207,8 +216,17 @@ def _sb_update_subscriptions(ctx: AppContext) -> None:
     save_nodes(_nodes_path(ctx), nodes)
     save_subscriptions(_subscriptions_path(ctx), updated)
 
+    # Auto-select active node if empty and we imported anything.
+    if total_imported > 0 and not (cur.active_singbox_node_id or "").strip():
+        # pick the first node from the just-saved list
+        if nodes:
+            cur.active_singbox_node_id = nodes[0].node_id
+            save_current_state(cur_path, cur)
+
     safe_print(f"\n{C.GREEN}Subscriptions updated.{C.RESET}")
-    safe_print(f"Imported: {total_imported}, skipped: {total_skipped}, errors: {total_errors}")
+    safe_print(
+        f"Imported: {total_imported}, skipped: {total_skipped}, errors: {total_errors}, unsupported_lines: {total_unsupported}"
+    )
     for s in updated:
         safe_print(f"- {masked_subscription_label(s)}")
     safe_print("")
@@ -220,6 +238,13 @@ def _sb_import_link(ctx: AppContext) -> None:
     clear()
     link = ask("\nВставьте ссылку (vless/vmess/trojan/ss): ").strip()
     if not link:
+        return
+    if link.startswith("http://") or link.startswith("https://"):
+        safe_print(
+            "\nПохоже, это subscription URL, а не одиночная нода. "
+            "Используй: Add subscription URL -> Update subscriptions.\n"
+        )
+        pause()
         return
     node = import_node_from_link(link)
     nodes = load_nodes(_nodes_path(ctx))

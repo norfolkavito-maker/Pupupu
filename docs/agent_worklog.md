@@ -179,3 +179,26 @@ Create focused commit for sing-box phases implemented in this iteration, push br
 - next step:
   - commit as: "fix(strategies/runtime): diagnose bundled v3/v8 fake assets"
   - run related runtime_assets test suites
+
+### 2026-05-01 12:00 (Europe/Moscow)
+- task: P1 fix(singbox): improve subscription import and auto-select active node
+- scope: subscription parsing (plain/base64 + clash yaml + sing-box json), safer UI import, counters, auto-select first imported node
+- files changed:
+  - app/zapret_manager/core/singbox/subscriptions.py
+  - app/zapret_manager/features/singbox_menu.py
+  - tests/test_singbox_subscriptions_unittest.py
+  - tests/test_singbox_menu_import_single_link_unittest.py
+  - tests/test_singbox_autoselect_active_node_unittest.py
+- commands run:
+  - python3 -m unittest tests/test_singbox_subscriptions_unittest.py -v
+  - python3 -m unittest tests/test_singbox_menu_import_single_link_unittest.py -v
+  - python3 -m unittest tests/test_singbox_autoselect_active_node_unittest.py -v
+  - python3 -m unittest tests/test_singbox_binary_unittest.py tests/test_singbox_nodes_unittest.py tests/test_singbox_config_builder_unittest.py tests/test_singbox_subscriptions_unittest.py tests/test_singbox_menu_import_single_link_unittest.py tests/test_singbox_autoselect_active_node_unittest.py -v
+- results:
+  - tests passed
+- not verified:
+  - Real-world parsing of full Clash YAML variants and sing-box JSON variants beyond minimal cases
+  - Real network download from subscription URL on Windows host
+- next step:
+  - commit as: "fix(singbox): improve subscription import and auto-select active node"
+  - optional: extend sing-box json parser to handle v2ray/vmess outbounds
