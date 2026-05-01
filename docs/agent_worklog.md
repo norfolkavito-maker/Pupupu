@@ -288,3 +288,35 @@ python3 -m unittest tests/test_test_all_strategies_with_progress_unittest.py -v
   - Real port openness checks when sing-box is actually running (ports mocked in tests)
 - next step:
   - commit as: "feat(singbox): add health check report"
+
+## 2026-05-01 15:27 (Europe/Moscow) — feat(diagnostics): add runtime flowseal and ranking artifacts
+
+### Scope
+- Add best-effort diagnostic summary artifacts:
+  - latest strategy ranking txt (from telemetry JSON)
+  - runtime asset report (json + txt)
+  - flowseal asset report (json + txt)
+- Integrate artifacts generation into:
+  - support menu entry (manual)
+  - bug report flow (auto, best-effort)
+
+### Files changed
+- app/zapret_manager/features/diagnostics_artifacts.py (new)
+- app/zapret_manager/ui/menus.py
+- tests/test_diagnostics_artifacts_unittest.py (new)
+- tests/test_bug_report_unittest.py
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -m unittest tests/test_diagnostics_artifacts_unittest.py tests/test_bug_report_unittest.py -v
+```
+
+### Results
+- OK (7 tests)
+
+### Not verified
+- Manual Windows runtime validation with a real bundled runtime (winws.exe / WinDivert files / Flowseal upstream) not executed in this environment.
+
+### Next step
+- Commit changes: "feat(diagnostics): add runtime flowseal and ranking artifacts"

@@ -77,5 +77,39 @@ class TestBugReport(unittest.TestCase):
                 self.assertIn("extra/problem_domains_summary.txt", names)
 
 
+    def test_report_zip_includes_diagnostics_artifacts_if_passed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            logs = root / "logs"
+            logs.mkdir(parents=True, exist_ok=True)
+            (logs / "app.log").write_text("hello\n", encoding="utf-8")
+
+            state = root / "state.json"
+            state.write_text("{}", encoding="utf-8")
+            cur = root / "current.json"
+            cur.write_text("{}", encoding="utf-8")
+            cfg = root / "config.yaml"
+            cfg.write_text("{}\n", encoding="utf-8")
+
+            diag1 = root / "latest_strategy_ranking.txt"
+            diag1.write_text("Рейтинг стратегий\n", encoding="utf-8")
+            diag2 = root / "runtime_asset_report.json"
+            diag2.write_text("{}\n", encoding="utf-8")
+
+            out = generate_bug_report_zip(
+                out_dir=root / "reports",
+                logs_dir=logs,
+                state_file=state,
+                current_state_file=cur,
+                config_file=cfg,
+                extra_files=[diag1, diag2],
+            )
+            self.assertTrue(out.exists())
+            with zipfile.ZipFile(out, "r") as z:
+                names = set(z.namelist())
+                self.assertIn("extra/latest_strategy_ranking.txt", names)
+                self.assertIn("extra/runtime_asset_report.json", names)
+
+
 if __name__ == "__main__":
     unittest.main()

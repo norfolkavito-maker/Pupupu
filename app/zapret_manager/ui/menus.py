@@ -100,6 +100,7 @@ from app.zapret_manager.core.menu_actions import menu_handler
 from app.zapret_manager.core.current_state import load_current_state
 from app.zapret_manager.features.singbox_health import build_singbox_health_report, write_singbox_health_artifacts
 from app.zapret_manager.core.report import generate_bug_report_zip
+from app.zapret_manager.features.diagnostics_artifacts import write_all_diagnostics_artifacts
 
 
 log = logging.getLogger(__name__)
@@ -1094,6 +1095,7 @@ def system_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Backup / Restore{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Системная информация{C.RESET}")
         print(f"{C.CYAN}S){C.RESET} {C.GREEN}Support: Generate bug report{C.RESET}")
+        print(f"{C.CYAN}X){C.RESET} {C.GREEN}Support: Сформировать диагностические артефакты{C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -1114,6 +1116,8 @@ def system_menu(ctx: AppContext) -> None:
                 pause()
             elif c.lower() == "s":
                 _support_generate_bug_report(ctx)
+            elif c.lower() == "x":
+                _support_generate_diagnostics_artifacts(ctx)
         except Exception as e:
             log.exception("system_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
@@ -1134,14 +1138,20 @@ def _support_generate_bug_report(ctx: AppContext) -> None:
     cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
     load_current_state(cur_path)  # ensure file exists
 
-    # Include extra diagnostics artifacts (best-effort).
+    # Generate diagnostics artifacts (best-effort) and include them.
     extra: list[Path] = []
+
+    try:
+        ar = write_all_diagnostics_artifacts(ctx)
+        extra.extend(ar.created)
+    except Exception:
+        pass
     try:
         rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
         p_json, p_txt = write_singbox_health_artifacts(data_dir=ctx.paths.data_dir, report=rep)
-        extra = [p_json, p_txt]
+        extra.extend([p_json, p_txt])
     except Exception:
-        extra = []
+        pass
 
     # Include problem domains artifacts (best-effort, masked in report writer).
     try:
@@ -1163,6 +1173,32 @@ def _support_generate_bug_report(ctx: AppContext) -> None:
         extra_files=extra,
     )
     print(f"\n{C.GREEN}Bug report создан:{C.RESET} {out}\n")
+    pause()
+
+
+@menu_handler("support.generate_diagnostics_artifacts")
+def _support_generate_diagnostics_artifacts(ctx: AppContext) -> None:
+    """Create diagnostics artifacts into DedZapretData/data/diagnostics."""
+    clear()
+    print(f"{C.MAGENTA}Support: Диагностические артефакты{C.RESET}\n")
+    print("Будут созданы небольшие summary файлы (best-effort), без сетевых операций.")
+    print("Папка: DedZapretData/data/diagnostics\n")
+    ans = ask("Сформировать артефакты? (Y/n): ").strip().lower()
+    if ans not in {"", "y", "yes"}:
+        return
+
+    res = write_all_diagnostics_artifacts(ctx)
+    print(f"\n{C.GREEN}Готово.{C.RESET}\n")
+    if res.created:
+        print(f"{C.YELLOW}Создано:{C.RESET}")
+        for p in res.created:
+            print(f"- {p}")
+        print()
+    if res.errors:
+        print(f"{C.YELLOW}Ошибки (не критично):{C.RESET}")
+        for e in res.errors:
+            print(f"- {e}")
+        print()
     pause()
 
 
