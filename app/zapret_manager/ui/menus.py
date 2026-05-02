@@ -101,6 +101,11 @@ from app.zapret_manager.core.current_state import load_current_state
 from app.zapret_manager.features.singbox_health import build_singbox_health_report, write_singbox_health_artifacts
 from app.zapret_manager.core.report import generate_bug_report_zip
 from app.zapret_manager.features.diagnostics_artifacts import write_all_diagnostics_artifacts
+from app.zapret_manager.core.commands import (
+    create_bug_report as cmd_create_bug_report,
+    generate_diagnostics_artifacts as cmd_generate_diagnostics_artifacts,
+    singbox_health as cmd_singbox_health,
+)
 
 
 log = logging.getLogger(__name__)
@@ -1138,41 +1143,26 @@ def _support_generate_bug_report(ctx: AppContext) -> None:
     cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
     load_current_state(cur_path)  # ensure file exists
 
-    # Generate diagnostics artifacts (best-effort) and include them.
-    extra: list[Path] = []
-
-    try:
-        ar = write_all_diagnostics_artifacts(ctx)
-        extra.extend(ar.created)
-    except Exception:
-        pass
-    try:
-        rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
-        p_json, p_txt = write_singbox_health_artifacts(data_dir=ctx.paths.data_dir, report=rep)
-        extra.extend([p_json, p_txt])
-    except Exception:
-        pass
-
-    # Include problem domains artifacts (best-effort, masked in report writer).
-    try:
-        # Canonical storage file.
-        pd = (ctx.paths.data_dir / "problem_domains.json").resolve()
-        if pd.exists():
-            extra.append(pd)
-        # Summary artifacts.
-        extra.extend(write_problem_domains_summary_artifacts(ctx))
-    except Exception:
-        pass
-
-    out = generate_bug_report_zip(
-        out_dir=(ctx.paths.data_dir / "reports").resolve(),
-        logs_dir=ctx.paths.logs_dir,
-        state_file=ctx.paths.state_file,
-        current_state_file=cur_path,
-        config_file=ctx.paths.config_file,
-        extra_files=extra,
-    )
-    print(f"\n{C.GREEN}Bug report создан:{C.RESET} {out}\n")
+    res = cmd_create_bug_report(ctx)
+    if res.ok:
+        out = (res.details or {}).get("zip_path")
+        safe_print(f"\n{C.GREEN}Bug report создан:{C.RESET} {out}\n")
+        extras = (res.details or {}).get("extras")
+        if isinstance(extras, list) and extras:
+            safe_print("Included extra files:")
+            for p in extras:
+                safe_print(f"- {p}")
+            safe_print("\n")
+        if res.warnings:
+            safe_print(f"{C.YELLOW}Предупреждения:{C.RESET}")
+            for w in res.warnings:
+                safe_print(f"- {w}")
+            safe_print("\n")
+    else:
+        safe_print(f"\n{C.RED}{res.message}{C.RESET}\n")
+        for e in res.errors:
+            safe_print(f"- {e}")
+        safe_print("\n")
     pause()
 
 
@@ -1186,20 +1176,23 @@ def _support_generate_diagnostics_artifacts(ctx: AppContext) -> None:
     ans = ask("Сформировать артефакты? (Y/n): ").strip().lower()
     if ans not in {"", "y", "yes"}:
         return
-
-    res = write_all_diagnostics_artifacts(ctx)
-    print(f"\n{C.GREEN}Готово.{C.RESET}\n")
-    if res.created:
-        print(f"{C.YELLOW}Создано:{C.RESET}")
-        for p in res.created:
-            print(f"- {p}")
-        print()
-    if res.errors:
-        print(f"{C.YELLOW}Ошибки (не критично):{C.RESET}")
-        for e in res.errors:
-            print(f"- {e}")
-        print()
+    r = cmd_generate_diagnostics_artifacts(ctx)
+    if r.ok:
+        safe_print(f"\n{C.GREEN}Готово.{C.RESET}\n")
+        for p in (r.details or {}).get("created_files", []) or []:
+            safe_print(f"- {p}")
+        if r.warnings:
+            safe_print(f"\n{C.YELLOW}Ошибки (best-effort, не критично):{C.RESET}")
+            for w in r.warnings:
+                safe_print(f"- {w}")
+        safe_print("\n")
+    else:
+        safe_print(f"\n{C.RED}{r.message}{C.RESET}\n")
+        for e in r.errors:
+            safe_print(f"- {e}")
+        safe_print("\n")
     pause()
+
 
 
 def _app_update_menu(ctx: AppContext) -> None:

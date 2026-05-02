@@ -67,6 +67,33 @@ note: "Facts are anchored to concrete files/functions. Unknowns are marked as UN
 
 ---
 
+## 2.1 Unified commands layer (new)
+
+Добавлен тонкий слой "команд" для будущих фронтендов (tray/GUI/autostart/watcher),
+чтобы не тащить UI-логику из `ui/*` и не работать напрямую с `features/*`.
+
+- Файл: `app/zapret_manager/core/commands.py`
+- Формат результата: `CommandResult(ok, message, details, warnings, errors)`
+  - сериализация: `CommandResult.to_dict()` приводит `Path` к строкам.
+
+Команды (все **best-effort**, не должны падать исключениями наружу):
+
+- `get_status_summary(ctx)` — лёгкое резюме статуса (без сетевых операций).
+- `generate_diagnostics_artifacts(ctx)` — формирует diagnostics summary файлы.
+- `create_bug_report(ctx)` — собирает masked bug report zip с extra артефактами.
+- `singbox_health(ctx)` — возвращает текстовый отчёт и json-представление.
+- `update_subscriptions(ctx)` — обновляет sing-box подписки (сетевые операции).
+- `run_test_all(ctx, domain_set, mode)` — запуск "test all strategies".
+- `repair_runtime(ctx)` — best-effort repair runtime assets.
+- `stop_all(ctx)` — best-effort stop (zapret/sing-box/TG).
+- `start_current_strategy(ctx)` / `restart_current(ctx)`.
+
+Интеграция в меню:
+
+- `ui/menus.py::_support_generate_bug_report` теперь использует `commands.create_bug_report`.
+- `ui/menus.py::_support_generate_diagnostics_artifacts` теперь использует `commands.generate_diagnostics_artifacts`.
+- `features/singbox_menu.py::_sb_health_check` использует `commands.singbox_health` (с defensive fallback).
+
 ## 3. Current menu structure
 
 ### Главный экран

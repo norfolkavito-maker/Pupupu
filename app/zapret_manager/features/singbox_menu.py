@@ -101,8 +101,23 @@ def singbox_menu(ctx: AppContext) -> None:
 @menu_handler("singbox.health_check")
 def _sb_health_check(ctx: AppContext) -> None:
     clear()
-    rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
-    safe_print("\n" + format_singbox_health_text(rep))
+    try:
+        from app.zapret_manager.core.commands import singbox_health as cmd_singbox_health
+
+        r = cmd_singbox_health(ctx)
+        if r.ok:
+            txt = str((r.details or {}).get("text") or "")
+            safe_print("\n" + (txt or "(пустой отчёт)"))
+            if r.details and r.details.get("recommended_action"):
+                safe_print("\nРекомендация:\n" + str(r.details.get("recommended_action")))
+        else:
+            safe_print(f"\nОшибка: {r.message}\n")
+            for e in r.errors:
+                safe_print(f"- {e}")
+    except Exception as e:
+        # Defensive fallback: preserve old behavior.
+        rep = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
+        safe_print("\n" + format_singbox_health_text(rep))
     pause()
 
 
