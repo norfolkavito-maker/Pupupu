@@ -344,3 +344,37 @@ git status --porcelain
 
 ### Next step
 - Commit as: `docs(audit): add post-P1 project map`.
+
+## 2026-05-02 19:44 (UTC) — Hotfix CI on Windows + prepare v0.3.5-test.10
+
+### Scope
+- Fix GitHub Actions Windows failure where `CommandResult.to_dict()` converted `Path` to backslash string.
+- Make `Path` serialization stable (`as_posix()`), so artifacts/telemetry are diff-friendly and tests are OS-invariant.
+- Prepare next test release tag v0.3.5-test.10.
+
+### Files changed
+- app/zapret_manager/core/commands.py
+- app/zapret_manager/__init__.py
+- release/v0.3.5-test.10-notes.md
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -m pytest -q --tb=long
+git add app/zapret_manager/core/commands.py && git commit -m "fix(commands): stable Path serialization in CommandResult"
+git add app/zapret_manager/__init__.py release/v0.3.5-test.10-notes.md && git commit -m "chore(release): prepare v0.3.5-test.10"
+git tag -a v0.3.5-test.10 -m "v0.3.5-test.10"
+git push origin main
+git push origin v0.3.5-test.10
+curl -s "https://api.github.com/repos/norfolkavito-maker/Pupupu/actions/runs/25260210145" | jq -r '.status+" "+(.conclusion//"-")'
+```
+
+### Results
+- Local tests: PASS (144)
+- GitHub Actions build workflow: completed success (run 25260210145)
+
+### Not verified
+- GitHub Release creation (gh not authenticated in this environment)
+
+### Next step
+- Create GitHub Release for tag `v0.3.5-test.10` and attach CI artifacts.
