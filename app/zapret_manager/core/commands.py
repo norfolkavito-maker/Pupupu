@@ -32,7 +32,8 @@ class CommandResult:
         # Keep json-friendly primitives only.
         def _coerce(v: Any) -> Any:
             if isinstance(v, Path):
-                return str(v)
+                # Use stable forward-slash representation for logs/telemetry.
+                return v.as_posix()
             if isinstance(v, (list, tuple)):
                 return [_coerce(x) for x in v]
             if isinstance(v, dict):
