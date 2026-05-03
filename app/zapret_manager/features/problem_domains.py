@@ -293,6 +293,39 @@ def add_problem_domains_from_results(ctx, results: list[Any]) -> int:
     return added
 
 
+def add_from_domain_checks(ctx, checks: list[Any], *, source: str = "") -> int:
+    """Compatibility helper: record failing domains from DomainCheck-like rows.
+
+    Older parts of the codebase (and some external tooling) expect a function
+    named `add_from_domain_checks(...)`.
+
+    We intentionally accept `list[Any]` here to avoid tight coupling to
+    `features.strategy_test.DomainCheck`.
+
+    Parameters:
+    - ctx: AppContext-like object (must have ctx.paths.data_dir)
+    - checks: iterable with attributes `.ok`, `.domain`, `.error`
+    - source: marker stored as last_strategy (e.g. "control" or strategy name)
+
+    Returns number of domains added/updated.
+    """
+
+    added = 0
+    ts = _utc_now_iso()
+    st = (source or "").strip() or "control"
+    for c in checks or []:
+        ok = bool(getattr(c, "ok", False))
+        if ok:
+            continue
+        dom = str(getattr(c, "domain", "") or "")
+        err = str(getattr(c, "error", "") or "")
+        if not dom:
+            continue
+        add_problem_domain(ctx, dom, error=err, strategy=st, ts=ts)
+        added += 1
+    return added
+
+
 def get_problem_domain_list(ctx) -> list[str]:
     """Return clean list of domains for test sets."""
     data = load_problem_domains(ctx)
