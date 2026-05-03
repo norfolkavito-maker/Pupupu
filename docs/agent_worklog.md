@@ -69,6 +69,30 @@ bash scripts/agent-verify.sh
 ### Next step
 - Continue Stage 1 / Task 4: resolve missing `quic_initial_ietf.bin` for games profiles/overlays.
 
+## 2026-05-03 14:48 (Europe/Moscow) — Stage 1: fix missing quic_initial_ietf fake reference
+
+### Scope
+- Avoid false INVALID preflight caused by referencing non-existent fake file `quic_initial_ietf.bin` in discord `quic4all` overlay.
+
+### Files changed
+- app/zapret_manager/strategies/composer.py
+- docs/ai/PROGRESS.md
+
+### Commands run
+```text
+python3 -m pytest -q tests/test_composer_unittest.py -q
+python3 -m pytest -q tests/test_winws_validate_unittest.py -q
+```
+
+### Results
+- PASS
+
+### Not verified
+- Manual Windows run with real `winws` process.
+
+### Next step
+- Continue Stage 1 / Task 5: diagnostics Windows decoding (`meta.json` garbled output).
+
 Template:
 
 ## YYYY-MM-DD HH:MM — <task title>
