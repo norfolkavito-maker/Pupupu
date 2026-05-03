@@ -6,6 +6,7 @@ This repository uses a local “task packet” workflow.
 
 - `AGENTS.md`
 - `docs/ai/MASTER_TASK.md`
+- `docs/ai/CONTEXT_MAP.md`
 - all `docs/ai/prompts/*.md`
 
 ## Workflow
@@ -25,6 +26,7 @@ This repository uses a local “task packet” workflow.
 - Preserve existing behavior unless explicitly changed.
 - Avoid unrelated refactors.
 - Use BLOCKERS only when truly blocked.
+- Prefer CONTEXT_MAP before full-repo scans; update it when structure changes.
 
 ## Stop condition
 

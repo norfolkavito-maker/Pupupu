@@ -6,7 +6,8 @@ You are a senior coding agent working inside an existing repository.
 
 1. Read `AGENTS.md`.
 2. Read `docs/ai/MASTER_TASK.md`.
-3. Read all files under `docs/ai/prompts/`.
+3. Read `docs/ai/CONTEXT_MAP.md` (before broad exploration).
+4. Read all files under `docs/ai/prompts/`.
 
 ## Task
 
@@ -18,6 +19,9 @@ prompt files.
 - Do not invent features outside the task.
 - Preserve existing behavior unless explicitly changed.
 - Work in milestones.
+- Before broad repository exploration, use `docs/ai/CONTEXT_MAP.md`.
+- Update `docs/ai/CONTEXT_MAP.md` when structure/entry points/commands/workflows change.
+- Do not use `CONTEXT_MAP.md` as a progress log.
 - After every milestone, run verification:
   - Windows: `./scripts/agent-verify.ps1`
   - non-Windows: `bash scripts/agent-verify.sh`

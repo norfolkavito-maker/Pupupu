@@ -41,6 +41,7 @@ These files are part of the “task packet” and must be read before meaningful
 Before editing any project logic:
 - Read `AGENTS.md`.
 - Read this file: `docs/ai/MASTER_TASK.md`.
+- Read `docs/ai/CONTEXT_MAP.md` before broad repository exploration.
 - Read **all** files under `docs/ai/prompts/`.
 - Inspect repository structure.
 - Write a short implementation plan into `docs/ai/PROGRESS.md`.

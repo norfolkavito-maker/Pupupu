@@ -6,6 +6,7 @@
 # Read rules + master task
 cat AGENTS.md
 cat docs/ai/MASTER_TASK.md
+cat docs/ai/CONTEXT_MAP.md
 ls -la docs/ai/prompts
 
 # Run verification (choose one)
@@ -19,6 +20,9 @@ bash scripts/agent-verify.sh
 # Inspect current repo state
 git status --short
 git --no-pager log --oneline -5
+
+# Re-load context map before broad exploration
+cat docs/ai/CONTEXT_MAP.md
 
 # Re-run verification
 ./scripts/agent-verify.ps1

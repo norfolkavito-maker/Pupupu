@@ -6,6 +6,10 @@ applyTo: "**"
 
 - Follow `AGENTS.md`.
 - Read `docs/ai/MASTER_TASK.md` and all `docs/ai/prompts/*.md` before major edits.
+- Before broad repository exploration, read `docs/ai/CONTEXT_MAP.md`.
+- Use `CONTEXT_MAP.md` to locate likely files before scanning the whole repository.
+- Update `CONTEXT_MAP.md` when structure/entry points/important paths change.
+- Do not use `CONTEXT_MAP.md` as a progress log.
 - Treat repository files + `docs/ai/*` as source of truth.
 - Do not invent features; mark missing logical items as **Future / Planned**.
 - Preserve existing behavior unless explicitly changed.

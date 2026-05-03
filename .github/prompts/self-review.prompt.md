@@ -6,6 +6,7 @@ Perform a strict self-review of your changes.
 
 - `AGENTS.md`
 - `docs/ai/MASTER_TASK.md`
+- `docs/ai/CONTEXT_MAP.md` (ensure it was read before broad exploration)
 - `docs/ai/ACCEPTANCE_CHECKLIST.md`
 - `docs/ai/PROGRESS.md`
 - `docs/ai/BLOCKERS.md`

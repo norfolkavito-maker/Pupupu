@@ -3,6 +3,10 @@
 ## Mandatory startup rule
 - Always read this file before starting implementation.
 
+Additional mandatory startup reads (before broad exploration or edits):
+- `docs/ai/MASTER_TASK.md`
+- `docs/ai/CONTEXT_MAP.md`
+
 ## Planning / execution
 - PLAN/READ-ONLY is required before major changes.
 - If user explicitly enables ACT MODE after planning, proceed with implementation.
@@ -115,6 +119,17 @@ working in this repository.
 ## Progress log rule
 - Update `docs/ai/PROGRESS.md` after each milestone.
 - Keep entries concise but actionable: what changed, where, how verified.
+
+## Context map rule
+- Before broad repository exploration, read `docs/ai/CONTEXT_MAP.md`.
+- Use `CONTEXT_MAP.md` to locate likely files before scanning the whole repository.
+- Update `CONTEXT_MAP.md` when project structure, entry points, important modules,
+  commands, paths, or workflows change.
+- Do not use `CONTEXT_MAP.md` as a progress log.
+- Track completed work in `docs/ai/PROGRESS.md`.
+- Track acceptance status in `docs/ai/ACCEPTANCE_CHECKLIST.md`.
+- Track blockers in `docs/ai/BLOCKERS.md`.
+- Do not delete completed tasks from checklists; mark them checked and keep the history.
 
 ## Git rules
 - Do not push directly to `main/master` unless explicitly instructed.

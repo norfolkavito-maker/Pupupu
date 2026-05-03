@@ -6,6 +6,7 @@ Use this when an agent/tool does not automatically read `AGENTS.md`.
 
 1. `AGENTS.md`
 2. `docs/ai/MASTER_TASK.md`
+3. `docs/ai/CONTEXT_MAP.md`
 3. All files under `docs/ai/prompts/`
 4. `docs/ai/ACCEPTANCE_CHECKLIST.md`
 5. `docs/ai/PROGRESS.md`
@@ -25,6 +26,12 @@ Use this when an agent/tool does not automatically read `AGENTS.md`.
    - non-Windows: `bash scripts/agent-verify.sh`
 5. Update `docs/ai/PROGRESS.md`.
 6. Repeat.
+
+## Context map rule
+
+- Before broad repository exploration, read `docs/ai/CONTEXT_MAP.md`.
+- Update it when structure/entry points/important paths change.
+- Do not use it as a progress log.
 
 ## Stop condition
 
