@@ -12,6 +12,8 @@ Read AGENTS.md and docs/ai/MASTER_TASK.md.
 
 Before broad repository exploration, read docs/ai/CONTEXT_MAP.md.
 
+Before starting feature work, read docs/ai/workflows/README.md and follow stage order.
+
 You must implement the full task described in docs/ai/MASTER_TASK.md and the four prompt files referenced by it.
 
 Work locally in this repository.
@@ -30,10 +32,11 @@ Start by:
 1. Reading AGENTS.md.
 2. Reading docs/ai/MASTER_TASK.md.
 3. Reading docs/ai/CONTEXT_MAP.md.
-4. Reading all files in docs/ai/prompts/.
-5. Inspecting the current repository structure (targeted, using CONTEXT_MAP.md first).
-6. Writing a short implementation plan into docs/ai/PROGRESS.md.
-7. Beginning implementation.
+4. Reading docs/ai/workflows/README.md and all stage files under docs/ai/workflows/.
+5. Reading all files in docs/ai/prompts/ (legacy/optional, if still used).
+6. Inspecting the current repository structure (targeted, using CONTEXT_MAP.md first).
+7. Writing a short implementation plan into docs/ai/PROGRESS.md.
+8. Beginning implementation.
 ```
 
 ## Короткий стартовый промпт
@@ -42,4 +45,6 @@ Start by:
 Read AGENTS.md and docs/ai/MASTER_TASK.md. Complete the task fully. Verify with scripts/agent-verify.ps1 after each milestone. Update PROGRESS.md. Stop only when DoD is complete or a real blocker is documented.
 
 Also: read docs/ai/CONTEXT_MAP.md before broad exploration; update it when structure/entry points change.
+
+Also: follow staged workflows in docs/ai/workflows/ unless explicitly overridden.
 ```

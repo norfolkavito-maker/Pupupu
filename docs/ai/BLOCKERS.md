@@ -1,8 +1,11 @@
 # BLOCKERS
 
+Use this file only for **real blockers that require human input**.
+Ordinary TODOs belong in `docs/ai/PROGRESS.md` or in the active workflow stage file.
+
 ## Active blockers
 
-- None.
+No active blockers.
 
 ## Blocker template
 

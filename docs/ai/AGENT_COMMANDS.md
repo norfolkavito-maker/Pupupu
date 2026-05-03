@@ -7,6 +7,8 @@
 cat AGENTS.md
 cat docs/ai/MASTER_TASK.md
 cat docs/ai/CONTEXT_MAP.md
+ls -la docs/ai/workflows
+cat docs/ai/workflows/README.md
 ls -la docs/ai/prompts
 
 # Run verification (choose one)

@@ -7,6 +7,7 @@ Use this when an agent/tool does not automatically read `AGENTS.md`.
 1. `AGENTS.md`
 2. `docs/ai/MASTER_TASK.md`
 3. `docs/ai/CONTEXT_MAP.md`
+4. `docs/ai/workflows/README.md` + all stage files under `docs/ai/workflows/`
 3. All files under `docs/ai/prompts/`
 4. `docs/ai/ACCEPTANCE_CHECKLIST.md`
 5. `docs/ai/PROGRESS.md`
@@ -40,6 +41,10 @@ Stop only when:
 - Acceptance checklist is checked;
 - verification passes;
 - no unresolved critical blockers.
+
+## Workflows (staged)
+
+- Execute workflow stages strictly in order unless the human explicitly overrides.
 
 ## Final answer format
 

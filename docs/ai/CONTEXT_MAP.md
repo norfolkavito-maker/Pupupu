@@ -20,16 +20,19 @@ It is **not** a progress log and **not** a task checklist.
 - Task progress belongs in `docs/ai/PROGRESS.md`.
 - Acceptance status belongs in `docs/ai/ACCEPTANCE_CHECKLIST.md`.
 - Blockers belong in `docs/ai/BLOCKERS.md`.
+- Completed checklist items must not be deleted.
 
 ## Quick start for agents
 
-Read first:
+Recommended read order:
 1. `AGENTS.md`
-2. `docs/ai/MASTER_TASK.md`
-3. `docs/ai/CONTEXT_MAP.md`
-4. `docs/ai/ACCEPTANCE_CHECKLIST.md`
-5. `docs/ai/PROGRESS.md`
-6. `docs/ai/BLOCKERS.md`
+2. `LOCAL_AGENT_START_HERE.md`
+3. `docs/ai/MASTER_TASK.md`
+4. `docs/ai/CONTEXT_MAP.md`
+5. `docs/ai/workflows/README.md`
+6. `docs/ai/PROGRESS.md`
+7. `docs/ai/ACCEPTANCE_CHECKLIST.md`
+8. `docs/ai/BLOCKERS.md`
 
 Verify command:
 - macOS/Linux: `bash scripts/agent-verify.sh`
@@ -180,7 +183,12 @@ Full agent verification:
 - `docs/ai/PROGRESS.md` — progress log.
 - `docs/ai/ACCEPTANCE_CHECKLIST.md` — acceptance checklist.
 - `docs/ai/BLOCKERS.md` — blocker log.
-- `docs/ai/prompts/` — large prompt files (placeholders unless replaced).
+- `docs/ai/workflows/` — staged implementation plans (read all, execute in order).
+  - `docs/ai/workflows/README.md` — stage order and execution rules.
+  - `docs/ai/workflows/01_stabilization_fixes_test10.md` — stabilization fixes from test.10 audit.
+  - `docs/ai/workflows/02_test_engine_performance.md` — test engine performance workflow.
+  - `docs/ai/workflows/03_tray_and_menu_ux.md` — tray and menu UX workflow.
+- `docs/ai/prompts/` — legacy prompt folder (optional / may be deprecated).
 - `scripts/agent-verify.ps1` — Windows verification.
 - `scripts/agent-verify.sh` — Unix verification.
 
@@ -202,4 +210,4 @@ Full agent verification:
 
 - Date: 2026-05-03
 - Updated by: AI coding agent
-- Reason: Add initial `CONTEXT_MAP.md` and require agents to maintain it.
+- Reason: Add staged workflows folder references and recommended read order.

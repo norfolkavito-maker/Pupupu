@@ -7,6 +7,7 @@ This repository uses a local “task packet” workflow.
 - `AGENTS.md`
 - `docs/ai/MASTER_TASK.md`
 - `docs/ai/CONTEXT_MAP.md`
+- `docs/ai/workflows/README.md`
 - all `docs/ai/prompts/*.md`
 
 ## Workflow
@@ -19,6 +20,9 @@ This repository uses a local “task packet” workflow.
    - `docs/ai/BLOCKERS.md`
 4. Run verification script.
 5. Update progress log.
+
+Stages:
+- Follow workflow stage order from `docs/ai/workflows/README.md` unless explicitly overridden.
 
 ## Guardrails
 

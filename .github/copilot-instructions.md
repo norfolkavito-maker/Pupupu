@@ -7,6 +7,7 @@ Follow these rules when generating or editing code in this repository.
 1. `AGENTS.md`
 2. `docs/ai/MASTER_TASK.md`
 3. `docs/ai/CONTEXT_MAP.md`
+4. `docs/ai/workflows/README.md` + all stage files under `docs/ai/workflows/`
 3. All files in `docs/ai/prompts/`
 
 ## Core rules
@@ -19,6 +20,7 @@ Follow these rules when generating or editing code in this repository.
 - Use `CONTEXT_MAP.md` to locate likely files before scanning the whole repository.
 - Update `CONTEXT_MAP.md` when structure/entry points/commands/workflows change.
 - Do not use `CONTEXT_MAP.md` as a progress log.
+- Follow staged workflows in `docs/ai/workflows/` (execute in order unless explicitly overridden).
 - After every meaningful change, run verification:
   - Windows: `./scripts/agent-verify.ps1`
   - non-Windows: `bash scripts/agent-verify.sh`

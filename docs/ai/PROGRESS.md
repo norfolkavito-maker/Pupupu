@@ -46,6 +46,38 @@ Use one entry per milestone.
 - Next step:
   - Run verification and commit changes.
 
+### Milestone — Added AI Workflow Documentation
+
+- Date: 2026-05-03
+- Goal: Add repository navigation and staged workflow docs for agents.
+- Files changed:
+  - docs/ai/CONTEXT_MAP.md
+  - docs/ai/MASTER_TASK.md
+  - docs/ai/PROGRESS.md
+  - docs/ai/ACCEPTANCE_CHECKLIST.md
+  - docs/ai/BLOCKERS.md
+  - docs/ai/workflows/README.md
+  - docs/ai/workflows/01_stabilization_fixes_test10.md
+  - docs/ai/workflows/02_test_engine_performance.md
+  - docs/ai/workflows/03_tray_and_menu_ux.md
+  - AGENTS.md
+  - LOCAL_AGENT_START_HERE.md
+  - docs/ai/OTHER_AGENT_RULES.md
+  - docs/ai/AGENT_COMMANDS.md
+  - .github/* agent rules/prompts
+  - .windsurf/rules/*
+- What changed:
+  - Added stable project navigation map.
+  - Added staged workflow docs under `docs/ai/workflows/`.
+  - Updated agent rules to read and maintain `CONTEXT_MAP.md` and follow workflow stage order.
+  - No project logic changed.
+- Verification command:
+  - Docs-only check + `bash scripts/agent-verify.sh`
+- Verification result:
+  - Pending
+- Remaining work:
+  - Execute workflow Stage 1 (stabilization) when requested.
+
 ### YYYY-MM-DD HH:MM — <milestone title>
 
 - Scope:

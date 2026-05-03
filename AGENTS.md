@@ -6,6 +6,7 @@
 Additional mandatory startup reads (before broad exploration or edits):
 - `docs/ai/MASTER_TASK.md`
 - `docs/ai/CONTEXT_MAP.md`
+- `docs/ai/workflows/README.md`
 
 ## Planning / execution
 - PLAN/READ-ONLY is required before major changes.
@@ -130,6 +131,12 @@ working in this repository.
 - Track acceptance status in `docs/ai/ACCEPTANCE_CHECKLIST.md`.
 - Track blockers in `docs/ai/BLOCKERS.md`.
 - Do not delete completed tasks from checklists; mark them checked and keep the history.
+
+## Workflows (staged) rule
+
+- Before starting feature work, read `docs/ai/workflows/README.md`.
+- Read all workflow stages for context.
+- Execute stages strictly in order unless the human explicitly overrides.
 
 ## Git rules
 - Do not push directly to `main/master` unless explicitly instructed.

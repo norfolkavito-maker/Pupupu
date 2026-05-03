@@ -4,6 +4,7 @@
 - Before major edits, read:
   - `docs/ai/MASTER_TASK.md`
   - `docs/ai/CONTEXT_MAP.md`
+  - `docs/ai/workflows/README.md`
   - all files under `docs/ai/prompts/`
 - Work in small milestones.
 - After each milestone:
@@ -14,4 +15,5 @@
 - Use `CONTEXT_MAP.md` to locate likely files before scanning the whole repository.
 - Update `CONTEXT_MAP.md` when structure/entry points/important paths change.
 - Do not use `CONTEXT_MAP.md` as a progress log.
+- Follow staged workflows in `docs/ai/workflows/` (execute in order unless explicitly overridden).
 - Stop only when Definition of Done in `docs/ai/MASTER_TASK.md` is satisfied.
