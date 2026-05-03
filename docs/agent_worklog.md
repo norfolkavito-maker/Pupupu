@@ -147,6 +147,36 @@ python3 -m pytest -q tests/test_test_all_strategies_with_progress_unittest.py -q
 ### Next step
 - Continue Stage 1 / Task 9: runtime preflight false file checks.
 
+## 2026-05-03 22:19 (Europe/Moscow) — Stage 1: runtime preflight avoid false file checks
+
+### Scope
+- Preflight validator no longer treats common non-path tokens as file paths:
+  - `0x...` hex masks
+  - `none`
+- Extended path heuristic to include cert/key extensions (`.pem/.crt/.cer/.key`).
+- Added regression unit tests.
+
+### Files changed
+- app/zapret_manager/features/zapret_runtime.py
+- tests/test_winws_validate_unittest.py
+- docs/ai/PROGRESS.md
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -m pytest -q tests/test_winws_validate_unittest.py -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- PASS
+
+### Not verified
+- Manual Windows run with a real `winws.exe` (network + driver).
+
+### Next step
+- Continue Stage 1 stabilization tasks (next from workflow list).
+
 Template:
 
 ## YYYY-MM-DD HH:MM — <task title>

@@ -926,12 +926,31 @@ def validate_winws_command(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> l
         vv = _strip_quotes(v).strip()
         if not vv:
             return False
+        # Common non-path tokens we must NOT treat as files.
+        # Examples from real strategies:
+        # - 0x0F0F0F0F (hex masks)
+        # - none
+        # - rnd,dupsid,sni=... (modifier lists)
+        lower_vv = vv.lower()
+        if lower_vv == "none":
+            return False
+        if lower_vv.startswith("0x") and len(lower_vv) > 2 and all(c in "0123456789abcdef" for c in lower_vv[2:]):
+            return False
         # absolute windows path (C:\...) or any path separators
         if ":\\" in vv or "\\" in vv or "/" in vv:
             return True
         # common assets extensions
         lower = vv.lower()
-        return lower.endswith(".bin") or lower.endswith(".dat") or lower.endswith(".txt") or lower.endswith(".csv")
+        return (
+            lower.endswith(".bin")
+            or lower.endswith(".dat")
+            or lower.endswith(".txt")
+            or lower.endswith(".csv")
+            or lower.endswith(".pem")
+            or lower.endswith(".crt")
+            or lower.endswith(".cer")
+            or lower.endswith(".key")
+        )
 
     for a in cmd[1:]:
         if a.startswith("--hostlist-domains="):

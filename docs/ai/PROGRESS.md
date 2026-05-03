@@ -225,6 +225,23 @@ Use one entry per milestone.
 - Next step:
   - Stage 1 / Task 9: Runtime preflight false file checks.
 
+### 2026-05-03 22:19 — Runtime preflight: avoid false file checks for hex/modifiers
+
+- Scope:
+  - Preflight validator no longer treats common non-path tokens (e.g. `0x...` hex masks and `none`) as file paths.
+  - Extended path heuristic to include certificate/key extensions (`.pem/.crt/.cer/.key`).
+  - Added unit tests to ensure `--dpi-desync-ttl=0x0F0F0F0F` and `--dpi-desync-fooling=none` do not trigger `missing file`.
+- Files changed:
+  - `app/zapret_manager/features/zapret_runtime.py`
+  - `tests/test_winws_validate_unittest.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_winws_validate_unittest.py -q`
+    - `bash scripts/agent-verify.sh`
+  - Result: PASS
+- Next step:
+  - Continue Stage 1 stabilization tasks (next from workflow list).
+
 ## Final summary template
 
 When the task is complete, fill this section.
