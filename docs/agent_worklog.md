@@ -120,6 +120,33 @@ python3 -m pytest -q tests/test_singbox_health_report_unittest.py -q
 ### Next step
 - Continue Stage 1 / Task 7: include strategy and node summaries in bug reports (without raw links/URLs).
 
+## 2026-05-03 22:02 (Europe/Moscow) — Stage 1: strategy-test show N/A for unmeasured metrics
+
+### Scope
+- Fix misleading `0/N` metrics display for unmeasured probes (DNS/TCP/PING/UDP).
+- `TestResult.summary_text()` now prints `N/A` unless a metric was actually measured.
+
+### Files changed
+- app/zapret_manager/features/strategy_test.py
+- tests/test_strategy_metrics_na_unittest.py
+- docs/ai/PROGRESS.md
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -m pytest -q tests/test_strategy_metrics_na_unittest.py -q
+python3 -m pytest -q tests/test_test_all_strategies_with_progress_unittest.py -q
+```
+
+### Results
+- PASS
+
+### Not verified
+- Manual Windows run (real network + real winws).
+
+### Next step
+- Continue Stage 1 / Task 9: runtime preflight false file checks.
+
 Template:
 
 ## YYYY-MM-DD HH:MM — <task title>

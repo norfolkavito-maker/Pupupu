@@ -209,6 +209,22 @@ Use one entry per milestone.
 - Next step:
   - Stage 1 / Task 7: include strategy and node summaries in bug reports (no raw links/URLs).
 
+### 2026-05-03 22:02 — Strategy test: show N/A for unmeasured metrics
+
+- Scope:
+  - Fixed misleading `0/N` metrics display for DNS/TCP/PING/UDP when a probe wasn't executed.
+  - `TestResult.summary_text()` now prints `N/A` for unmeasured metrics, and preserves `0/N` only when metric was actually measured.
+- Files changed:
+  - `app/zapret_manager/features/strategy_test.py`
+  - `tests/test_strategy_metrics_na_unittest.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_strategy_metrics_na_unittest.py -q`
+    - `python3 -m pytest -q tests/test_test_all_strategies_with_progress_unittest.py -q`
+  - Result: PASS
+- Next step:
+  - Stage 1 / Task 9: Runtime preflight false file checks.
+
 ## Final summary template
 
 When the task is complete, fill this section.

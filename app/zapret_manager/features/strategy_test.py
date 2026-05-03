@@ -89,14 +89,24 @@ class TestResult:
     ping_ok: int = 0
     udp_ok: int = 0
 
+    # Flags to indicate which metrics were actually measured.
+    # When False, UI should show N/A instead of 0/N.
+    measured_dns: bool = False
+    measured_tcp: bool = False
+    measured_ping: bool = False
+    measured_udp: bool = False
+
     def summary_text(self) -> str:
         # ok/total is HTTP result to preserve backward compatible display.
         parts = [f"HTTP: {self.ok}/{self.total}"]
         if self.total:
-            parts.append(f"TCP: {self.tcp_ok}/{self.total}")
-            parts.append(f"DNS: {self.dns_ok}/{self.total}")
-            parts.append(f"PING: {self.ping_ok}/{self.total}")
-            parts.append(f"UDP443: {self.udp_ok}/{self.total}")
+            def _metric(label: str, ok: int, measured: bool) -> str:
+                return f"{label}: {ok}/{self.total}" if measured else f"{label}: N/A"
+
+            parts.append(_metric("TCP", self.tcp_ok, self.measured_tcp))
+            parts.append(_metric("DNS", self.dns_ok, self.measured_dns))
+            parts.append(_metric("PING", self.ping_ok, self.measured_ping))
+            parts.append(_metric("UDP443", self.udp_ok, self.measured_udp))
         return " | ".join(parts)
 
 
@@ -492,6 +502,11 @@ def control_test(ctx: "AppContext", domains: list[str], *, parallel: int | None 
     tcp_ok = sum(1 for c in checks if c.tcp_ok)
     ping_ok = sum(1 for c in checks if c.ping_ok)
     udp_ok = sum(1 for c in checks if c.udp443 == "ok")
+    measured_dns = any(c.dns_ok is not None for c in checks)
+    measured_tcp = any(c.tcp_ok is not None for c in checks)
+    measured_ping = any(c.ping_ok is not None for c in checks)
+    measured_udp = any(bool(c.udp443) for c in checks)
+
     result = TestResult(
         strategy="control",
         ok=ok,
@@ -501,6 +516,10 @@ def control_test(ctx: "AppContext", domains: list[str], *, parallel: int | None 
         tcp_ok=tcp_ok,
         ping_ok=ping_ok,
         udp_ok=udp_ok,
+        measured_dns=measured_dns,
+        measured_tcp=measured_tcp,
+        measured_ping=measured_ping,
+        measured_udp=measured_udp,
     )
     # Record failed domains as problem domains
     try:
@@ -534,6 +553,11 @@ def control_test_mode(
     tcp_ok = sum(1 for c in checks if c.tcp_ok)
     ping_ok = sum(1 for c in checks if c.ping_ok)
     udp_ok = sum(1 for c in checks if c.udp443 == "ok")
+    measured_dns = any(c.dns_ok is not None for c in checks)
+    measured_tcp = any(c.tcp_ok is not None for c in checks)
+    measured_ping = any(c.ping_ok is not None for c in checks)
+    measured_udp = any(bool(c.udp443) for c in checks)
+
     result = TestResult(
         strategy="control",
         ok=ok,
@@ -543,6 +567,10 @@ def control_test_mode(
         tcp_ok=tcp_ok,
         ping_ok=ping_ok,
         udp_ok=udp_ok,
+        measured_dns=measured_dns,
+        measured_tcp=measured_tcp,
+        measured_ping=measured_ping,
+        measured_udp=measured_udp,
     )
     try:
         from app.zapret_manager.features.problem_domains import add_from_domain_checks
@@ -680,6 +708,11 @@ def test_strategy(
         tcp_ok = sum(1 for c in checks if c.tcp_ok)
         ping_ok = sum(1 for c in checks if c.ping_ok)
         udp_ok = sum(1 for c in checks if c.udp443 == "ok")
+        measured_dns = any(c.dns_ok is not None for c in checks)
+        measured_tcp = any(c.tcp_ok is not None for c in checks)
+        measured_ping = any(c.ping_ok is not None for c in checks)
+        measured_udp = any(bool(c.udp443) for c in checks)
+
         result = TestResult(
             strategy=strategy.name,
             ok=ok,
@@ -689,6 +722,10 @@ def test_strategy(
             tcp_ok=tcp_ok,
             ping_ok=ping_ok,
             udp_ok=udp_ok,
+            measured_dns=measured_dns,
+            measured_tcp=measured_tcp,
+            measured_ping=measured_ping,
+            measured_udp=measured_udp,
         )
         if show_progress:
             _print_strategy_footer(result)
