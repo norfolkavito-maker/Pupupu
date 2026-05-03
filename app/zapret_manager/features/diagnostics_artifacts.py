@@ -423,6 +423,59 @@ def write_all_diagnostics_artifacts(ctx: AppContext) -> ArtifactsResult:
     _try(lambda: [write_latest_strategy_ranking_artifact(ctx)], "latest_strategy_ranking")
     _try(lambda: list(write_runtime_asset_reports(ctx)), "runtime_asset_report")
     _try(lambda: list(write_flowseal_asset_reports(ctx)), "flowseal_asset_report")
+    # Include problem domains artifacts
+    try:
+        from app.zapret_manager.features.problem_domains import write_problem_domains_summary_artifacts
+        _try(lambda: list(write_problem_domains_summary_artifacts(ctx)), "problem_domains_summary")
+    except Exception:
+        pass
+
+    # Include raw telemetry files (truncated)
+    try:
+        strategy_runs = ctx.paths.data_dir / "telemetry" / "strategy_runs.jsonl"
+        if strategy_runs.exists():
+            # Truncate to last 100 lines for bug report
+            import itertools
+            with open(strategy_runs, "rb") as f:
+                f.seek(0, 2)
+                end = f.tell()
+                lines = []
+                while end > 0 and len(lines) < 100:
+                    end -= 1
+                    f.seek(end)
+                    if f.read(1) == b"\n":
+                        lines.append(f.readline().decode("utf-8", errors="replace"))
+                lines.reverse()
+                out = diagnostics_dir(ctx) / "strategy_runs_last_100.jsonl"
+                out.write_text("".join(lines), encoding="utf-8")
+                created.append(out)
+    except Exception:
+        pass
+
+    # Include singbox nodes summary (masked)
+    try:
+        from app.zapret_manager.core.singbox.nodes import load_nodes
+        nodes_path = ctx.paths.data_dir / "singbox" / "nodes.json"
+        if nodes_path.exists():
+            nodes = load_nodes(nodes_path)
+            summary = {
+                "nodes_count": len(nodes),
+                "protocols": {},
+                "sample": []
+            }
+            for n in nodes[:10]:  # Only first 10 nodes for sample
+                proto = n.protocol or "unknown"
+                summary["protocols"][proto] = summary["protocols"].get(proto, 0) + 1
+                summary["sample"].append({
+                    "protocol": n.protocol,
+                    "server": mask_secrets_text(n.server),
+                    "port": n.port
+                })
+            out_json = diagnostics_dir(ctx) / "singbox_nodes_summary.json"
+            atomic_write_json(out_json, summary)
+            created.append(out_json)
+    except Exception:
+        pass
 
     # Dedup preserve order
     uniq: list[Path] = []
