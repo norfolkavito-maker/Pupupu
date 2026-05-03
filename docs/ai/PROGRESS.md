@@ -93,6 +93,23 @@ Use one entry per milestone.
 - Next step:
   - ...
 
+### 2026-05-03 13:03 — Fix Problem Domains recording from control test
+
+- Scope:
+  - Restored backward-compatible API `add_from_domain_checks(...)` so control test baseline can record failing domains into `problem_domains.json`.
+- Files changed:
+  - `app/zapret_manager/features/problem_domains.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_control_test_menu_unittest.py -q`
+    - `python3 -m unittest tests.test_control_test_menu_unittest -v`
+  - Result: PASS
+- Notes:
+  - Minimal change: compatibility helper delegates to canonical v2 storage.
+  - No menu/UX redesign.
+- Next step:
+  - Stage 1 / Task 2: Flowseal asset resolution.
+
 ## Final summary template
 
 When the task is complete, fill this section.
