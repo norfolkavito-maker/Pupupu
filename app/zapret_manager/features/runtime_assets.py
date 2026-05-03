@@ -200,7 +200,23 @@ def ensure_fake_assets(ctx: AppContext) -> list[RepairItem]:
 
     out: list[RepairItem] = []
 
+    upstreams_dir = getattr(getattr(ctx, "paths", None), "upstreams_dir", None)
+    flowseal_root: Path | None = None
+    try:
+        if upstreams_dir:
+            flowseal_root = (Path(str(upstreams_dir)) / "flowseal").resolve()
+    except Exception:
+        flowseal_root = None
+
     def find_anywhere(name: str) -> Path | None:
+        # Prefer upstreams/flowseal/bin if present (canonical source for Flowseal fakes)
+        if flowseal_root:
+            try:
+                p = (flowseal_root / "bin" / name).resolve()
+                if p.is_file() and p.stat().st_size > 0:
+                    return p
+            except Exception:
+                pass
         # search under runtime root first
         try:
             for p in rt_root.rglob(name):
@@ -239,10 +255,54 @@ def ensure_fake_assets(ctx: AppContext) -> list[RepairItem]:
     return out
 
 
+def ensure_flowseal_lists(ctx: AppContext) -> list[RepairItem]:
+    """Ensure Flowseal list assets exist under canonical manager lists dir.
+
+    We do not download anything. If Flowseal upstream is present, we can copy
+    upstream-local lists (e.g. list-general.txt) into DedZapretData/data/lists.
+    """
+
+    upstreams_dir = getattr(getattr(ctx, "paths", None), "upstreams_dir", None)
+    if not upstreams_dir:
+        return []
+
+    target = ctx.paths.lists_dir.resolve()
+    target.mkdir(parents=True, exist_ok=True)
+
+    flowseal_lists = (Path(str(upstreams_dir)) / "flowseal" / "lists").resolve()
+    out: list[RepairItem] = []
+
+    # Minimum required by Flowseal strategies
+    required = ["list-general.txt"]
+    for name in required:
+        dst = (target / name).resolve()
+        try:
+            if dst.exists() and dst.is_file() and dst.stat().st_size > 0:
+                out.append(RepairItem(name, "OK", str(dst)))
+                continue
+        except Exception:
+            pass
+
+        src = (flowseal_lists / name).resolve()
+        try:
+            if src.exists() and src.is_file() and src.stat().st_size > 0:
+                dst.write_bytes(src.read_bytes())
+                out.append(RepairItem(name, "COPIED", f"{src} -> {dst}"))
+                continue
+        except Exception as e:
+            out.append(RepairItem(name, "MISSING", f"copy failed: {e}"))
+            continue
+
+        out.append(RepairItem(name, "MISSING", f"not found in flowseal upstream lists ({flowseal_lists})"))
+
+    return out
+
+
 def repair_runtime_assets(ctx: AppContext) -> list[RepairItem]:
     """High-level repair action used by UI/diagnostics."""
     out: list[RepairItem] = []
     out.extend(ensure_base_lists(ctx))
+    out.extend(ensure_flowseal_lists(ctx))
     out.extend(ensure_fake_assets(ctx))
     out.extend(ensure_winws2_binary(ctx))
     return out

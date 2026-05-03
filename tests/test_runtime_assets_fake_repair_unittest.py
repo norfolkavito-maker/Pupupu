@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 import tempfile
+from types import SimpleNamespace
 
 
 from app.zapret_manager.features.runtime_assets import ensure_fake_assets
@@ -81,6 +82,30 @@ class TestRuntimeAssetsFakeRepair(unittest.TestCase):
                 dst = target / name
                 self.assertTrue(dst.exists(), name)
                 self.assertEqual(dst.read_bytes(), expected, name)
+
+    def test_fake_asset_is_copied_from_flowseal_upstreams_bin(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            rt = root / "DedZapretData" / "runtime"
+            # canonical target
+            target = rt / "zapret" / "files" / "fake"
+            target.mkdir(parents=True, exist_ok=True)
+
+            upstreams_bin = root / "DedZapretData" / "data" / "upstreams" / "flowseal" / "bin"
+            upstreams_bin.mkdir(parents=True, exist_ok=True)
+            (upstreams_bin / "tls_clienthello_max_ru.bin").write_bytes(b"max")
+
+            ctx = SimpleNamespace(
+                paths=SimpleNamespace(
+                    runtime_dir=rt,
+                    upstreams_dir=(root / "DedZapretData" / "data" / "upstreams"),
+                )
+            )
+
+            ensure_fake_assets(ctx)
+            dst = target / "tls_clienthello_max_ru.bin"
+            self.assertTrue(dst.exists())
+            self.assertEqual(dst.read_bytes(), b"max")
 
 
 if __name__ == "__main__":

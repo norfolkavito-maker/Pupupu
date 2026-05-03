@@ -2,9 +2,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 import tempfile
+from types import SimpleNamespace
 
 
 from app.zapret_manager.features.runtime_assets import ensure_base_lists
+from app.zapret_manager.features.runtime_assets import ensure_flowseal_lists
 
 
 class TestRuntimeAssetsListsRepair(unittest.TestCase):
@@ -59,6 +61,26 @@ class TestRuntimeAssetsListsRepair(unittest.TestCase):
 
             self.assertTrue((lists_dir / "exclude.txt").exists())
             self.assertEqual((lists_dir / "exclude.txt").read_text(encoding="utf-8"), "y\n")
+
+    def test_flowseal_list_general_is_copied_from_upstreams(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td).resolve()
+            data_upstreams = root / "DedZapretData" / "data" / "upstreams" / "flowseal" / "lists"
+            data_upstreams.mkdir(parents=True, exist_ok=True)
+            (data_upstreams / "list-general.txt").write_text("gen\n", encoding="utf-8")
+
+            lists_dir = root / "DedZapretData" / "data" / "lists"
+            ctx = SimpleNamespace(
+                paths=SimpleNamespace(
+                    lists_dir=lists_dir,
+                    upstreams_dir=(root / "DedZapretData" / "data" / "upstreams"),
+                )
+            )
+
+            items = ensure_flowseal_lists(ctx)
+            self.assertTrue((lists_dir / "list-general.txt").exists())
+            self.assertEqual((lists_dir / "list-general.txt").read_text(encoding="utf-8"), "gen\n")
+            self.assertTrue(any(i.status in {"OK", "COPIED"} for i in items))
 
 
 if __name__ == "__main__":
