@@ -35,6 +35,40 @@ Rules:
 - one entry per phase/change;
 - include exact commands and results.
 
+## 2026-05-03 14:42 (Europe/Moscow) — Stage 1: Flowseal upstream assets
+
+### Scope
+- Fix Flowseal `.bat` placeholder mapping so `%BIN%/%LISTS%` resolve to upstream-local directories.
+- Extend runtime assets repair to copy missing fake/list assets from Flowseal upstreams.
+
+### Files changed
+- app/zapret_manager/strategies/flowseal_parser.py
+- tests/test_flowseal_parser_unittest.py
+- app/zapret_manager/features/runtime_assets.py
+- tests/test_runtime_assets_lists_repair_unittest.py
+- tests/test_runtime_assets_fake_repair_unittest.py
+- docs/ai/PROGRESS.md
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -m pytest -q tests/test_flowseal_parser_unittest.py -q
+python3 -m pytest -q tests/test_winws_validate_unittest.py -q
+python3 -m pytest -q tests/test_runtime_assets_lists_repair_unittest.py -q
+python3 -m pytest -q tests/test_runtime_assets_fake_repair_unittest.py -q
+python3 -m pytest -q tests/test_runtime_assets_repair_unittest.py -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- PASS
+
+### Not verified
+- Manual Windows run with real Flowseal bundle and real `winws` execution.
+
+### Next step
+- Continue Stage 1 / Task 4: resolve missing `quic_initial_ietf.bin` for games profiles/overlays.
+
 Template:
 
 ## YYYY-MM-DD HH:MM — <task title>
