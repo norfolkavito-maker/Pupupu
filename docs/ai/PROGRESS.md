@@ -189,6 +189,26 @@ Use one entry per milestone.
 - Next step:
   - Stage 1 / Task 6: sing-box nodes health schema/load errors report.
 
+### 2026-05-03 15:16 — sing-box health: report nodes file schema and load errors
+
+- Scope:
+  - Extended sing-box health report with nodes file diagnostics:
+    - `nodes_file_exists`, `nodes_file_size`, `nodes_schema_detected`, `load_nodes_error`.
+  - Added `subscriptions_count` (enabled) to health report.
+  - Improved recommendation text for the case when `nodes.json` exists and has size but parsing returns zero nodes.
+  - Updated formatter + unit tests.
+- Files changed:
+  - `app/zapret_manager/features/singbox_health.py`
+  - `tests/test_singbox_health_report_unittest.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_singbox_health_report_unittest.py -q`
+  - Result: PASS
+- Commit:
+  - `487f7b1` — `feat(singbox): report nodes file schema and load errors`
+- Next step:
+  - Stage 1 / Task 7: include strategy and node summaries in bug reports (no raw links/URLs).
+
 ## Final summary template
 
 When the task is complete, fill this section.

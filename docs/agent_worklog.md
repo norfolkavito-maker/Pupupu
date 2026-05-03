@@ -93,6 +93,33 @@ python3 -m pytest -q tests/test_winws_validate_unittest.py -q
 ### Next step
 - Continue Stage 1 / Task 5: diagnostics Windows decoding (`meta.json` garbled output).
 
+## 2026-05-03 15:16 (Europe/Moscow) — Stage 1: sing-box health nodes file diagnostics
+
+### Scope
+- Fix misleading health state where `nodes_count=0` even when `nodes.json` exists and has size.
+- Health report now includes nodes file existence/size, schema detection, and load/parse errors.
+- Also includes enabled subscriptions count.
+
+### Files changed
+- app/zapret_manager/features/singbox_health.py
+- tests/test_singbox_health_report_unittest.py
+- docs/ai/PROGRESS.md
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -m pytest -q tests/test_singbox_health_report_unittest.py -q
+```
+
+### Results
+- PASS
+
+### Not verified
+- Manual run on Windows with real nodes/subscriptions files from a user system.
+
+### Next step
+- Continue Stage 1 / Task 7: include strategy and node summaries in bug reports (without raw links/URLs).
+
 Template:
 
 ## YYYY-MM-DD HH:MM — <task title>
