@@ -59,6 +59,7 @@ class AppState:
     doh: DoHRunState = field(default_factory=DoHRunState)
     hosts: HostsState = field(default_factory=HostsState)
     tg: dict[str, Any] = field(default_factory=dict)
+    test: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
         def asdict_up(u: UpstreamState) -> dict[str, Any]:
@@ -100,6 +101,7 @@ class AppState:
                 "blocks": self.hosts.blocks,
             },
             "tg": self.tg,
+            "test": self.test,
         }
 
 
@@ -163,6 +165,7 @@ def load_state(path: Path) -> AppState:
     st.hosts = HostsState(blocks=h.get("blocks", {}) or {})
 
     st.tg = data.get("tg", {}) or {}
+    st.test = data.get("test", {}) or {}
 
     return st
 

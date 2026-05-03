@@ -6,6 +6,7 @@ import socket
 import tempfile
 import time
 import json
+import threading
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,74 @@ from app.zapret_manager.utils.timex import now_utc_iso
 
 
 log = logging.getLogger(__name__)
+
+
+DEFAULT_SPEED_SETTINGS: dict[str, Any] = {
+    "concurrency": 8,
+    "connect_timeout_s": 2.0,
+    "read_timeout_s": 3.0,
+    "total_domain_timeout_s": 4.0,
+    "max_strategy_time_s": 90.0,
+    "detailed_console_output": False,
+    "dns_cache": True,
+    "deduplicate_equivalent_strategies": True,
+}
+
+
+def get_speed_settings(ctx: AppContext) -> dict[str, Any]:
+    """Return sweep speed settings (stored in state.json).
+
+    We intentionally keep this in state (not config.yaml) so users can tweak it
+    interactively without editing files.
+    """
+    raw = {}
+    try:
+        raw = dict(getattr(ctx.state, "test", {}) or {})
+    except Exception:
+        raw = {}
+    cur = dict(DEFAULT_SPEED_SETTINGS)
+    for k, v in raw.items():
+        if k in cur:
+            cur[k] = v
+    # sanitize
+    try:
+        cur["concurrency"] = int(cur["concurrency"])
+    except Exception:
+        cur["concurrency"] = int(DEFAULT_SPEED_SETTINGS["concurrency"])
+    cur["concurrency"] = max(1, min(16, int(cur["concurrency"])))
+
+    for k in ["connect_timeout_s", "read_timeout_s", "total_domain_timeout_s", "max_strategy_time_s"]:
+        try:
+            cur[k] = float(cur[k])
+        except Exception:
+            cur[k] = float(DEFAULT_SPEED_SETTINGS[k])
+        cur[k] = max(0.1, cur[k])
+    cur["detailed_console_output"] = bool(cur.get("detailed_console_output", False))
+    cur["dns_cache"] = bool(cur.get("dns_cache", True))
+    cur["deduplicate_equivalent_strategies"] = bool(cur.get("deduplicate_equivalent_strategies", True))
+    return cur
+
+
+def set_speed_settings(ctx: AppContext, patch: dict[str, Any]) -> dict[str, Any]:
+    """Update speed settings in state.json (merge patch), return normalized."""
+    cur = dict(getattr(ctx.state, "test", {}) or {})
+    cur.update(patch or {})
+    ctx.state.test = cur
+    from app.zapret_manager.core.state import save_state
+
+    save_state(ctx.paths.state_file, ctx.state)
+    return get_speed_settings(ctx)
+
+
+class _CancelFlag:
+    def __init__(self) -> None:
+        self._ev = threading.Event()
+
+    def cancel(self) -> None:
+        self._ev.set()
+
+    def is_cancelled(self) -> bool:
+        return self._ev.is_set()
 
 
 DEFAULT_TEST_DOMAINS = [
@@ -300,12 +369,24 @@ def _fetch_one_quick(url: str, *, timeout_s: float) -> DomainCheck:
         return DomainCheck(display, url, False, elapsed_ms, error=type(e).__name__)
 
 
-def _fetch_one_detail(url: str, *, timeout_s: float) -> DomainCheck:
+def _fetch_one_detail(
+    url: str,
+    *,
+    timeout_s: float,
+    connect_timeout_s: float | None = None,
+    read_timeout_s: float | None = None,
+    dns_cache: "DNSCache | None" = None,
+) -> DomainCheck:
     display = _display_domain(url)
     host = _host_for_probes(url)
 
-    dns_ok, ip, dns_ms, dns_err = _dns_resolve(host)
-    tcp_ok, tcp_ms, tcp_err = _tcp_connect(host, 443, timeout_s=timeout_s)
+    if dns_cache is not None:
+        dns_ok, ip, dns_ms, dns_err = dns_cache.resolve(host)
+    else:
+        dns_ok, ip, dns_ms, dns_err = _dns_resolve(host)
+
+    tcp_timeout = float(connect_timeout_s if connect_timeout_s is not None else timeout_s)
+    tcp_ok, tcp_ms, tcp_err = _tcp_connect(host, 443, timeout_s=tcp_timeout)
     ping_ok, ping_ms, ping_err = _ping_host(host)
     udp_status, udp_err = _udp443_probe(ip)
 
@@ -332,7 +413,14 @@ def _fetch_one_detail(url: str, *, timeout_s: float) -> DomainCheck:
         # A normal GET is closer to real browser behavior than just opening TCP.
         # We intentionally treat HTTP 4xx as network OK: domain is reachable, even
         # if the server rejects the exact path.
-        r = requests.get(url, timeout=timeout_s, allow_redirects=True)
+        ct = float(connect_timeout_s if connect_timeout_s is not None else timeout_s)
+        rt = float(read_timeout_s if read_timeout_s is not None else timeout_s)
+        r = requests.get(url, timeout=(ct, rt), allow_redirects=True, stream=True)
+        # Don't download full page.
+        try:
+            _ = r.raw.read(256)  # type: ignore[attr-defined]
+        except Exception:
+            pass
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         ok = 200 <= r.status_code < 500
         return DomainCheck(
@@ -447,13 +535,30 @@ def check_domains_detailed(
     parallel: int | None = None,
     progress: bool = False,
     mode: str = "full",  # full|quick
+    connect_timeout_s: float | None = None,
+    read_timeout_s: float | None = None,
+    total_domain_timeout_s: float | None = None,
+    dns_cache: "DNSCache | None" = None,
+    cancel: "_CancelFlag | None" = None,
 ) -> list[DomainCheck]:
     cleaned = [_normalize_url(d) for d in domains if d.strip()]
     cleaned = [u for u in cleaned if u]
     if not cleaned:
         return []
 
-    fetch = _fetch_one_detail if mode != "quick" else _fetch_one_quick
+    def _fetch(url: str, *, timeout_s: float) -> DomainCheck:
+        if cancel is not None and cancel.is_cancelled():
+            return DomainCheck(domain=_display_domain(url), url=url, ok=False, elapsed_ms=0, error="cancelled")
+        if mode == "quick":
+            # quick path keeps backward compatible single timeout
+            return _fetch_one_quick(url, timeout_s=timeout_s)
+        return _fetch_one_detail(
+            url,
+            timeout_s=timeout_s,
+            connect_timeout_s=connect_timeout_s,
+            read_timeout_s=read_timeout_s,
+            dns_cache=dns_cache,
+        )
 
     # If progress is requested, keep sequential order so the user sees exactly
     # which domain is being tested now. This is slower but much more readable.
@@ -473,7 +578,9 @@ def check_domains_detailed(
                 # UX: keep format stable for parsing and readability.
                 # Caller is responsible for higher-level progress (strategy index/name).
                 print(f"  [Domain {i:02d}/{total:02d}] {domain:<42} ... ", end="", flush=True)
-            check = fetch(url, timeout_s=timeout_s)
+            if cancel is not None and cancel.is_cancelled():
+                break
+            check = _fetch(url, timeout_s=timeout_s)
             checks.append(check)
             if progress:
                 suffix = f"{check.elapsed_ms} ms"
@@ -483,10 +590,149 @@ def check_domains_detailed(
                 print(f"{color}{check.status_text:<5}{C.RESET} {suffix}")
         return checks
 
-    from concurrent.futures import ThreadPoolExecutor
+    # Parallel mode (no per-domain prints). Keep results order stable.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    import concurrent.futures
+
+    checks: list[DomainCheck] = [DomainCheck("", "", False, 0, error="internal") for _ in cleaned]
+    with ThreadPoolExecutor(max_workers=int(parallel)) as ex:
+        futs: dict[concurrent.futures.Future[DomainCheck], int] = {}
+        for idx, u in enumerate(cleaned):
+            if cancel is not None and cancel.is_cancelled():
+                break
+            futs[ex.submit(_fetch, u, timeout_s=timeout_s)] = idx
+        for f in as_completed(futs):
+            idx = futs[f]
+            try:
+                if total_domain_timeout_s is not None:
+                    checks[idx] = f.result(timeout=float(total_domain_timeout_s))
+                else:
+                    checks[idx] = f.result()
+            except Exception as e:
+                url = cleaned[idx]
+                checks[idx] = DomainCheck(
+                    domain=_display_domain(url),
+                    url=url,
+                    ok=False,
+                    elapsed_ms=0,
+                    error=type(e).__name__,
+                )
+    return checks
+
+
+class DNSCache:
+    """In-memory DNS cache for one sweep (best-effort)."""
+
+    def __init__(self, *, ttl_s: float = 600.0) -> None:
+        self.ttl_s = float(ttl_s)
+        self._items: dict[str, tuple[float, tuple[bool, str, int, str]]] = {}
+
+    def resolve(self, host: str) -> tuple[bool, str, int, str]:
+        now = time.time()
+        item = self._items.get(host)
+        if item:
+            ts, val = item
+            if now - ts <= self.ttl_s:
+                return val
+        val = _dns_resolve(host)
+        self._items[host] = (now, val)
+        return val
+
+
+def _compact_progress_line(
+    *,
+    strategy_name: str,
+    strategy_idx: int,
+    strategies_total: int,
+    done: int,
+    total: int,
+    ok: int,
+    fail: int,
+    elapsed_s: float,
+) -> str:
+    return (
+        f"[Strategy {strategy_idx:02d}/{strategies_total:02d}] {strategy_name}"
+        f" | domains {done}/{total} | OK {ok} | FAIL {fail} | elapsed {int(elapsed_s)}s"
+    )
+
+
+def check_domains_compact(
+    domains: list[str],
+    *,
+    timeout_s: float,
+    parallel: int,
+    mode: str,
+    connect_timeout_s: float,
+    read_timeout_s: float,
+    total_domain_timeout_s: float,
+    dns_cache: "DNSCache | None",
+    cancel: "_CancelFlag",
+    max_strategy_time_s: float,
+    progress_cb: callable,
+) -> tuple[list[DomainCheck], bool]:
+    """Parallel checks with compact progress callback.
+
+    Returns (checks, partial_timeout).
+    """
+    cleaned = [_normalize_url(d) for d in domains if d.strip()]
+    cleaned = [u for u in cleaned if u]
+    if not cleaned:
+        return ([], False)
+
+    start = time.perf_counter()
+    partial_timeout = False
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    checks: list[DomainCheck] = [DomainCheck("", "", False, 0, error="internal") for _ in cleaned]
+    ok = 0
+    fail = 0
+    done = 0
+
+    def _fetch_one(url: str) -> DomainCheck:
+        if cancel.is_cancelled():
+            return DomainCheck(domain=_display_domain(url), url=url, ok=False, elapsed_ms=0, error="cancelled")
+        # Reuse rich fetch path.
+        return check_domains_detailed(
+            [url],
+            timeout_s=timeout_s,
+            parallel=None,
+            progress=False,
+            mode=mode,
+            connect_timeout_s=connect_timeout_s,
+            read_timeout_s=read_timeout_s,
+            total_domain_timeout_s=total_domain_timeout_s,
+            dns_cache=dns_cache,
+            cancel=cancel,
+        )[0]
 
     with ThreadPoolExecutor(max_workers=int(parallel)) as ex:
-        return list(ex.map(lambda u: fetch(u, timeout_s=timeout_s), cleaned))
+        futs = {ex.submit(_fetch_one, u): idx for idx, u in enumerate(cleaned)}
+        for f in as_completed(futs):
+            idx = futs[f]
+            # strategy hard deadline
+            if max_strategy_time_s is not None and (time.perf_counter() - start) > float(max_strategy_time_s):
+                partial_timeout = True
+                cancel.cancel()
+            try:
+                checks[idx] = f.result(timeout=float(total_domain_timeout_s))
+            except Exception as e:
+                url = cleaned[idx]
+                checks[idx] = DomainCheck(domain=_display_domain(url), url=url, ok=False, elapsed_ms=0, error=type(e).__name__)
+            done += 1
+            if checks[idx].ok:
+                ok += 1
+            else:
+                fail += 1
+            progress_cb(done=done, total=len(cleaned), ok=ok, fail=fail, elapsed_s=time.perf_counter() - start)
+            if cancel.is_cancelled():
+                break
+
+    # Only keep checks for completed futures if cancelled.
+    if cancel.is_cancelled():
+        checks = [c for c in checks if c.domain]
+    return (checks, partial_timeout)
 
 
 def check_domains(domains: list[str], *, timeout_s: float = 3.0, parallel: int | None = None) -> tuple[int, int]:
@@ -916,6 +1162,19 @@ def _strategies_for_mode(ctx: AppContext, *, mode: str) -> tuple[list[Strategy],
     raise ValueError(f"Unknown test mode: {mode}")
 
 
+def _strategy_equivalence_key(st: Strategy) -> str:
+    """Key for deduplicating equivalent strategies.
+
+    We cannot use just name, because upstream packs may provide same params under
+    different names. We normalize by engine and args.
+    """
+    try:
+        args = st.get_full_args()
+    except Exception:
+        args = list(st.args)
+    return "|".join([str(st.engine).lower()] + [str(a) for a in args])
+
+
 def test_all_strategies_with_progress(
     ctx: AppContext,
     *,
@@ -933,59 +1192,230 @@ def test_all_strategies_with_progress(
       - check_domains_detailed(..., progress=True) inside test_strategy()
     """
 
+    settings = get_speed_settings(ctx)
+    # Backward compatible override: old menu passes parallel. New default is from settings.
+    concurrency = int(parallel if parallel is not None else settings["concurrency"])
+    concurrency = max(1, min(16, concurrency))
+    detailed_console_output = bool(settings["detailed_console_output"])
+
     candidates, ensure_flowseal, ensure_stressozz = _strategies_for_mode(ctx, mode=mode)
     # Best-effort pack sync if requested.
     if ensure_flowseal or ensure_stressozz:
         _ensure_pack_strategies(ctx, need_flowseal=ensure_flowseal, need_stressozz=ensure_stressozz)
 
     # De-dup candidates by name, preserve order.
-    seen: set[str] = set()
+    seen_names: set[str] = set()
     uniq: list[Strategy] = []
     for st in candidates:
-        if st.name in seen:
+        if st.name in seen_names:
             continue
-        seen.add(st.name)
+        seen_names.add(st.name)
         uniq.append(st)
     candidates = uniq
 
+    # Optionally de-dup by equivalent args (same engine+args): this can reduce
+    # sweep time significantly when upstream packs contain aliases.
+    if bool(settings.get("deduplicate_equivalent_strategies", True)):
+        seen_keys: set[str] = set()
+        uniq2: list[Strategy] = []
+        for st in candidates:
+            k = _strategy_equivalence_key(st)
+            if k in seen_keys:
+                continue
+            seen_keys.add(k)
+            uniq2.append(st)
+        candidates = uniq2
+
     if not candidates:
         raise RuntimeError("No strategies for this mode.")
+
+    cancel = _CancelFlag()
+    dns_cache = DNSCache(ttl_s=900.0) if bool(settings.get("dns_cache", True)) else None
 
     # Patch in strategy-level progress header by wrapping test_strategy.
     results: list[TestResult] = []
 
     total_strategies = len(candidates)
-    for idx, st in enumerate(candidates, start=1):
-        print(f"[Strategy {idx:02d}/{total_strategies:02d}] {st.name}")
-        r = test_strategy(
-            ctx,
-            st,
-            domains,
-            settle_s=settle_s,
-            parallel=parallel,
-            show_progress=True,
-            mode="quick" if mode == "quick" else "full",
-        )
-        results.append(r)
+    try:
+        for idx, st in enumerate(candidates, start=1):
+            # NOTE: must not run multiple strategies simultaneously.
+            # Strategy starts once here, domain checks happen inside.
+            if cancel.is_cancelled():
+                break
 
-        missing_assets = _detect_missing_assets_from_error(r.error) if r.status != "ok" else []
-        avg_ms = _avg_ms_from_checks(r.checks)
-        fail = max(0, r.total - r.ok)
-        crashed = r.status != "ok"
-        score = _score_run(ok=r.ok, total=r.total, missing_assets=len(missing_assets), crashed=crashed, avg_ms=avg_ms)
-        rec = StrategyRunRecord(
-            ts=datetime.now(timezone.utc).isoformat(),
-            mode=mode,
-            domain_set=_safe_domain_set_key(domain_set),
-            strategy_id=st.name,
-            ok=r.ok,
-            fail=fail,
-            avg_ms=avg_ms,
-            score=score,
-            missing_assets=missing_assets,
-            error=r.error if r.status != "ok" else "",
-        )
-        _append_strategy_run_jsonl(ctx, rec)
+            # Strategy-level header
+            print(f"[Strategy {idx:02d}/{total_strategies:02d}] {st.name}")
+
+            r: TestResult | None = None
+            if not detailed_console_output:
+                # Compact mode: run parallel checks without per-domain prints.
+                was_running = ctx.state.zapret.running
+                prev_selected = ctx.state.zapret.selected_strategy
+                prev_base = ctx.state.zapret.base_strategy
+                prev_youtube = ctx.state.zapret.youtube_layer
+                prev_discord = ctx.state.zapret.discord_layer
+                try:
+                    stop_zapret(ctx)
+                    try:
+                        start_zapret_interactive(ctx, st)
+                    except WinwsStartError as e:
+                        r = TestResult(strategy=st.name, ok=0, total=0, checks=[], status="invalid", error=str(e))
+                        results.append(r)
+                        # telemetry
+                        missing_assets = _detect_missing_assets_from_error(r.error) if r.status != "ok" else []
+                        avg_ms = _avg_ms_from_checks(r.checks)
+                        fail = max(0, r.total - r.ok)
+                        crashed = r.status != "ok"
+                        score = _score_run(
+                            ok=r.ok,
+                            total=r.total,
+                            missing_assets=len(missing_assets),
+                            crashed=crashed,
+                            avg_ms=avg_ms,
+                        )
+                        _append_strategy_run_jsonl(
+                            ctx,
+                            StrategyRunRecord(
+                                ts=datetime.now(timezone.utc).isoformat(),
+                                mode=mode,
+                                domain_set=_safe_domain_set_key(domain_set),
+                                strategy_id=st.name,
+                                ok=r.ok,
+                                fail=fail,
+                                avg_ms=avg_ms,
+                                score=score,
+                                missing_assets=missing_assets,
+                                error=r.error if r.status != "ok" else "",
+                            ),
+                        )
+                        continue
+
+                    time.sleep(settle_s)
+
+                    last_print = 0.0
+
+                    def _cb(*, done: int, total: int, ok: int, fail: int, elapsed_s: float) -> None:
+                        nonlocal last_print
+                        now = time.perf_counter()
+                        if now - last_print < 0.4 and done < total:
+                            return
+                        last_print = now
+                        print(_compact_progress_line(
+                            strategy_name=st.name,
+                            strategy_idx=idx,
+                            strategies_total=total_strategies,
+                            done=done,
+                            total=total,
+                            ok=ok,
+                            fail=fail,
+                            elapsed_s=elapsed_s,
+                        ))
+
+                    checks, partial_timeout = check_domains_compact(
+                        domains,
+                        timeout_s=float(settings["read_timeout_s"]),
+                        parallel=concurrency,
+                        mode=("quick" if mode == "quick" else "full"),
+                        connect_timeout_s=float(settings["connect_timeout_s"]),
+                        read_timeout_s=float(settings["read_timeout_s"]),
+                        total_domain_timeout_s=float(settings["total_domain_timeout_s"]),
+                        dns_cache=dns_cache,
+                        cancel=cancel,
+                        max_strategy_time_s=float(settings["max_strategy_time_s"]),
+                        progress_cb=_cb,
+                    )
+                    okc = sum(1 for c in checks if c.ok)
+                    dnsc = sum(1 for c in checks if c.dns_ok)
+                    tcpc = sum(1 for c in checks if c.tcp_ok)
+                    pingc = sum(1 for c in checks if c.ping_ok)
+                    udpc = sum(1 for c in checks if c.udp443 == "ok")
+                    measured_dns = any(c.dns_ok is not None for c in checks)
+                    measured_tcp = any(c.tcp_ok is not None for c in checks)
+                    measured_ping = any(c.ping_ok is not None for c in checks)
+                    measured_udp = any(bool(c.udp443) for c in checks)
+                    status = "ok"
+                    err = ""
+                    if partial_timeout:
+                        status = "invalid"
+                        err = "partial_timeout"
+                    r = TestResult(
+                        strategy=st.name,
+                        ok=okc,
+                        total=len(checks),
+                        checks=checks,
+                        dns_ok=dnsc,
+                        tcp_ok=tcpc,
+                        ping_ok=pingc,
+                        udp_ok=udpc,
+                        measured_dns=measured_dns,
+                        measured_tcp=measured_tcp,
+                        measured_ping=measured_ping,
+                        measured_udp=measured_udp,
+                        status=status,
+                        error=err,
+                    )
+                    results.append(r)
+                finally:
+                    stop_zapret(ctx)
+                    ctx.state.zapret.base_strategy = prev_base
+                    ctx.state.zapret.selected_strategy = prev_selected
+                    ctx.state.zapret.youtube_layer = prev_youtube
+                    ctx.state.zapret.discord_layer = prev_discord
+                    if was_running and prev_selected:
+                        prev_strategy = find_strategy(ctx, prev_selected, kind="base") or find_strategy(ctx, prev_selected)
+                        if prev_strategy:
+                            try:
+                                start_zapret_interactive(ctx, prev_strategy)
+                            except Exception:
+                                pass
+            else:
+                # Detailed mode: keep existing verbose printing, but allow bounded parallel
+                # ONLY when progress=False (so here parallel must be None -> sequential).
+                r = test_strategy(
+                    ctx,
+                    st,
+                    domains,
+                    settle_s=settle_s,
+                    parallel=None,
+                    show_progress=True,
+                    mode="quick" if mode == "quick" else "full",
+                )
+                results.append(r)
+
+            # telemetry (per strategy)
+            if r is not None:
+                missing_assets = _detect_missing_assets_from_error(r.error) if r.status != "ok" else []
+                avg_ms = _avg_ms_from_checks(r.checks)
+                fail = max(0, r.total - r.ok)
+                crashed = r.status != "ok"
+                score = _score_run(
+                    ok=r.ok,
+                    total=r.total,
+                    missing_assets=len(missing_assets),
+                    crashed=crashed,
+                    avg_ms=avg_ms,
+                )
+                _append_strategy_run_jsonl(
+                    ctx,
+                    StrategyRunRecord(
+                        ts=datetime.now(timezone.utc).isoformat(),
+                        mode=mode,
+                        domain_set=_safe_domain_set_key(domain_set),
+                        strategy_id=st.name,
+                        ok=r.ok,
+                        fail=fail,
+                        avg_ms=avg_ms,
+                        score=score,
+                        missing_assets=missing_assets,
+                        error=r.error if r.status != "ok" else "",
+                    ),
+                )
+
+    except KeyboardInterrupt:
+        cancel.cancel()
+        print("\nТест остановлен пользователем")
+    finally:
+        stop_zapret(ctx)
 
     # Persist classic results (txt + pin) by reusing existing helper.
     # We keep this behavior by building a minimal TestSessionSummary.

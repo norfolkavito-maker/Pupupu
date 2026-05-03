@@ -2,9 +2,9 @@
 
 ## Current status
 
-- Status: Not started
-- Current milestone: Phase 0 — Read and plan
-- Last verification: Not run
+- Status: In progress
+- Current milestone: Phase 2 — Test engine performance
+- Last verification: 2026-05-03 — PASS (`bash scripts/agent-verify.sh`)
 
 ## Milestones
 
@@ -12,6 +12,30 @@
 - [ ] Phase 1 — Implement safely (milestone-by-milestone)
 - [ ] Phase 2 — Self-review
 - [ ] Finalize — DoD + Acceptance checklist + Verification
+
+### 2026-05-03 22:43 — Stage 2: Strategy sweep speed controls (compact output + concurrency + timeouts)
+
+- Scope:
+  - Introduced speed settings stored in `state.json` (no config editing required):
+    - concurrency; connect/read timeouts; per-domain timeout; per-strategy deadline;
+    - dns cache toggle; equivalent strategy dedup toggle; detailed/compact output toggle.
+  - Implemented compact sweep output mode:
+    - parallel domain probes with periodic one-line progress;
+    - hard per-strategy deadline triggers cancellation and marks result INVALID.
+  - Added best-effort DNS cache for a sweep.
+  - Added equivalent-strategy deduplication by (engine + args).
+- Files changed:
+  - app/zapret_manager/features/strategy_test.py
+  - app/zapret_manager/core/state.py
+- Verification:
+  - Command(s):
+    - bash scripts/agent-verify.sh
+  - Result: PASS
+- Notes:
+  - Menu integration for editing speed settings is pending (Stage 2.3).
+  - Telemetry jsonl is now written per strategy (previously could write only once / had scope bug).
+- Next step:
+  - Add UI menu to edit speed settings + add unit tests for compact sweep and dedup.
 
 ## Change log
 

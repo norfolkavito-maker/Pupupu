@@ -177,6 +177,34 @@ bash scripts/agent-verify.sh
 ### Next step
 - Continue Stage 1 stabilization tasks (next from workflow list).
 
+## 2026-05-03 22:43 (Europe/Moscow) — Stage 2: strategy sweep speed controls
+
+### Scope
+- Add sweep speed settings stored in `state.json` (no config edits required).
+- Add compact sweep output mode with parallel domain checks.
+- Add per-strategy deadline + cancellation.
+- Add best-effort sweep DNS cache.
+- Add equivalent strategy deduplication (engine+args).
+
+### Files changed
+- app/zapret_manager/features/strategy_test.py
+- app/zapret_manager/core/state.py
+- docs/ai/PROGRESS.md
+
+### Commands run
+```text
+bash scripts/agent-verify.sh
+```
+
+### Results
+- PASS
+
+### Not verified
+- Manual Windows run with real winws/network.
+
+### Next step
+- Implement UI menu to edit speed settings and add unit tests for compact sweep + dedup.
+
 Template:
 
 ## YYYY-MM-DD HH:MM — <task title>
