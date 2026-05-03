@@ -152,6 +152,23 @@ Use one entry per milestone.
 - Next step:
   - Stage 1 / Task 4: `quic_initial_ietf.bin` in games profiles / overlays.
 
+### 2026-05-03 14:47 — Fix missing quic_initial_ietf.bin for discord quic4all overlay
+
+- Scope:
+  - Replaced reference to non-existent `{FAKE:quic_initial_ietf.bin}` in the `quic4all` discord script overlay with existing `{FAKE:quic_initial_www_google_com.bin}`.
+  - This avoids false INVALID preflight due to missing fake asset.
+- Files changed:
+  - `app/zapret_manager/strategies/composer.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_composer_unittest.py -q`
+    - `python3 -m pytest -q tests/test_winws_validate_unittest.py -q`
+  - Result: PASS
+- Commit:
+  - `dc75303` — `fix(runtime): avoid missing quic_initial_ietf fake asset for discord quic4all`
+- Next step:
+  - Continue Stage 1 stabilization tasks (diagnostics decoding / sing-box health / bug report artifacts / etc.).
+
 ## Final summary template
 
 When the task is complete, fill this section.
