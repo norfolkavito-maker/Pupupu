@@ -378,3 +378,41 @@ curl -s "https://api.github.com/repos/norfolkavito-maker/Pupupu/actions/runs/252
 
 ### Next step
 - Create GitHub Release for tag `v0.3.5-test.10` and attach CI artifacts.
+
+## 2026-05-03 11:05 (Europe/Moscow) — docs(ai): add local AI-agent workflow pack scaffold
+
+### Scope
+- Add repository-local AI-agent workflow pack:
+  - rule files and “task packet” structure under `docs/ai/`;
+  - placeholder prompt files under `docs/ai/prompts/`;
+  - verification scripts (`scripts/agent-verify.ps1`, `scripts/agent-verify.sh`);
+  - GitHub Copilot and Windsurf instruction files.
+
+### Files changed
+- AGENTS.md
+- LOCAL_AGENT_START_HERE.md (new)
+- README_AGENT_PACK.md (new)
+- docs/ai/* (new)
+- docs/ai/prompts/* (new)
+- scripts/agent-verify.ps1 (new)
+- scripts/agent-verify.sh (new)
+- .github/copilot-instructions.md (new)
+- .github/instructions/* (new)
+- .github/prompts/* (new)
+- .windsurf/rules/* (new)
+- docs/agent_worklog.md
+
+### Commands run
+```text
+python3 -V
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `scripts/agent-verify.sh` completed: **Agent verification passed**
+
+### Not verified
+- `scripts/agent-verify.ps1` run on a real Windows host.
+
+### Next step
+- Commit the agent pack scaffold as a single docs/chore commit.
