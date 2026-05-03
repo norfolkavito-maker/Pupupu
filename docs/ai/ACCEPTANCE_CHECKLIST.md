@@ -16,7 +16,7 @@
 
 ## Workflow stages
 
-- [ ] Stage 1 completed: `docs/ai/workflows/01_stabilization_fixes_test10.md`
+- [x] Stage 1 completed: `docs/ai/workflows/01_stabilization_fixes_test10.md`
 - [ ] Stage 2 completed: `docs/ai/workflows/02_test_engine_performance.md`
 - [ ] Stage 3 completed: `docs/ai/workflows/03_tray_and_menu_ux.md`
 
