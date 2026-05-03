@@ -128,6 +128,30 @@ Use one entry per milestone.
 - Next step:
   - Stage 1 / Task 3: Runtime assets repair from upstreams.
 
+### 2026-05-03 14:41 — Repair runtime assets using Flowseal upstreams
+
+- Scope:
+  - Extended runtime asset repair so it can source missing assets from Flowseal upstream directories:
+    - Fake `.bin` assets from `DedZapretData/data/upstreams/flowseal/bin`
+    - List assets (currently `list-general.txt`) from `DedZapretData/data/upstreams/flowseal/lists`
+  - Guardrails preserved:
+    - no downloads;
+    - no empty fake `.bin` creation.
+- Files changed:
+  - `app/zapret_manager/features/runtime_assets.py`
+  - `tests/test_runtime_assets_lists_repair_unittest.py`
+  - `tests/test_runtime_assets_fake_repair_unittest.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_runtime_assets_lists_repair_unittest.py -q`
+    - `python3 -m pytest -q tests/test_runtime_assets_fake_repair_unittest.py -q`
+    - `python3 -m pytest -q tests/test_runtime_assets_repair_unittest.py -q`
+  - Result: PASS
+- Commit:
+  - `a88b915` — `fix(runtime-assets): repair fake/list assets from flowseal upstream`
+- Next step:
+  - Stage 1 / Task 4: `quic_initial_ietf.bin` in games profiles / overlays.
+
 ## Final summary template
 
 When the task is complete, fill this section.
