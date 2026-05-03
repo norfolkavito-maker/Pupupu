@@ -119,8 +119,11 @@ def extract_winws_command(bat_text: str) -> ParsedCommand | None:
         args2: list[str] = []
         for a in args:
             # Legacy placeholders
-            a = a.replace("%BIN%", "{BIN}")
-            a = a.replace("%LISTS%", "{LISTS}")
+            # In Flowseal packs, BIN/LISTS normally point to upstream-local folders
+            # (".../flowseal/bin" and ".../flowseal/lists").
+            # They are NOT the same as runtime {BIN} (winws.exe dir) or manager {LISTS}.
+            a = a.replace("%BIN%", "{FLOWSEAL_BIN}")
+            a = a.replace("%LISTS%", "{FLOWSEAL_LISTS}")
             a = a.replace("%~dp0", "{UPSTREAM_ROOT}\\")
             # Explicit Flowseal placeholders (preferred)
             a = a.replace("{UPSTREAM_ROOT}", "{FLOWSEAL_ROOT}")

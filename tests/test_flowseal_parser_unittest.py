@@ -18,7 +18,8 @@ set LISTS=%~dp0lists\
         assert cmd is not None
         self.assertEqual(cmd.engine, "winws")
         self.assertIn("--wf-tcp=80,443", cmd.args)
-        self.assertTrue(any("{LISTS}" in a for a in cmd.args))
+        # Flowseal's %LISTS% should map to upstream-local lists dir, not manager lists.
+        self.assertTrue(any("{FLOWSEAL_LISTS}" in a for a in cmd.args))
 
     def test_extract_winws2(self):
         txt = r"""
