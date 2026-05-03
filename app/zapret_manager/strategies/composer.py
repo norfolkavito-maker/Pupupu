@@ -150,7 +150,8 @@ def _discord_script_args(script_name: str) -> list[str]:
             "--filter-udp=1-65535",
             "--dpi-desync=fake",
             "--dpi-desync-repeats=2",
-            "--dpi-desync-fake-unknown-udp={FAKE:quic_initial_ietf.bin}",
+            # keep compatibility with existing fake assets shipped/repairable
+            "--dpi-desync-fake-unknown-udp={FAKE:quic_initial_www_google_com.bin}",
         ]
     if s in {"50-discord-media", "discord-media"}:
         return ["--new", f"--filter-tcp={DISCORD_PORTS}", "--hostlist-domains=discord.media", "--dpi-desync=fake", "--dpi-desync-repeats=2"]
