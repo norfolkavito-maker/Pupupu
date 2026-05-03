@@ -26,6 +26,11 @@ class SingBoxHealthReport:
     version_error: str
 
     # nodes
+    nodes_file_exists: bool
+    nodes_file_size: int
+    nodes_schema_detected: str
+    load_nodes_error: str
+    subscriptions_count: int
     nodes_count: int
     active_node_id: str
     active_node_exists: bool
@@ -59,6 +64,10 @@ def _config_path(data_dir: Path) -> Path:
 def _recommendation(
     *,
     binary_found: bool,
+    nodes_file_exists: bool,
+    nodes_file_size: int,
+    load_nodes_error: str,
+    subscriptions_count: int,
     nodes_count: int,
     active_node_id: str,
     active_node_exists: bool,
@@ -71,6 +80,14 @@ def _recommendation(
         return "Установите sing-box (sing-box.exe отсутствует в bin/sing-box)."
 
     if nodes_count <= 0:
+        if nodes_file_exists and nodes_file_size > 0:
+            # Node file present but empty after parsing.
+            hint = "nodes.json найден, но ноды не прочитаны. Возможна несовместимая схема файла или ошибка парсера."
+            if load_nodes_error:
+                hint += f" Ошибка: {load_nodes_error}"
+            return hint
+        if subscriptions_count > 0:
+            return "Подписки найдены, но ноды не появились. Проверьте формат подписки и повторите Update subscriptions."
         return "Обновите подписки. Если ноды не появились — проверьте формат подписки."
 
     if not active_node_id or not active_node_exists:
@@ -115,8 +132,44 @@ def build_singbox_health_report(*, data_dir: Path, root_dir: Path) -> SingBoxHea
 
     # nodes + active
     nodes_path = (data_dir / "singbox" / "nodes.json").resolve()
-    nodes = load_nodes(nodes_path)
+    nodes_file_exists = nodes_path.exists() and nodes_path.is_file()
+    nodes_file_size = int(nodes_path.stat().st_size) if nodes_file_exists else 0
+    nodes_schema_detected = "missing"
+    load_nodes_error = ""
+
+    # Load nodes with schema detection
+    nodes = []
+    if nodes_file_exists:
+        try:
+            raw_nodes = nodes_path.read_text(encoding="utf-8", errors="replace")
+            try:
+                obj = json.loads(raw_nodes)
+                if isinstance(obj, list):
+                    nodes_schema_detected = "list"
+                elif isinstance(obj, dict):
+                    nodes_schema_detected = "dict"
+                else:
+                    nodes_schema_detected = type(obj).__name__
+            except Exception as e:
+                nodes_schema_detected = "invalid_json"
+                load_nodes_error = f"JSONDecodeError: {e}"
+
+            nodes = load_nodes(nodes_path)
+        except Exception as e:
+            load_nodes_error = f"{type(e).__name__}: {e}"
+            nodes = []
     nodes_count = len(nodes)
+
+    # subscriptions count (best-effort, no secrets)
+    subs_count = 0
+    try:
+        from app.zapret_manager.core.singbox.subscriptions import load_subscriptions
+
+        subs_path = (data_dir / "singbox" / "subscriptions.json").resolve()
+        subs = load_subscriptions(subs_path)
+        subs_count = len([s for s in subs if getattr(s, "enabled", True)])
+    except Exception:
+        subs_count = 0
     active_node_id = (cur.active_singbox_node_id or "").strip()
     active = next((n for n in nodes if n.node_id == active_node_id), None) if active_node_id else None
     active_node_exists = bool(active)
@@ -140,6 +193,10 @@ def build_singbox_health_report(*, data_dir: Path, root_dir: Path) -> SingBoxHea
 
     recommended_action = _recommendation(
         binary_found=binary_found,
+        nodes_file_exists=nodes_file_exists,
+        nodes_file_size=nodes_file_size,
+        load_nodes_error=mask_secrets_text(load_nodes_error),
+        subscriptions_count=int(subs_count),
         nodes_count=nodes_count,
         active_node_id=active_node_id,
         active_node_exists=active_node_exists,
@@ -155,6 +212,11 @@ def build_singbox_health_report(*, data_dir: Path, root_dir: Path) -> SingBoxHea
         version_ok=version_ok,
         version_text=mask_secrets_text(version_text),
         version_error=mask_secrets_text(version_error),
+        nodes_file_exists=bool(nodes_file_exists),
+        nodes_file_size=int(nodes_file_size),
+        nodes_schema_detected=str(nodes_schema_detected),
+        load_nodes_error=mask_secrets_text(load_nodes_error),
+        subscriptions_count=int(subs_count),
         nodes_count=nodes_count,
         active_node_id=active_node_id,
         active_node_exists=active_node_exists,
@@ -190,6 +252,11 @@ def format_singbox_health_text(r: SingBoxHealthReport) -> str:
         else:
             lines.append(f"Версия: FAIL{(': ' + r.version_error) if r.version_error else ''}")
 
+    nf = f"exists={yn(r.nodes_file_exists)} size={r.nodes_file_size} schema={r.nodes_schema_detected}"
+    lines.append(f"Nodes file: {nf}")
+    if r.load_nodes_error:
+        lines.append(f"Load nodes error: {r.load_nodes_error}")
+    lines.append(f"Подписок (enabled): {r.subscriptions_count}")
     lines.append(f"Ноды: {r.nodes_count}")
     if not r.active_node_id:
         lines.append("Активная нода: отсутствует")

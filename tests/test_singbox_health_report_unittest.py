@@ -61,7 +61,11 @@ class TestSingBoxHealthReport(unittest.TestCase):
                 det.return_value = type("B", (), {"path": d / "bin" / "sing-box" / "sing-box.exe"})()
                 r = build_singbox_health_report(data_dir=d, root_dir=d)
             self.assertEqual(r.nodes_count, 0)
-            self.assertIn("Обновите подписки", r.recommended_action)
+            # nodes.json exists but contains no parsed nodes => diagnostic hint
+            self.assertTrue(r.nodes_file_exists)
+            self.assertGreater(r.nodes_file_size, 0)
+            self.assertEqual(r.nodes_schema_detected, "list")
+            self.assertIn("nodes.json найден, но ноды не прочитаны", r.recommended_action)
 
     def test_active_node_empty_when_nodes_present(self):
         with tempfile.TemporaryDirectory() as td:
