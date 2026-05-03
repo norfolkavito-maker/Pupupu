@@ -10,6 +10,7 @@ from typing import Any
 
 from app.zapret_manager import __version__
 from app.zapret_manager.core.mask import mask_secrets
+from app.zapret_manager.utils.subprocessx import decode_bytes_best_effort
 
 
 def _utc_iso() -> str:
@@ -68,9 +69,25 @@ def generate_bug_report_zip(
         if os.name == "nt":
             import subprocess
 
+            import locale
+
             def _run(cmd: list[str]) -> str:
-                p = subprocess.run(cmd, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace")
-                return (p.stdout or "") + ("\n" + p.stderr if p.stderr else "")
+                # Windows console tools often use OEM code page (cp866 for RU).
+                # Use bytes mode + best-effort decoding.
+                p = subprocess.run(cmd, check=False, capture_output=True, text=False)
+                preferred = locale.getpreferredencoding(False) or "utf-8"
+                out, enc_out = decode_bytes_best_effort(p.stdout or b"", preferred=preferred)
+                err, enc_err = decode_bytes_best_effort(p.stderr or b"", preferred=preferred)
+                combined = out + ("\n" + err if err else "")
+                # store encoding hints for triage
+                meta.setdefault("network_encoding", {})
+                meta["network_encoding"]["preferred"] = preferred
+                meta["network_encoding"]["ipconfig"] = enc_out
+                meta["network_encoding"]["route_print"] = enc_out
+                meta["network_encoding"]["netsh_dns"] = enc_out
+                if enc_out != enc_err:
+                    meta["network_encoding"]["stderr"] = enc_err
+                return combined
 
             meta["network"] = {
                 "ipconfig": mask_secrets(_run(["ipconfig", "/all"])),
