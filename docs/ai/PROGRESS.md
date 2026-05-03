@@ -110,6 +110,24 @@ Use one entry per milestone.
 - Next step:
   - Stage 1 / Task 2: Flowseal asset resolution.
 
+### 2026-05-03 14:35 — Fix Flowseal placeholder mapping for upstream BIN/LISTS
+
+- Scope:
+  - Fixed Flowseal `.bat` parsing so `%BIN%` / `%LISTS%` placeholders map to upstream-local paths (`{FLOWSEAL_BIN}` / `{FLOWSEAL_LISTS}`), instead of runtime `{BIN}` / manager `{LISTS}`.
+  - This is required for imported Flowseal strategies to resolve assets under `DedZapretData/data/upstreams/flowseal/{bin,lists}`.
+- Files changed:
+  - `app/zapret_manager/strategies/flowseal_parser.py`
+  - `tests/test_flowseal_parser_unittest.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_flowseal_parser_unittest.py -q`
+    - `python3 -m pytest -q tests/test_winws_validate_unittest.py -q`
+  - Result: PASS
+- Commit:
+  - `5ee1eb0` — `fix(flowseal): map BIN/LISTS placeholders to upstream paths`
+- Next step:
+  - Stage 1 / Task 3: Runtime assets repair from upstreams.
+
 ## Final summary template
 
 When the task is complete, fill this section.
