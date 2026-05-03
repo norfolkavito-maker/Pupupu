@@ -169,6 +169,26 @@ Use one entry per milestone.
 - Next step:
   - Continue Stage 1 stabilization tasks (diagnostics decoding / sing-box health / bug report artifacts / etc.).
 
+### 2026-05-03 14:59 — Fix Windows diagnostics output decoding (OEM/cp866 fallback)
+
+- Scope:
+  - Introduced best-effort decoding helper for Windows subprocess output to avoid mojibake in diagnostics/bug report (`ipconfig`, `route`, `netsh`).
+  - Switched bug report network snapshot runner to bytes mode + decoding fallback.
+  - Added a unit test asserting cp866 fallback works.
+- Files changed:
+  - `app/zapret_manager/utils/subprocessx.py`
+  - `app/zapret_manager/core/report.py`
+  - `tests/test_windows_decode_cp866_unittest.py`
+- Verification:
+  - Command(s):
+    - `python3 -m pytest -q tests/test_windows_decode_cp866_unittest.py -q`
+    - `python3 -m pytest -q tests/test_bug_report_unittest.py -q`
+  - Result: PASS
+- Commit:
+  - `849f207` — `fix(diagnostics): decode Windows command output with OEM fallback`
+- Next step:
+  - Stage 1 / Task 6: sing-box nodes health schema/load errors report.
+
 ## Final summary template
 
 When the task is complete, fill this section.
