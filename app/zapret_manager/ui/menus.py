@@ -14,6 +14,8 @@ from app.zapret_manager.features.lists import update_exclude, update_rkn
 from app.zapret_manager.features.selection import find_strategy, list_bases, list_layers
 from app.zapret_manager.features.strategy_test import (
     DEFAULT_TEST_DOMAINS,
+    get_speed_settings,
+    set_speed_settings,
     TestResult,
     ProofResult,
     control_test,
@@ -109,6 +111,74 @@ from app.zapret_manager.core.commands import (
 
 
 log = logging.getLogger(__name__)
+
+
+def _test_concurrency(ctx: AppContext) -> int:
+    """Return current configured concurrency for domain checks."""
+    try:
+        s = get_speed_settings(ctx)
+        return int(s.get("concurrency", 8))
+    except Exception:
+        return 8
+
+
+def _speed_settings_menu(ctx: AppContext) -> None:
+    """UI to edit sweep/test speed settings stored in state.json.
+
+    Workflow 02 requirement: keep this under existing test menu.
+    """
+    while True:
+        clear()
+        s = get_speed_settings(ctx)
+        safe_print(f"{C.MAGENTA}Настройки скорости теста{C.RESET}\n")
+
+        safe_print(f"{C.CYAN}1){C.RESET} Параллельные проверки доменов: {s['concurrency']}")
+        safe_print(f"{C.CYAN}2){C.RESET} Connect timeout (сек): {s['connect_timeout_s']}")
+        safe_print(f"{C.CYAN}3){C.RESET} Read timeout (сек): {s['read_timeout_s']}")
+        safe_print(f"{C.CYAN}4){C.RESET} Общий лимит на домен (сек): {s['total_domain_timeout_s']}")
+        safe_print(f"{C.CYAN}5){C.RESET} Общий лимит на стратегию (сек): {s['max_strategy_time_s']}")
+        safe_print(
+            f"{C.CYAN}6){C.RESET} Подробный вывод в консоль: {'ON' if s['detailed_console_output'] else 'OFF'}"
+        )
+        safe_print(f"{C.CYAN}7){C.RESET} DNS cache: {'ON' if s['dns_cache'] else 'OFF'}")
+        safe_print(
+            f"{C.CYAN}8){C.RESET} Deduplicate одинаковые стратегии: {'ON' if s['deduplicate_equivalent_strategies'] else 'OFF'}"
+        )
+        safe_print("")
+
+        c = ask(f"{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+        if not c:
+            return
+
+        try:
+            if c == "1":
+                v = ask("Новая параллельность (1/4/8/16): ").strip()
+                if v.isdigit():
+                    set_speed_settings(ctx, {"concurrency": int(v)})
+            elif c == "2":
+                v = ask("Connect timeout (сек): ").strip().replace(",", ".")
+                set_speed_settings(ctx, {"connect_timeout_s": float(v)})
+            elif c == "3":
+                v = ask("Read timeout (сек): ").strip().replace(",", ".")
+                set_speed_settings(ctx, {"read_timeout_s": float(v)})
+            elif c == "4":
+                v = ask("Лимит на домен (сек): ").strip().replace(",", ".")
+                set_speed_settings(ctx, {"total_domain_timeout_s": float(v)})
+            elif c == "5":
+                v = ask("Лимит на стратегию (сек): ").strip().replace(",", ".")
+                set_speed_settings(ctx, {"max_strategy_time_s": float(v)})
+            elif c == "6":
+                set_speed_settings(ctx, {"detailed_console_output": not bool(s.get("detailed_console_output"))})
+            elif c == "7":
+                set_speed_settings(ctx, {"dns_cache": not bool(s.get("dns_cache"))})
+            elif c == "8":
+                set_speed_settings(
+                    ctx,
+                    {"deduplicate_equivalent_strategies": not bool(s.get("deduplicate_equivalent_strategies"))},
+                )
+        except Exception as e:
+            safe_print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+            pause()
 
 
 def _choose_test_mode() -> str:
@@ -525,7 +595,9 @@ def test_menu(ctx: AppContext) -> None:
     while True:
         clear()
         have_results = any(ctx.paths.results_dir.glob("results_*.txt"))
+        conc = _test_concurrency(ctx)
         print(f"{C.MAGENTA}Меню тестирования стратегий{C.RESET}\n")
+        print(f"{C.DIM}Speed: concurrency={conc} (меняется в 'S' → Настройки скорости теста){C.RESET}\n")
         print(f"{C.CYAN}0){C.RESET} {C.GREEN}Control test (без zapret){C.RESET}")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Тестировать стратегии v{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Тестировать стратегии Flowseal{C.RESET}")
@@ -537,6 +609,7 @@ def test_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}8){C.RESET} {C.GREEN}Proof-of-effect test (baseline vs strategy){C.RESET}")
         print(f"{C.CYAN}9){C.RESET} {C.GREEN}Авто-подбор по проблемным доменам{C.RESET}")
         print(f"{C.CYAN}T){C.RESET} {C.GREEN}Тест всех стратегий{C.RESET} (с прогрессом и рейтингом)")
+        print(f"{C.CYAN}S){C.RESET} {C.GREEN}Настройки скорости теста{C.RESET}")
         if have_results:
             print(f"{C.CYAN}A){C.RESET} {C.GREEN}Результаты тестирования стратегий{C.RESET}")
             print(f"{C.CYAN}D){C.RESET} {C.GREEN}Удалить результаты тестирования{C.RESET}")
@@ -566,6 +639,8 @@ def test_menu(ctx: AppContext) -> None:
                 _problem_domains_menu(ctx)
             elif c.lower() == "t":
                 _test_all_strategies_menu(ctx)
+            elif c.lower() == "s":
+                _speed_settings_menu(ctx)
             elif c.lower() == "a" and have_results:
                 _show_results(ctx)
             elif c.lower() == "d" and have_results:

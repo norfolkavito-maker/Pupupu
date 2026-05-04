@@ -27,7 +27,9 @@ class TestAllStrategiesWithProgress(unittest.TestCase):
     @patch("app.zapret_manager.features.strategy_test.test_strategy")
     @patch("app.zapret_manager.features.strategy_test.list_strategies")
     @patch("app.zapret_manager.features.strategy_test.save_strategy")
-    def test_quick_mode_builtin_only(self, mock_save, mock_list, mock_test_strategy):
+    @patch("app.zapret_manager.features.strategy_test.stop_zapret")
+    @patch("app.zapret_manager.features.strategy_test.start_zapret_interactive")
+    def test_quick_mode_builtin_only(self, _mock_start, _mock_stop, mock_save, mock_list, mock_test_strategy):
         from app.zapret_manager.features.strategy_test import test_all_strategies_with_progress
         from app.zapret_manager.features.strategy_test import DomainCheck
 

@@ -72,9 +72,24 @@ def get_speed_settings(ctx: AppContext) -> dict[str, Any]:
         except Exception:
             cur[k] = float(DEFAULT_SPEED_SETTINGS[k])
         cur[k] = max(0.1, cur[k])
-    cur["detailed_console_output"] = bool(cur.get("detailed_console_output", False))
-    cur["dns_cache"] = bool(cur.get("dns_cache", True))
-    cur["deduplicate_equivalent_strategies"] = bool(cur.get("deduplicate_equivalent_strategies", True))
+    def _as_bool(v: Any, default: bool) -> bool:
+        if v is None:
+            return default
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(v)
+        if isinstance(v, str):
+            s = v.strip().lower()
+            if s in {"1", "true", "yes", "y", "on"}:
+                return True
+            if s in {"0", "false", "no", "n", "off", ""}:
+                return False
+        return bool(v)
+
+    cur["detailed_console_output"] = _as_bool(cur.get("detailed_console_output", False), False)
+    cur["dns_cache"] = _as_bool(cur.get("dns_cache", True), True)
+    cur["deduplicate_equivalent_strategies"] = _as_bool(cur.get("deduplicate_equivalent_strategies", True), True)
     return cur
 
 
