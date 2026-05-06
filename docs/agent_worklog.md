@@ -824,3 +824,36 @@ bash scripts/agent-verify.sh
 
 ### Not verified
 - `./scripts/agent-verify.ps1` on a real Windows host.
+
+## 2026-05-06 00:22 (UTC) — chore(release): tag + push v0.3.5-test.11 (GitHub Release pending auth)
+
+### Task
+- Push changes to `origin/main` and prepare a new test release tag.
+
+### Scope
+- Bump `__version__` to `0.3.5-test.11`.
+- Add release notes: `release/v0.3.5-test.11-notes.md`.
+- Create annotated tag `v0.3.5-test.11`.
+- Push `main` and tag to GitHub.
+
+### Files changed
+- app/zapret_manager/__init__.py
+- release/v0.3.5-test.11-notes.md
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+git push origin main
+git push origin v0.3.5-test.11
+gh release create v0.3.5-test.11 -t v0.3.5-test.11 -F release/v0.3.5-test.11-notes.md --draft
+```
+
+### Results
+- `python3 -m pytest -q`: **164 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+- Push: **OK** (main + tag)
+- GitHub Release: **NOT created** (no `gh auth login` / `GH_TOKEN` in this environment)
+
+### Next step
+- Run `gh auth login` (or set `GH_TOKEN`) and re-run the `gh release create ...` command above to publish/attach CI artifacts.
