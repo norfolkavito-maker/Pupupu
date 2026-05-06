@@ -3,8 +3,8 @@
 ## Current status
 
 - Status: In progress
-- Current milestone: Phase 2 — Test engine performance
-- Last verification: 2026-05-03 — PASS (`bash scripts/agent-verify.sh`)
+- Current milestone: Phase 3 — Tray and menu UX
+- Last verification: 2026-05-05 — PASS (`python3 -m pytest -q`, `bash scripts/agent-verify.sh`)
 
 ## Milestones
 
@@ -36,6 +36,33 @@
   - Telemetry jsonl is now written per strategy (previously could write only once / had scope bug).
 - Next step:
   - Add UI menu to edit speed settings + add unit tests for compact sweep and dedup.
+
+### 2026-05-05 — Stage 2 completed: speed settings UI + bool normalization + test fixes
+
+- Scope:
+  - Added speed settings screen under test menu (concurrency/timeouts/dedup/compact/dns cache).
+  - Improved speed settings normalization (robust bool parsing: `0/1/true/false/on/off`).
+  - Added unit tests for speed settings.
+  - Fixed unit tests failing on non-Windows due to:
+    - new required fields in `SingBoxHealthReport`;
+    - Windows-only `stop_zapret` being invoked during tests.
+- Files changed:
+  - app/zapret_manager/ui/menus.py
+  - app/zapret_manager/features/strategy_test.py
+  - tests/test_speed_settings_unittest.py
+  - tests/test_commands_layer_unittest.py
+  - tests/test_test_all_strategies_with_progress_unittest.py
+  - docs/ai/PROGRESS.md
+  - docs/agent_worklog.md
+- Verification:
+  - Command(s):
+    - python3 -m pytest -q
+    - bash scripts/agent-verify.sh
+  - Result: PASS (перезапущено 2026-05-05 в рамках текущей сессии)
+- Commit:
+  - 8949cad — feat(test-engine): speed settings menu + normalize bools
+- Next step:
+  - Start Stage 3: tray + menu UX workflow.
 
 ## Change log
 

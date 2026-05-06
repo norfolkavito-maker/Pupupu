@@ -586,3 +586,31 @@ bash scripts/agent-verify.sh
 
 ### Next step
 - Commit the agent pack scaffold as a single docs/chore commit.
+
+## 2026-05-05 23:53 (UTC) — docs(ai): mark Stage 2 completed
+
+### Task
+- Close Workflow Stage 2 in docs and re-run verification before starting Stage 3.
+
+### Scope
+- Mark Stage 2 completed in `docs/ai/PROGRESS.md` and `docs/ai/ACCEPTANCE_CHECKLIST.md`.
+
+### Files changed
+- docs/ai/PROGRESS.md
+- docs/ai/ACCEPTANCE_CHECKLIST.md
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `python3 -m pytest -q`: **157 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+
+### Not verified
+- `./scripts/agent-verify.ps1` run on a real Windows host.
+
+### Next step
+- Continue Workflow 03: tray config gating + icons/status/menu + strategy/test menu UX.
