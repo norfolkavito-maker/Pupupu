@@ -19,7 +19,8 @@ class TestTrayConfigGating(unittest.TestCase):
         with mock.patch("builtins.__import__", side_effect=guarded_import):
             maybe_start_tray(ctx)  # must be a no-op
 
-    def test_tray_enabled_but_non_windows_does_not_import_tray_package(self):
+    @mock.patch("app.zapret_manager.utils.platform.is_windows", return_value=False)
+    def test_tray_enabled_but_non_windows_does_not_import_tray_package(self, _mock_is_windows):
         from app.zapret_manager.main import maybe_start_tray
 
         ctx = SimpleNamespace(config=SimpleNamespace(tray=SimpleNamespace(enabled=True)))
