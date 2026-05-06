@@ -653,3 +653,41 @@ bash scripts/agent-verify.sh
 
 ### Next step
 - Implement full tray menu tree + icons + background jobs, then polish strategy/test menus and add conflict validator.
+
+## 2026-05-06 00:10 (UTC) — feat(tray): icons + full menu tree + job status
+
+### Task
+- Implement Workflow 03 tray UX: statuses, icons, and a human-oriented menu structure.
+
+### Scope
+- Add `tray_icons.get_icon(level)` (lazy Pillow import + cache).
+- Extend tray status mapping:
+  - purple BUSY overlay when tray job is running/cancel_requested;
+  - tooltip includes engine mode + recommended strategy when available.
+- Replace flat tray menu with a grouped menu tree:
+  - Основное / VPN / Стратегии / Диагностика / Настройки + Выход.
+  - VPN location chooser lists masked node labels and routes to `core.commands` only.
+- Add best-effort notifications when a tray job finishes or an action fails.
+
+### Files changed
+- app/zapret_manager/tray/tray_icons.py
+- app/zapret_manager/tray/tray_app.py
+- app/zapret_manager/tray/tray_menu.py
+- app/zapret_manager/tray/tray_status.py
+- app/zapret_manager/main.py
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `python3 -m pytest -q`: **157 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+
+### Not verified
+- Real tray behavior on Windows host (pystray/Pillow installed, icon rendering, notifications).
+
+### Next step
+- Add tray menu/spec unit tests and proceed to strategy/test menus polish + conflict validator.

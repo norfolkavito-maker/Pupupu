@@ -27,6 +27,7 @@ def maybe_start_tray(ctx: AppContext) -> None:
     from app.zapret_manager.tray.tray_app import TrayApp
 
     refresh_ms = int(getattr(tray_cfg, "refresh_interval_ms", 1500) or 1500)
+    show_notifications = bool(getattr(tray_cfg, "show_notifications", True))
 
     # Best-effort: minimize console window if requested (do not hide).
     if bool(getattr(tray_cfg, "start_minimized", False)):
@@ -43,7 +44,7 @@ def maybe_start_tray(ctx: AppContext) -> None:
     import threading
 
     t = threading.Thread(
-        target=lambda: TrayApp(ctx, refresh_interval_ms=refresh_ms).run(),
+        target=lambda: TrayApp(ctx, refresh_interval_ms=refresh_ms, show_notifications=show_notifications).run(),
         daemon=True,
         name="TrayApp",
     )
