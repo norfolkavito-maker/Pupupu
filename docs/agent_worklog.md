@@ -796,3 +796,31 @@ bash scripts/agent-verify.sh
 
 ### Next step
 - Finalize Stage 3: update `docs/ai/PROGRESS.md`, `docs/ai/ACCEPTANCE_CHECKLIST.md`, verify, commit.
+
+## 2026-05-06 00:20 (UTC) — docs(ai): finalize Stage 3 (progress + checklist + context map)
+
+### Task
+- Finalize Workflow 03 documentation and acceptance status.
+
+### Scope
+- Update navigation map to include new tray package and conflict validator module.
+- Mark Stage 3 completed in acceptance checklist and fill final checklist items.
+- Update progress log with Stage 3 completion summary and latest verification timestamp.
+
+### Files changed
+- docs/ai/CONTEXT_MAP.md
+- docs/ai/PROGRESS.md
+- docs/ai/ACCEPTANCE_CHECKLIST.md
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `python3 -m pytest -q`: **164 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+
+### Not verified
+- `./scripts/agent-verify.ps1` on a real Windows host.

@@ -3,8 +3,8 @@
 ## Current status
 
 - Status: In progress
-- Current milestone: Phase 3 — Tray and menu UX
-- Last verification: 2026-05-05 — PASS (`python3 -m pytest -q`, `bash scripts/agent-verify.sh`)
+- Current milestone: Finalize — DoD + Acceptance checklist + Verification
+- Last verification: 2026-05-06 — PASS (`python3 -m pytest -q`, `bash scripts/agent-verify.sh`)
 
 ## Milestones
 
@@ -63,6 +63,39 @@
   - 8949cad — feat(test-engine): speed settings menu + normalize bools
 - Next step:
   - Start Stage 3: tray + menu UX workflow.
+
+### 2026-05-06 — Stage 3 completed: tray + menu UX
+
+- Scope:
+  - Optional tray layer (lazy `pystray/Pillow`, Windows-only startup, no tray deps at import time).
+  - Tray statuses + colored icons + grouped menu:
+    - Основное / VPN / Стратегии / Диагностика / Настройки / Выход.
+  - Background jobs for long tray actions (single-job lock, best-effort notifications).
+  - Runtime engine override mode `state.zapret.engine_mode` (auto|winws|winws2) exposed via tray.
+  - Strategy/test menus polish (grouping, short hints, рейтинг helpers, output mode toggle).
+  - Conflict validator MVP (UDP/443 + fake QUIC) with console UX screen.
+- Files changed/added:
+  - app/zapret_manager/tray/*
+  - app/zapret_manager/main.py
+  - app/zapret_manager/core/commands.py
+  - app/zapret_manager/core/config.py
+  - app/zapret_manager/core/state.py
+  - app/zapret_manager/features/zapret_runtime.py
+  - app/zapret_manager/features/strategy_conflicts.py
+  - app/zapret_manager/ui/menus.py
+  - tests/test_tray_*_unittest.py
+  - tests/test_strategy_conflicts_unittest.py
+  - config.yaml
+  - docs/ai/CONTEXT_MAP.md
+  - docs/agent_worklog.md
+- Commits:
+  - 3fe4aca — feat(tray): add optional tray app and config gating
+  - 8b20b11 — feat(tray): icons, statuses, full tray menu + jobs
+  - c5b52ee — test(tray): cover menu spec and config gating
+  - d1160a8 — ux(menu): polish strategy and test menus
+  - 96e7ede — feat(strategies): add conflict validator UX
+- Next step:
+  - Update Acceptance checklist final section and re-run verification.
 
 ## Change log
 

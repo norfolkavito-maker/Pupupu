@@ -84,6 +84,12 @@ Main runtime entry points:
   - `ui/menus.py` — menu routing.
   - `ui/main_menu.py` — main menu screen.
   - `ui/tray.py` — tray-related integration.
+- `app/zapret_manager/tray/` — optional system tray layer (lazy `pystray/Pillow`).
+  - `tray_app.py` — tray lifecycle + refresh loop
+  - `tray_menu.py` — menu spec builder + action router (calls `core/commands.py`)
+  - `tray_status.py` — status mapping to tray tooltip/level
+  - `tray_icons.py` — icon generation (lazy Pillow)
+  - `tray_worker.py` — single-job worker for long tray actions
 
 ### Proxy / networking / sing-box / zapret
 
@@ -106,6 +112,7 @@ Main runtime entry points:
 - `config.yaml` — main configuration file (repo root).
 - `app/zapret_manager/core/paths.py` — defines portable/data roots.
 - `app/zapret_manager/core/state.py` — state model.
+- `app/zapret_manager/features/strategy_conflicts.py` — conflict detection for strategy/layer combinations (UX helper).
 
 ### Updates / release / packaging
 
