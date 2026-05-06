@@ -691,3 +691,36 @@ bash scripts/agent-verify.sh
 
 ### Next step
 - Add tray menu/spec unit tests and proceed to strategy/test menus polish + conflict validator.
+
+## 2026-05-06 00:12 (UTC) — test(tray): menu spec + config gating + action routing
+
+### Task
+- Add unit coverage for tray UX invariants without requiring real pystray/Pillow.
+
+### Scope
+- Ensure `maybe_start_tray()` does not import tray package when:
+  - `tray.enabled=false`;
+  - `tray.enabled=true` on non-Windows.
+- Validate grouped tray menu spec can be built from a fake `CommandResult`.
+- Validate key tray actions route through `core.commands` wrappers (mocked at `tray_menu` boundary).
+
+### Files changed
+- tests/test_tray_config_gating_unittest.py
+- tests/test_tray_menu_spec_unittest.py
+- tests/test_tray_actions_unittest.py
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `python3 -m pytest -q`: **162 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+
+### Not verified
+- Real tray UI integration (pystray backend specifics).
+
+### Next step
+- Proceed to Stage 3 menu UX polish (strategies/tests) and conflict validator MVP.
