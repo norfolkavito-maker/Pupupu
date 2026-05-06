@@ -386,7 +386,7 @@ def strategies_menu(ctx: AppContext) -> None:
 def _strategy_conflicts_menu(ctx: AppContext) -> None:
     """MVP conflicts checker (Workflow 03).
 
-    Full logic lives in `features/strategy_conflicts.py` (added in Stage 3 later).
+    Full logic lives in `features/strategy_conflicts.py`.
     """
     clear()
     print(f"{C.MAGENTA}Проверка конфликтов (MVP){C.RESET}\n")
@@ -396,10 +396,7 @@ def _strategy_conflicts_menu(ctx: AppContext) -> None:
         rep = build_conflict_report_for_current_layers(ctx)
         print(rep)
     except Exception as e:
-        print(
-            "Функция ещё не реализована полностью.\n"
-            "Пока доступна как Future / Planned.\n"
-        )
+        print(f"{C.RED}Не удалось выполнить проверку:{C.RESET} {e}\n")
     pause()
 
 

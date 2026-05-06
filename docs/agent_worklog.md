@@ -762,3 +762,37 @@ bash scripts/agent-verify.sh
 
 ### Next step
 - Implement conflict validator MVP (`features/strategy_conflicts.py`) + tests, then finalize Stage 3 docs/checklist.
+
+## 2026-05-06 00:18 (UTC) — feat(strategies): conflict validator MVP (UDP/443 fake QUIC)
+
+### Task
+- Add first conflict validator UX hook as requested by Workflow 03.
+
+### Scope
+- Implement `features/strategy_conflicts.py`:
+  - builds composed args for current base/layers;
+  - detects obvious conflicts: multiple UDP/443 + fake QUIC blocks;
+  - outputs human-readable Russian report with recommendation (no auto-merge).
+- Wire conflicts screen in `ui/menus.py` to the new module (no Future/Planned placeholder).
+- Add unit tests for conflict detection (no real network, no strategy file writes).
+
+### Files changed
+- app/zapret_manager/features/strategy_conflicts.py
+- app/zapret_manager/ui/menus.py
+- tests/test_strategy_conflicts_unittest.py
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `python3 -m pytest -q`: **164 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+
+### Not verified
+- Manual confirmation on Windows with real strategy sets that exhibit the conflict (needs user environment).
+
+### Next step
+- Finalize Stage 3: update `docs/ai/PROGRESS.md`, `docs/ai/ACCEPTANCE_CHECKLIST.md`, verify, commit.
