@@ -7,11 +7,55 @@ from app.zapret_manager.core.diagnostics import github_issue_url, open_url
 from app.zapret_manager.ui.main_menu import run_main_menu
 
 
+def maybe_start_tray(ctx: AppContext) -> None:
+    """Start optional tray icon in background (Windows-only, lazy deps).
+
+    Must not import tray deps unless enabled in config.
+    """
+    tray_cfg = getattr(getattr(ctx, "config", None), "tray", None)
+    if not (tray_cfg and bool(getattr(tray_cfg, "enabled", False))):
+        return
+
+    from app.zapret_manager.utils.console import C, safe_print
+    from app.zapret_manager.utils.platform import is_windows
+
+    if not is_windows():
+        safe_print(f"{C.YELLOW}Tray включён в config, но доступен только на Windows.{C.RESET}")
+        return
+
+    # Lazy import: tray package itself is optional.
+    from app.zapret_manager.tray.tray_app import TrayApp
+
+    refresh_ms = int(getattr(tray_cfg, "refresh_interval_ms", 1500) or 1500)
+
+    # Best-effort: minimize console window if requested (do not hide).
+    if bool(getattr(tray_cfg, "start_minimized", False)):
+        try:
+            import ctypes
+
+            SW_MINIMIZE = 6
+            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+            if hwnd:
+                ctypes.windll.user32.ShowWindow(hwnd, SW_MINIMIZE)
+        except Exception:
+            pass
+
+    import threading
+
+    t = threading.Thread(
+        target=lambda: TrayApp(ctx, refresh_interval_ms=refresh_ms).run(),
+        daemon=True,
+        name="TrayApp",
+    )
+    t.start()
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     ctx = AppContext.bootstrap(argv=argv)
     exit_code = 0
     try:
+        maybe_start_tray(ctx)
         exit_code = int(run_main_menu(ctx))
     finally:
         try:
@@ -65,4 +109,3 @@ def main(argv: list[str] | None = None) -> int:
             pass
 
     return exit_code
-

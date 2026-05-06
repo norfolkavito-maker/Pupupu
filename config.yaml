@@ -43,6 +43,13 @@ doh:
   listen_addr: 127.0.0.1
   listen_port: 5053
 
+tray:
+  enabled: false
+  start_minimized: false
+  close_to_tray: false
+  show_notifications: true
+  refresh_interval_ms: 1500
+
 diagnostics:
   enabled: false
   record_console_io: true

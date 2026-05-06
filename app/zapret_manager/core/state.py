@@ -29,6 +29,7 @@ class ZapretRunState:
     pid: int | None = None
     base_strategy: str = ""
     selected_strategy: str = ""
+    engine_mode: str = "auto"  # auto|winws|winws2 (override for start/build, does not modify strategies)
     youtube_layer: str = ""
     discord_layer: str = ""
     discord_script: str = ""
@@ -83,6 +84,7 @@ class AppState:
                 "pid": self.zapret.pid,
                 "base_strategy": self.zapret.base_strategy,
                 "selected_strategy": self.zapret.selected_strategy,
+                "engine_mode": self.zapret.engine_mode,
                 "youtube_layer": self.zapret.youtube_layer,
                 "discord_layer": self.zapret.discord_layer,
                 "discord_script": self.zapret.discord_script,
@@ -144,6 +146,7 @@ def load_state(path: Path) -> AppState:
         pid=z.get("pid"),
         base_strategy=str(z.get("base_strategy", "")),
         selected_strategy=str(z.get("selected_strategy", "")),
+        engine_mode=str(z.get("engine_mode", "auto") or "auto"),
         youtube_layer=str(z.get("youtube_layer", "")),
         discord_layer=str(z.get("discord_layer", "")),
         discord_script=str(z.get("discord_script", "")),

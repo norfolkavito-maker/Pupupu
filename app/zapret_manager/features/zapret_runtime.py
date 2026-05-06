@@ -1092,6 +1092,15 @@ def start_zapret_interactive(
         engine_override = composed.engine
         warnings = list(composed.warnings)
 
+    # Optional engine override (does not modify strategy files).
+    # Default "auto" preserves current behavior: engine is taken from strategy/compose.
+    try:
+        mode = str(getattr(getattr(ctx, "state", None), "zapret", None).engine_mode or "auto").strip().lower()
+    except Exception:
+        mode = "auto"
+    if mode in {"winws", "winws2"}:
+        engine_override = mode
+
     # Preflight: stale PID cleanup (do not trust state blindly).
     if ctx.state.zapret.pid and not is_pid_alive(int(ctx.state.zapret.pid)):
         log.warning("state has stale winws pid=%s; clearing", ctx.state.zapret.pid)

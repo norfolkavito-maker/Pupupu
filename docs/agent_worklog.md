@@ -614,3 +614,42 @@ bash scripts/agent-verify.sh
 
 ### Next step
 - Continue Workflow 03: tray config gating + icons/status/menu + strategy/test menu UX.
+
+## 2026-05-06 00:06 (UTC) — feat(tray): config gating + engine mode override groundwork
+
+### Task
+- Start Workflow 03 implementation with minimal, safe foundations (no tray deps at startup).
+
+### Scope
+- Add `tray.*` config section (enabled/start_minimized/close_to_tray/show_notifications/refresh_interval_ms).
+- Add `state.zapret.engine_mode` (auto|winws|winws2) as a runtime override (does not modify strategy files).
+- Extend `core.commands` for tray/UX:
+  - richer `get_status_summary` (recommended from latest ranking rows; pid_alive; engine_mode);
+  - `set_engine_mode(...)`, `apply_recommended_strategy(...)`;
+  - sing-box local proxy start/stop/restart + set active node;
+  - open logs folder (Windows-only).
+- Wire `maybe_start_tray(ctx)` into `app/zapret_manager/main.py` (Windows-only; lazy imports; optional).
+
+### Files changed
+- config.yaml
+- app/zapret_manager/core/config.py
+- app/zapret_manager/core/state.py
+- app/zapret_manager/features/zapret_runtime.py
+- app/zapret_manager/core/commands.py
+- app/zapret_manager/main.py
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `python3 -m pytest -q`: **157 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+
+### Not verified
+- `./scripts/agent-verify.ps1` run on a real Windows host.
+
+### Next step
+- Implement full tray menu tree + icons + background jobs, then polish strategy/test menus and add conflict validator.

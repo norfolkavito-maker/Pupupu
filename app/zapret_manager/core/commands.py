@@ -96,13 +96,25 @@ def get_status_summary(ctx) -> CommandResult:
         # zapret state
         zap = getattr(getattr(ctx, "state", None), "zapret", None)
         active_strategy = ""
+        engine_mode = "auto"
         if zap:
             # selected_strategy is preferred, fallback to base_strategy
             active_strategy = str(getattr(zap, "selected_strategy", "") or getattr(zap, "base_strategy", "") or "").strip()
+            engine_mode = str(getattr(zap, "engine_mode", "auto") or "auto").strip().lower() or "auto"
 
         running = bool(getattr(zap, "running", False)) if zap else False
         pid = getattr(zap, "pid", None) if zap else None
         pid_int = int(pid) if pid else 0
+        pid_alive: bool | None = None
+        try:
+            from app.zapret_manager.utils.platform import is_windows
+
+            if is_windows() and pid_int:
+                from app.zapret_manager.features.zapret_runtime import is_pid_alive
+
+                pid_alive = bool(is_pid_alive(pid_int))
+        except Exception:
+            pid_alive = None
 
         # sing-box short health (cheap)
         sb = build_singbox_health_report(data_dir=ctx.paths.data_dir, root_dir=ctx.paths.root)
@@ -120,7 +132,13 @@ def get_status_summary(ctx) -> CommandResult:
 
                 obj = json.loads(p.read_text(encoding="utf-8", errors="replace"))
                 if isinstance(obj, dict):
-                    recommended = str(obj.get("recommended") or "")
+                    rows = obj.get("rows")
+                    if isinstance(rows, list):
+                        # pick best ok row by rank (file is rank-sorted)
+                        ok_rows = [r for r in rows if isinstance(r, dict) and str(r.get("status") or "ok") == "ok"]
+                        if ok_rows:
+                            best = ok_rows[0]
+                            recommended = str(best.get("strategy") or best.get("name") or "")
         except Exception:
             recommended = ""
 
@@ -134,6 +152,8 @@ def get_status_summary(ctx) -> CommandResult:
                 "active_strategy": active_strategy,
                 "running": running,
                 "pid": pid_int,
+                "pid_alive": pid_alive,
+                "engine_mode": engine_mode,
             },
             "profile": {"active": "unknown"},
             "singbox": {
@@ -149,6 +169,201 @@ def get_status_summary(ctx) -> CommandResult:
         return success("Статус получен.", details=details)
     except Exception as e:
         return from_exception(e, "Не удалось получить статус.")
+
+
+def set_engine_mode(ctx, mode: str) -> CommandResult:
+    """Set runtime engine override mode for zapret start.
+
+    mode: auto|winws|winws2
+    """
+    try:
+        m = (mode or "").strip().lower()
+        if m not in {"auto", "winws", "winws2"}:
+            return failure("Неверный engine mode.", errors=[f"mode={mode!r}"])
+        ctx.state.zapret.engine_mode = m
+        try:
+            from app.zapret_manager.core.state import save_state
+
+            save_state(ctx.paths.state_file, ctx.state)
+        except Exception:
+            pass
+        running = bool(getattr(getattr(ctx, "state", None), "zapret", None) and ctx.state.zapret.running)
+        msg = f"Runtime engine mode: {m}."
+        if running:
+            msg += " Применится после перезапуска."
+        return success(msg, details={"engine_mode": m, "running": running})
+    except Exception as e:
+        return from_exception(e, "Не удалось обновить engine mode.")
+
+
+def apply_recommended_strategy(ctx, *, restart_if_running: bool = True) -> CommandResult:
+    """Apply strategy recommended by the latest ranking json (if present)."""
+    try:
+        from app.zapret_manager.features.selection import find_strategy
+        from app.zapret_manager.core.state import save_state
+
+        p = (ctx.paths.data_dir / "telemetry" / "latest_strategy_ranking.json").resolve()
+        if not p.exists():
+            return failure("Рейтинг ещё не создан. Запустите 'Тест всех стратегий'.", errors=["latest_strategy_ranking.json missing"])
+
+        import json
+
+        obj = json.loads(p.read_text(encoding="utf-8", errors="replace"))
+        if not isinstance(obj, dict):
+            return failure("Файл рейтинга повреждён.", errors=["ranking json is not a dict"])
+        rows = obj.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return failure("Рейтинг пуст.", errors=["rows empty"])
+
+        ok_rows = [r for r in rows if isinstance(r, dict) and str(r.get("status") or "ok") == "ok"]
+        best = ok_rows[0] if ok_rows else next((r for r in rows if isinstance(r, dict)), None)
+        if not isinstance(best, dict):
+            return failure("Не удалось выбрать стратегию из рейтинга.", errors=["no usable rows"])
+        name = str(best.get("strategy") or best.get("name") or "").strip()
+        if not name:
+            return failure("Не удалось выбрать стратегию из рейтинга.", errors=["strategy name missing"])
+
+        st = find_strategy(ctx, name, kind="base") or find_strategy(ctx, name)
+        if not st:
+            return failure("Рекомендованная стратегия не найдена локально.", errors=[f"strategy '{name}' not found"])
+
+        ctx.state.zapret.base_strategy = st.name
+        ctx.state.zapret.selected_strategy = st.name
+        save_state(ctx.paths.state_file, ctx.state)
+
+        if restart_if_running and bool(ctx.state.zapret.running):
+            r = restart_current(ctx)
+            if not r.ok:
+                return failure(
+                    "Стратегия выбрана, но перезапуск не удался.",
+                    errors=r.errors,
+                    warnings=r.warnings,
+                    details={"strategy": st.name, "restart_current": r.to_dict()},
+                )
+            return success("Рекомендованная стратегия применена и перезапущена.", details={"strategy": st.name, "restart_current": r.to_dict()})
+
+        return success("Рекомендованная стратегия применена.", details={"strategy": st.name, "restart_needed": bool(ctx.state.zapret.running)})
+    except Exception as e:
+        return from_exception(e, "Не удалось применить рекомендованную стратегию.")
+
+
+def singbox_start_local_proxy(ctx) -> CommandResult:
+    """Start sing-box local proxy without touching system proxy."""
+    try:
+        from app.zapret_manager.core.process_supervisor import ProcessSupervisor
+        from app.zapret_manager.core.current_state import load_current_state
+        from app.zapret_manager.core.singbox.binary import detect_singbox_binary
+        from app.zapret_manager.core.singbox.process import SingBoxProcess
+
+        cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+        _ = load_current_state(cur_path)  # ensure file exists/shape
+        sup = ProcessSupervisor(current_state_file=cur_path)
+        bin = detect_singbox_binary(ctx.paths.root)
+        if not bin:
+            return failure("sing-box.exe не найден.", errors=["singbox binary missing"])
+        proc = SingBoxProcess(
+            supervisor=sup,
+            bin_path=bin.path,
+            config_path=(ctx.paths.data_dir / "singbox" / "generated_config.json").resolve(),
+            log_file=(ctx.paths.logs_dir / "singbox.log").resolve(),
+        )
+        pid = proc.start()
+        return success("sing-box запущен (local proxy).", details={"pid": int(pid or 0)})
+    except Exception as e:
+        return from_exception(e, "Не удалось запустить sing-box.")
+
+
+def singbox_stop(ctx) -> CommandResult:
+    try:
+        from app.zapret_manager.core.process_supervisor import ProcessSupervisor
+        from app.zapret_manager.core.current_state import load_current_state
+        from app.zapret_manager.core.singbox.binary import detect_singbox_binary
+        from app.zapret_manager.core.singbox.process import SingBoxProcess
+
+        cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+        cur = load_current_state(cur_path)
+        pid = None
+        if cur.processes.get("singbox"):
+            pid = cur.processes["singbox"].pid
+        sup = ProcessSupervisor(current_state_file=cur_path)
+        bin = detect_singbox_binary(ctx.paths.root)
+        if not bin:
+            # clear state anyway
+            sup.set_process("singbox", pid=None, running=False)
+            return success("sing-box остановлен (state cleared).", details={"pid": int(pid or 0), "binary_missing": True})
+        proc = SingBoxProcess(
+            supervisor=sup,
+            bin_path=bin.path,
+            config_path=(ctx.paths.data_dir / "singbox" / "generated_config.json").resolve(),
+            log_file=(ctx.paths.logs_dir / "singbox.log").resolve(),
+        )
+        proc.stop(pid)
+        return success("sing-box остановлен.", details={"pid": int(pid or 0)})
+    except Exception as e:
+        return from_exception(e, "Не удалось остановить sing-box.")
+
+
+def singbox_restart(ctx) -> CommandResult:
+    try:
+        st = singbox_stop(ctx)
+        if not st.ok:
+            return failure("Не удалось перезапустить sing-box: stop завершился с ошибкой.", errors=st.errors, warnings=st.warnings, details={"stop": st.to_dict()})
+        started = singbox_start_local_proxy(ctx)
+        if not started.ok:
+            return failure("Не удалось перезапустить sing-box: start завершился с ошибкой.", errors=started.errors, warnings=st.warnings + started.warnings, details={"stop": st.to_dict(), "start": started.to_dict()})
+        return success("sing-box перезапущен.", details={"stop": st.to_dict(), "start": started.to_dict()}, warnings=st.warnings + started.warnings)
+    except Exception as e:
+        return from_exception(e, "Не удалось перезапустить sing-box.")
+
+
+def singbox_set_active_node(ctx, node_id: str, *, restart: bool = True) -> CommandResult:
+    """Set active sing-box node id (masked in output)."""
+    try:
+        from app.zapret_manager.core.current_state import load_current_state, save_current_state
+        from app.zapret_manager.core.singbox.nodes import load_nodes
+
+        wanted = (node_id or "").strip()
+        if not wanted:
+            return failure("Пустой node_id.", errors=["node_id is empty"])
+
+        nodes = load_nodes((ctx.paths.data_dir / "singbox" / "nodes.json").resolve())
+        node = next((n for n in nodes if n.node_id == wanted), None)
+        if not node:
+            return failure("Нода не найдена.", errors=[f"node_id={wanted}"])
+
+        cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+        cur = load_current_state(cur_path)
+        cur.active_singbox_node_id = wanted
+        save_current_state(cur_path, cur)
+
+        if restart:
+            r = singbox_restart(ctx)
+            if not r.ok:
+                return failure(
+                    "Нода выбрана, но перезапуск sing-box не удался.",
+                    errors=r.errors,
+                    warnings=r.warnings,
+                    details={"active_node_id": wanted, "restart": r.to_dict()},
+                )
+            return success("Нода выбрана и sing-box перезапущен.", details={"active_node_id": wanted, "node": node.masked_summary(), "restart": r.to_dict()})
+
+        return success("Нода выбрана.", details={"active_node_id": wanted, "node": node.masked_summary()})
+    except Exception as e:
+        return from_exception(e, "Не удалось выбрать ноду.")
+
+
+def open_logs_dir(ctx) -> CommandResult:
+    try:
+        from app.zapret_manager.utils.platform import is_windows
+        from subprocess import Popen
+
+        p = ctx.paths.logs_dir.resolve()
+        if is_windows():
+            Popen(["explorer.exe", str(p)])  # noqa: S603,S607
+            return success("Открыта папка логов.", details={"path": p})
+        return failure("Открытие папки логов доступно только на Windows.", errors=["windows-only"], details={"path": p})
+    except Exception as e:
+        return from_exception(e, "Не удалось открыть папку логов.")
 
 
 def generate_diagnostics_artifacts(ctx) -> CommandResult:

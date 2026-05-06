@@ -81,6 +81,15 @@ class DoHSection:
 
 
 @dataclass(frozen=True)
+class TraySection:
+    enabled: bool = False
+    start_minimized: bool = False
+    close_to_tray: bool = False
+    show_notifications: bool = True
+    refresh_interval_ms: int = 1500
+
+
+@dataclass(frozen=True)
 class AppConfig:
     app: AppSection = field(default_factory=AppSection)
     zapret: ZapretSection = field(default_factory=ZapretSection)
@@ -88,6 +97,7 @@ class AppConfig:
     network: NetworkSection = field(default_factory=NetworkSection)
     game_launcher: GameLauncherSection = field(default_factory=GameLauncherSection)
     doh: DoHSection = field(default_factory=DoHSection)
+    tray: TraySection = field(default_factory=TraySection)
     diagnostics: "DiagnosticsSection" = field(default_factory=lambda: DiagnosticsSection())
 
 
@@ -194,6 +204,14 @@ def load_config(path: Path) -> AppConfig:
         listen_port=int(_get(data, ["doh", "listen_port"], 5053)),
     )
 
+    tray = TraySection(
+        enabled=bool(_get(data, ["tray", "enabled"], False)),
+        start_minimized=bool(_get(data, ["tray", "start_minimized"], False)),
+        close_to_tray=bool(_get(data, ["tray", "close_to_tray"], False)),
+        show_notifications=bool(_get(data, ["tray", "show_notifications"], True)),
+        refresh_interval_ms=int(_get(data, ["tray", "refresh_interval_ms"], 1500)),
+    )
+
     reporting = DiagnosticsReportingSection(
         mode=str(_get(data, ["diagnostics", "reporting", "mode"], "github_issue")),
         github_repo=str(_get(data, ["diagnostics", "reporting", "github_repo"], "norfolkavito-maker/Pupupu")),
@@ -213,6 +231,6 @@ def load_config(path: Path) -> AppConfig:
         network=network,
         game_launcher=game_launcher,
         doh=doh,
+        tray=tray,
         diagnostics=diagnostics,
     )
-
