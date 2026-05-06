@@ -290,32 +290,70 @@ def strategies_menu(ctx: AppContext) -> None:
     """
     while True:
         clear()
+        # Human-friendly header (Workflow 03)
+        print(
+            "Стратегия — это технический набор параметров winws.\n"
+            "Профиль — это пользовательский сценарий (например Discord или Games).\n"
+        )
         base = ctx.state.zapret.base_strategy or "-"
         yv = ctx.state.zapret.youtube_layer or "-"
         dv = ctx.state.zapret.discord_layer or "-"
         rkn = "ON" if ctx.state.zapret.rkn_enabled else "OFF"
         gv = ctx.state.zapret.games_profile or "-"
         wss = "ON" if ctx.state.zapret.wssize_enabled else "OFF"
+        eng = (getattr(ctx.state.zapret, "engine_mode", "auto") or "auto").strip().lower()
+
+        # Best-effort: show recommended strategy from latest ranking
+        recommended = "-"
+        try:
+            from app.zapret_manager.core.commands import get_status_summary
+
+            ss = get_status_summary(ctx)
+            if ss.ok and isinstance(ss.details, dict):
+                latest = ss.details.get("latest_ranking")
+                if isinstance(latest, dict):
+                    recommended = str(latest.get("recommended") or "").strip() or "-"
+        except Exception:
+            recommended = "-"
+
         print(f"{C.MAGENTA}Меню стратегий{C.RESET}\n")
         print(f"{C.YELLOW}Base:{C.RESET} {C.CYAN}{base}{C.RESET}")
+        print(f"{C.YELLOW}Recommended:{C.RESET} {C.CYAN}{recommended}{C.RESET}")
+        print(f"{C.YELLOW}Engine mode:{C.RESET} {C.CYAN}{eng}{C.RESET}")
         print(f"{C.YELLOW}YouTube:{C.RESET} {C.CYAN}{yv}{C.RESET}")
         print(f"{C.YELLOW}Discord:{C.RESET} {C.CYAN}{dv}{C.RESET}")
         print(f"{C.YELLOW}RKN:{C.RESET} {C.CYAN}{rkn}{C.RESET}")
         print(f"{C.YELLOW}Games:{C.RESET} {C.CYAN}{gv}{C.RESET}")
         print(f"{C.YELLOW}wssize:{C.RESET} {C.CYAN}{wss}{C.RESET}\n")
 
+        print(f"{C.DIM}Основное:{C.RESET}")
+        print(f"{C.CYAN}R){C.RESET} {C.GREEN}Выбрать Recommended{C.RESET} {C.DIM}— по последнему рейтингу{C.RESET}")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Выбрать и установить стратегию v1-v9{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Выбрать и установить стратегию от Flowseal{C.RESET}")
+        print(f"\n{C.DIM}Профили / слои:{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Выбрать и установить стратегию для YouTube{C.RESET}")
         print(f"{C.CYAN}4){C.RESET} {C.GREEN}Выбрать и установить стратегию для игр{C.RESET}")
+        print(f"\n{C.DIM}Опции:{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Включить / Выключить обход по спискам РКН{C.RESET}")
         print(f"{C.CYAN}6){C.RESET} {C.GREEN}Обновить список исключений{C.RESET}")
         print(f"{C.CYAN}7){C.RESET} {C.GREEN}Добавить / Удалить блок с --wssize 1:6{C.RESET}")
+        print(f"{C.CYAN}C){C.RESET} {C.GREEN}Проверить конфликты текущих слоёв{C.RESET} {C.DIM}(MVP){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
         try:
-            if c == "1":
+            if c.lower() == "r":
+                from app.zapret_manager.core.commands import apply_recommended_strategy
+
+                r = apply_recommended_strategy(ctx, restart_if_running=True)
+                if r.ok:
+                    print(f"\n{C.GREEN}{r.message}{C.RESET}\n")
+                else:
+                    print(f"\n{C.RED}{r.message}{C.RESET}\n")
+                    for e in r.errors:
+                        print(f"- {e}")
+                pause()
+            elif c == "1":
                 v = ask("\nВведите версию стратегии (1-9): ").strip()
                 if v.isdigit() and 1 <= int(v) <= 9:
                     _set_base(ctx, f"v{int(v)}")
@@ -335,12 +373,34 @@ def strategies_menu(ctx: AppContext) -> None:
                 ctx.state.zapret.wssize_enabled = not ctx.state.zapret.wssize_enabled
                 save_state(ctx.paths.state_file, ctx.state)
                 _restart_if_running(ctx)
+            elif c.lower() == "c":
+                _strategy_conflicts_menu(ctx)
             else:
                 continue
         except Exception as e:
             log.exception("strategies_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
             pause()
+
+
+def _strategy_conflicts_menu(ctx: AppContext) -> None:
+    """MVP conflicts checker (Workflow 03).
+
+    Full logic lives in `features/strategy_conflicts.py` (added in Stage 3 later).
+    """
+    clear()
+    print(f"{C.MAGENTA}Проверка конфликтов (MVP){C.RESET}\n")
+    try:
+        from app.zapret_manager.features.strategy_conflicts import build_conflict_report_for_current_layers
+
+        rep = build_conflict_report_for_current_layers(ctx)
+        print(rep)
+    except Exception as e:
+        print(
+            "Функция ещё не реализована полностью.\n"
+            "Пока доступна как Future / Planned.\n"
+        )
+    pause()
 
 
 def _set_base(ctx: AppContext, name: str) -> None:
@@ -597,22 +657,41 @@ def test_menu(ctx: AppContext) -> None:
         have_results = any(ctx.paths.results_dir.glob("results_*.txt"))
         conc = _test_concurrency(ctx)
         print(f"{C.MAGENTA}Меню тестирования стратегий{C.RESET}\n")
+        print(
+            "Здесь проверяется, какие стратегии реально работают в вашей сети.\n"
+            "Для первого подбора используйте “Тест всех стратегий”.\n"
+            "Для проверки без обхода используйте “Control test”.\n"
+        )
         print(f"{C.DIM}Speed: concurrency={conc} (меняется в 'S' → Настройки скорости теста){C.RESET}\n")
-        print(f"{C.CYAN}0){C.RESET} {C.GREEN}Control test (без zapret){C.RESET}")
+
+        print(f"{C.DIM}Основное:{C.RESET}")
+        print(f"{C.CYAN}T){C.RESET} {C.GREEN}Тест всех стратегий{C.RESET} {C.DIM}— рейтинг + прогресс{C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Тест текущей стратегии{C.RESET} {C.DIM}— быстрый sanity-check{C.RESET}")
+        print(f"{C.CYAN}0){C.RESET} {C.GREEN}Control test (без zapret){C.RESET} {C.DIM}— базовая доступность{C.RESET}")
+        print(f"{C.CYAN}9){C.RESET} {C.GREEN}Тест проблемных доменов / автоподбор{C.RESET} {C.DIM}— TOP-5 и применение{C.RESET}")
+        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Proof-of-effect test{C.RESET} {C.DIM}— baseline vs strategy{C.RESET}")
+
+        print(f"\n{C.DIM}Группы стратегий:{C.RESET}")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Тестировать стратегии v{C.RESET}")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Тестировать стратегии Flowseal{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Тестировать v и Flowseal стратегии{C.RESET}")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Тестировать текущую стратегию{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Тестировать стратегии по домену{C.RESET}")
         print(f"{C.CYAN}6){C.RESET} {C.GREEN}YouTube auto-test (Yv){C.RESET}")
-        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Выбрать набор доменов{C.RESET} (Default/YouTube/CDN/Amazon)")
-        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Proof-of-effect test (baseline vs strategy){C.RESET}")
-        print(f"{C.CYAN}9){C.RESET} {C.GREEN}Авто-подбор по проблемным доменам{C.RESET}")
-        print(f"{C.CYAN}T){C.RESET} {C.GREEN}Тест всех стратегий{C.RESET} (с прогрессом и рейтингом)")
-        print(f"{C.CYAN}S){C.RESET} {C.GREEN}Настройки скорости теста{C.RESET}")
+
+        print(f"\n{C.DIM}Результаты:{C.RESET}")
+        print(f"{C.CYAN}L){C.RESET} {C.GREEN}Последний рейтинг стратегий{C.RESET}")
+        print(f"{C.CYAN}R){C.RESET} {C.GREEN}Применить Recommended стратегию{C.RESET}")
+        print(f"{C.CYAN}P){C.RESET} {C.GREEN}Сохранить TOP-5{C.RESET}")
         if have_results:
             print(f"{C.CYAN}A){C.RESET} {C.GREEN}Результаты тестирования стратегий{C.RESET}")
             print(f"{C.CYAN}D){C.RESET} {C.GREEN}Удалить результаты тестирования{C.RESET}")
+
+        print(f"\n{C.DIM}Настройки теста:{C.RESET}")
+        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Выбрать набор доменов{C.RESET}")
+        print(f"{C.CYAN}S){C.RESET} {C.GREEN}Настройки скорости теста{C.RESET}")
+        print(f"{C.CYAN}O){C.RESET} {C.GREEN}Подробный / компактный вывод{C.RESET}")
+        if have_results:
+            pass
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -641,6 +720,24 @@ def test_menu(ctx: AppContext) -> None:
                 _test_all_strategies_menu(ctx)
             elif c.lower() == "s":
                 _speed_settings_menu(ctx)
+            elif c.lower() == "o":
+                s = get_speed_settings(ctx)
+                set_speed_settings(ctx, {"detailed_console_output": not bool(s.get("detailed_console_output"))})
+            elif c.lower() == "l":
+                _show_latest_ranking(ctx)
+            elif c.lower() == "r":
+                from app.zapret_manager.core.commands import apply_recommended_strategy
+
+                r = apply_recommended_strategy(ctx, restart_if_running=True)
+                if r.ok:
+                    print(f"\n{C.GREEN}{r.message}{C.RESET}\n")
+                else:
+                    print(f"\n{C.RED}{r.message}{C.RESET}\n")
+                    for e in r.errors:
+                        print(f"- {e}")
+                pause()
+            elif c.lower() == "p":
+                _save_top5(ctx)
             elif c.lower() == "a" and have_results:
                 _show_results(ctx)
             elif c.lower() == "d" and have_results:
@@ -652,6 +749,96 @@ def test_menu(ctx: AppContext) -> None:
             log.exception("test_menu failed")
             print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
             pause()
+
+
+def _read_latest_ranking_json(ctx: AppContext) -> dict | None:
+    try:
+        p = (ctx.paths.data_dir / "telemetry" / "latest_strategy_ranking.json").resolve()
+        if not p.exists():
+            return None
+        import json
+
+        obj = json.loads(p.read_text(encoding="utf-8", errors="replace"))
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
+def _recommended_from_ranking(ranking: dict | None) -> str:
+    if not ranking:
+        return ""
+    rows = ranking.get("rows")
+    if not isinstance(rows, list):
+        return ""
+    ok_rows = [r for r in rows if isinstance(r, dict) and str(r.get("status") or "ok") == "ok"]
+    best = ok_rows[0] if ok_rows else next((r for r in rows if isinstance(r, dict)), None)
+    if not isinstance(best, dict):
+        return ""
+    return str(best.get("strategy") or best.get("name") or "").strip()
+
+
+def _show_latest_ranking(ctx: AppContext) -> None:
+    clear()
+    ranking = _read_latest_ranking_json(ctx)
+    if not ranking:
+        safe_print(f"{C.YELLOW}Рейтинг ещё не создан.{C.RESET} Запустите “Тест всех стратегий”.\n")
+        pause()
+        return
+    created_at = str(ranking.get("created_at") or ranking.get("ts") or "-")
+    domain_set = str(ranking.get("domain_set") or "-")
+    mode = str(ranking.get("mode") or "-")
+    rec = _recommended_from_ranking(ranking) or "-"
+
+    safe_print(f"{C.MAGENTA}Последний рейтинг стратегий{C.RESET}\n")
+    safe_print(f"created_at: {created_at}")
+    safe_print(f"domain_set: {domain_set}")
+    safe_print(f"mode: {mode}")
+    safe_print(f"recommended: {rec}\n")
+
+    rows = ranking.get("rows")
+    if isinstance(rows, list):
+        for i, r in enumerate(rows[:10], start=1):
+            if not isinstance(r, dict):
+                continue
+            name = str(r.get("strategy") or r.get("name") or "-")
+            ok = r.get("ok")
+            fail = r.get("fail")
+            score = r.get("score")
+            status = str(r.get("status") or "ok")
+            safe_print(f"{i:02d}. {name} | ok={ok} fail={fail} score={score} status={status}")
+    safe_print("")
+    pause()
+
+
+def _save_top5(ctx: AppContext) -> None:
+    ranking = _read_latest_ranking_json(ctx)
+    if not ranking:
+        safe_print(f"\n{C.YELLOW}Рейтинг ещё не создан.{C.RESET} Запустите “Тест всех стратегий”.\n")
+        pause()
+        return
+    rows = ranking.get("rows")
+    if not isinstance(rows, list) or not rows:
+        safe_print(f"\n{C.YELLOW}Рейтинг пуст.{C.RESET}\n")
+        pause()
+        return
+
+    ok_rows = [r for r in rows if isinstance(r, dict) and str(r.get("status") or "ok") == "ok"]
+    top = ok_rows[:5]
+    if not top:
+        safe_print(f"\n{C.YELLOW}Нет валидных стратегий в рейтинге (все INVALID/CRASHED).{C.RESET}\n")
+        pause()
+        return
+
+    out_dir = (ctx.paths.data_dir / "telemetry").resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = (out_dir / "latest_strategy_top5.txt").resolve()
+    lines = ["TOP-5 strategies (latest ranking):"]
+    for i, r in enumerate(top, start=1):
+        name = str(r.get("strategy") or r.get("name") or "-")
+        lines.append(f"{i}. {name}")
+    out.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    safe_print(f"\n{C.GREEN}Сохранено:{C.RESET} {out}\n")
+    pause()
 
 
 def _domains_for_current_set(ctx: AppContext) -> list[str]:
@@ -1855,4 +2042,3 @@ def _auto_tune_top5_by_problem_domains(ctx: AppContext) -> None:
     except Exception as e:
         print(f"\n{C.RED}Не удалось запустить с выбранной стратегией:{C.RESET} {e}\n")
     pause()
-

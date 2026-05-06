@@ -724,3 +724,41 @@ bash scripts/agent-verify.sh
 
 ### Next step
 - Proceed to Stage 3 menu UX polish (strategies/tests) and conflict validator MVP.
+
+## 2026-05-06 00:16 (UTC) — ux(menu): polish strategies and test menus (grouping + hints)
+
+### Task
+- Make strategy/test sections human-friendly without removing advanced functionality.
+
+### Scope
+- `Стратегии`:
+  - Add short description (strategy vs profile).
+  - Show status block: Base + Recommended + Engine mode + current layers.
+  - Add `R) Выбрать Recommended` action (uses `core.commands.apply_recommended_strategy`).
+  - Add `C) Проверить конфликты текущих слоёв` entry (placeholder until conflict validator is added).
+- `Тесты`:
+  - Add short description + regroup items by intent (Основное/Группы/Результаты/Настройки).
+  - Add `O) Подробный / компактный вывод` toggle (maps to speed setting `detailed_console_output`).
+  - Add рейтинг helpers:
+    - `L) Последний рейтинг стратегий` (prints summary from `latest_strategy_ranking.json`);
+    - `R) Применить Recommended стратегию`;
+    - `P) Сохранить TOP-5` into telemetry text file.
+
+### Files changed
+- app/zapret_manager/ui/menus.py
+
+### Commands run
+```text
+python3 -m pytest -q
+bash scripts/agent-verify.sh
+```
+
+### Results
+- `python3 -m pytest -q`: **162 passed**
+- `bash scripts/agent-verify.sh`: **Agent verification passed**
+
+### Not verified
+- Manual UX review on Windows console (layout/hints readability).
+
+### Next step
+- Implement conflict validator MVP (`features/strategy_conflicts.py`) + tests, then finalize Stage 3 docs/checklist.
