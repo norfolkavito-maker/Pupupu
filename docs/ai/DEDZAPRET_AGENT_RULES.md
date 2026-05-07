@@ -1,59 +1,97 @@
 # DedZapret Agent Rules
 
-These rules apply to any work on DedZapret Manager or related Windows zapret/winws2 tooling.
+Правила безопасности для DedZapret Manager.
 
-## Project identity
+---
 
-DedZapret Manager is a Windows operations manager for Flowseal `winws2`, zapret strategies, testing, sing-box proxy/VPN, DNS/hosts/network operations, autostart/tray, profiles, diagnostics, updates, repair and bug reports.
+## 1. Общие принципы
 
-It is not a simple `.bat` launcher.
+### 1.1 Безопасность прежде всего
+- **Никогда не компромисс безопасности**
+- **Zero Trust** — ничего и никто не доверять
+- **Defense in depth** — многоуровневая защита
 
-## Mandatory read order
+### 1.2 Принципы разработки
+- **Fresh build** — всегда fresh build, не migration
+- **Preserve behavior** — сохранять полезное поведение
+- **Extract intent** — извлекать намерение
 
-Before work begins, read:
+---
 
-1. `AGENTS.md`
-2. `docs/ai/MASTER_TASK.md`
-3. `docs/ai/RUNTIME_SOURCE_POLICY.md`
-4. `docs/ai/REGRESSION_PREVENTION_CHECKLIST.md`
-5. `docs/ai/STRATEGY_COMPATIBILITY_WORKFLOW.md`
-6. `docs/ai/development_history_merged.md` if present
-7. Relevant files under `docs/ai/prompts/`
+## 2. Правила безопасности
 
-## Work discipline
+### 2.1 Никаких секретов в коде
+- **Hardcoded secrets** — API ключи, токены, пароли
+- **Configuration files** — все настройки в конфигурационных файлах
+- **Environment variables** — использование переменных окружения
+- **Masking** — маскировка секретов в логах
 
-- Write a short plan in `docs/ai/PROGRESS.md` before editing code.
-- Work one milestone at a time.
-- Run verification after each meaningful milestone.
-- Update `PROGRESS.md` after each milestone.
-- Use `BLOCKERS.md` only for blockers that cannot be solved locally.
-- Do not stop until DoD is complete or a real blocker is documented.
+### 2.2 Проверка прав администратора
+- **Explicit checks** — явные проверки is_admin()
+- **User confirmation** — запрос прав у пользователя
+- **Audit logging** — логирование использования прав
+- **Minimum privilege** — использовать только необходимые права
 
-## Safety constraints
+### 2.3 Безопасное выполнение процессов
+- **No shell=True** — только list argv, не shell=True
+- **Parameter validation** — валидация параметров
+- **Process isolation** — изоляция процессов
 
-- No unsafe `shell=True`.
-- No direct unsafe `ZipFile.extractall()`.
-- No destructive updates without backup.
-- No critical state writes without atomic replace.
-- No Windows system operations without admin/preflight checks.
-- No unverified downloads or execution of staged binaries.
-- No secret leakage in logs, diagnostics or reports.
-- No silent fallback from `winws2.exe` to `winws.exe`.
+---
 
-## Strategy constraints
+## 3. Правила разработки
 
-- Every strategy must have source provenance.
-- Every strategy must have compatibility status.
-- Flowseal is the preferred Windows `winws2` runtime source.
-- StressOzz is a workflow/strategy source that requires normalization.
-- bol-van is the technical semantics reference.
-- Do not auto-activate newly imported strategies.
-- Experimental or risky strategies require confirmation.
+### 3.1 Fresh build vs Migration
+- **Fresh build** — всегда fresh build
+- **Extract intent** — извлечение намерения
+- **Clean implementation** — чистая реализация
 
-## Logging constraints
+### 3.2 Изучение upstream источников
+- **Read and understand** — читать и понимать
+- **Extract patterns** — извлекать паттерны
+- **Adapt, don't copy** — адаптировать, не копировать
 
-Every meaningful runtime, updater, network, proxy, strategy, diagnostic or state-changing action must be audit-logged with masked sensitive values.
+---
 
-## Documentation constraints
+## 4. Тестирование и валидация
 
-If user-visible behavior changes, update docs. If architecture changes, update context maps. If a historical bug is addressed, mention the corresponding P-code/TASK item in `PROGRESS.md` or `CHANGELOG.md`.
+### 4.1 Characterization tests
+- **Capture current behavior** — захват текущего поведения
+- **Test all scenarios** — тестирование всех сценариев
+
+### 4.2 Unit tests
+- **Test public API** — тестирование публичного API
+- **Edge cases** — тестирование крайних случаев
+
+---
+
+## 5. Обработка ошибок
+
+### 5.1 User-friendly messages
+- **Clear language** — понятный язык
+- **Actionable suggestions** — полезные советы
+- **Error codes** — коды ошибок
+
+### 5.2 Error handling patterns
+- **Graceful degradation** — плавное degradation
+- **Safe fallback** — безопасные альтернативы
+
+---
+
+## 6. Логирование и аудит
+
+### 6.1 Audit logging
+- **All actions** — все действия
+- **Structured format** — структурированный формат
+- **No sensitive data** — нет чувствительных данных
+
+### 6.2 Secret masking
+- **API keys** — API ключи
+- **Tokens** — токены
+- **Passwords** — пароли
+
+---
+
+**Документация обновлена:** 2026-05-07  
+**Версия документа:** 1.0  
+**Автор:** DedZapret Team

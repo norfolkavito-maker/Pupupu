@@ -1,85 +1,241 @@
-# PRODUCT OVERVIEW
+# DedZapret Manager — Product Overview
 
-This document provides a high‑level overview of the DedZapret Manager product.  It describes what the program is and is not, maps upstream sources to internal layers, outlines the user workflow and main capabilities, explains the runtime and data model, summarises the safety model and lists the guiding agent rules.  It serves as an executive summary for stakeholders and a starting point for new contributors.
+**Версия:** 0.4.0  
+**Статус:** Rebuild  
+**Платформа:** Windows (portable)  
+**Лицензия:详见 LICENSE**
 
-## One‑line description
+---
 
-**DedZapret Manager** is a portable Windows 10/11 manager for DPI desynchronisation (`zapret/winws2`), strategies, testing, proxy/VPN connectivity, autostart/tray, profiles and diagnostics.
+## 1. Что такое DedZapret Manager?
 
-## What this program is
+DedZapret Manager — это портативная утилита для управления обходом DPI (Deep Packet Inspection) с помощью техники DPI-desync. Она служит "менеджером" для нескольких технологий:
 
-* A **Windows operations manager** that wraps the low‑level `zapret/winws2` runtime and provides a safe interface for choosing and composing strategies.
-* A **strategy orchestrator** that imports, validates, classifies and combines base strategies with service‑specific layers (Discord, YouTube, Games) and optional modes (RKN/exclude, wssize).
-* A **test engine** that measures the effectiveness of strategies via DNS, TCP/UDP and HTTP/HTTPS probes and ranks them for the user.
-* An **optional proxy/VPN client** that manages sing‑box nodes and subscriptions, providing SOCKS/HTTP/Mixed proxy and system proxy integration.
-* A **profile manager** allowing users to save sets of settings for different scenarios and automatically start/stop runtime based on watched processes.
-* A **system integrator** that modifies DNS, hosts, QUIC blocking, TCP timestamps and autostart safely with backup and rollback.
-* A **diagnostics and reporting tool** that checks system and runtime health and creates masked bug report archives.
+- **zapret/winws2** — основная технология обхода DPI
+- **Flowseal/StressOzz** — стратегии обхода из других проектов
+- **sing-box** — proxy/VPN nodes для дополнительного обхода
+- **Диагностика и тестирование** — проверка работоспособности
+- **Профили и автозапуск** — автоматизация сценариев использования
 
-## What this program is not
+---
 
-* Not just a bat launcher; users should never edit `.bat` files manually.
-* Not a simple clone of Flowseal or StressOzz; it unifies and normalises their behaviour.
-* Not a general VPN client; the proxy layer is optional and separate from DPI desynchronisation.
-* Not a random collection of scripts; it must follow a layered architecture with clear responsibilities.
-* Not a replacement for bol‑van/zapret’s Linux tooling; it targets Windows only.
+## 2. Целевая аудитория
 
-## Upstream source model
+### Основные пользователи:
+- **Технические пользователи**, знающие о DPI и обходе
+- **Игроки**, нуждающиеся в обходе для онлайн-игр
+- **Пользователи с ограниченным доступом к интернету**
 
-The program uses three upstreams:
+### Требования к пользователям:
+- Базовые технические навыки
+- Права администратора для установки/работы
+- Понимание рисков использования обхода DPI
 
-* **bol‑van/zapret** – canonical semantics of DPI desynchronisation; reference for desync methods, hostlist/ipset, blockcheck.  Not a source of Windows code.
-* **Flowseal/zapret‑discord‑youtube** – provides the Windows runtime (`winws2.exe`), runtime assets (bin/lists/fake), example strategies and service management scripts.  This is the base for runtime operations.
-* **StressOzz/Zapret‑Manager** – supplies workflow ideas, additional strategies (Dv/Yv/Gv), update logic and menu organisation.  Used as a reference for features and imported as data.
+---
 
-Mapping these sources to layers ensures that semantics (bol‑van), runtime (Flowseal) and workflow (StressOzz) are kept separate and can be updated independently.
+## 3. Ключевые возможности
 
-## User workflow
+### 3.1 Управление стратегиями
+- Импорт стратегий из Flowseal/StressOzz
+- Встроенные стратегии (v1-v9)
+- Классификация по типам и совместимости
+- Редактирование и кастомизация
 
-1. **Installation:** User extracts DedZapret and runs the executable.  Preflight checks verify system readiness and prompt for missing runtime or strategies.
-2. **Choosing a strategy:** User selects a base strategy and adds layers (Discord/YouTube/Games/RKN/wssize).  The program composes and applies the strategy.
-3. **Testing:** User runs quick or full tests.  The test engine compares baseline and strategy performance and provides a ranking.
-4. **Proxy/VPN (optional):** User imports nodes or subscriptions for sing‑box, previews them, updates and starts proxy.  System proxy can be toggled.
-5. **Profiles:** User saves combinations of settings as profiles, assigns watchers for processes, enables autostart and tray.
-6. **Updating:** User updates Flowseal runtime and imports new strategies from StressOzz.  Repair operations fix missing assets.
-7. **Diagnostics and reporting:** User runs diagnostics to see system health; bug reports package logs and configs with secrets masked.
+### 3.2 Тестирование и диагностика
+- Автоматическое тестирование всех стратегий
+- Проверка доменов и сетевых возможностей
+- Мониторинг состояния runtime
+- Генерация отчетов и логов
 
-## Main capabilities
+### 3.3 Proxy/VPN интеграция
+- Поддержка sing-box nodes
+- Импорт подписок
+- Системный proxy
+- Превью без активации
 
-* **Strategy selection and composition** – choose from built‑in, imported, generated and custom strategies and combine them with service‑specific layers.
-* **Testing and ranking** – run baseline and per‑strategy tests, save results and recommend the best strategies.
-* **Proxy/VPN management** – import nodes/subscriptions, configure ports, start/stop proxy and system proxy.
-* **Network operations** – toggle DoH, edit hosts file, block QUIC, toggle TCP timestamps.
-* **Profiles and autostart/tray** – manage named scenarios, auto‑start when Windows boots, control via system tray.
-* **Diagnostics and bug reports** – perform health checks, collect logs, mask secrets and package reports.
-* **Updates and repair** – sync with upstream sources, replace runtime safely, repair missing assets and backup important data.
+### 3.4 Автоматизация
+- Профили для разных сценариев
+- Автозапуск через Task Scheduler
+- Process watcher
+- Last working profile recovery
 
-## Runtime and data model
+### 3.5 Интерфейсы
+- Console UI (основной)
+- System tray (опционально)
+- Progress indicators
+- User-friendly сообщения
 
-* All runtime assets live under `DedZapretData/runtime/zapret` for winws2 and under `DedZapretData/runtime/singbox` for proxy binaries.
-* Configuration resides in `config.yaml`; persistent state in `state.json`; runtime state in `current.json`.
-* Logs are stored in `logs/`, telemetry in `data/telemetry`, reports in `reports/` and imported upstream data in `data/upstreams`.
-* Strategies are stored in `strategies/builtin`, `strategies/generated`, `strategies/custom` and imported locations; registry holds metadata and classification.
-* Tests produce JSONL files and ranking JSONs; profiles are stored alongside config.
+---
 
-## Safety model
+## 4. Архитектура продукта
 
-* **Preflight checks** ensure that runtime binaries and drivers exist and that user has necessary privileges.
-* **Atomic writes and backups** are used for config/state/log modifications and updates.
-* **Validation** of strategies prevents unsupported or dangerous arguments from being executed.
-* **Rollback** is available for hosts/DNS modifications, runtime updates and autostart tasks.
-* **Masking** of sensitive data ensures that bug reports do not expose secrets.
-* **Agent rules** (see `AGENT_RULES_RUNTIME_REBUILD.md`) protect against unsafe refactoring and enforce upstream separation.
+### 4.1 Слои приложения
+```
+┌─────────────────────────────────┐
+│          UI Layer               │  ← Console + Tray
+├─────────────────────────────────┤
+│        Command Layer            │  ← Menu actions + CLI
+├─────────────────────────────────┤
+│      Feature Layer             │  ← Tests, Diagnostics, Profiles
+├─────────────────────────────────┤
+│    Strategy Registry           │  ← Strategy management
+├─────────────────────────────────┤
+│ Runtime Management Layer       │  ← winws2 + sing-box
+├─────────────────────────────────┤
+│      Core Foundation           │  ← Config, State, Paths
+└─────────────────────────────────┘
+```
 
-## Agent rules summary
+### 4.2 Ключевые модули
+- **`core/`** — Foundation (config, state, paths, audit)
+- **`features/`** — Business logic (tests, diagnostics, profiles)
+- **`strategies/`** — Strategy management
+- **`core/singbox/`** — Proxy/VPN management
+- **`ui/`** — Console UI
+- **`tray/`** — System tray (optional)
 
-* Do not mix upstream sources; treat bol‑van, Flowseal and StressOzz as separate roles.
-* Prefer winws2 and avoid silent fallback to winws.
-* Preserve behaviour; mark unused code for later verification rather than deleting.
-* Verify downloads and checksums; do not execute staged binaries immediately.
-* Log and audit all operations; mask secrets.
-* Ask the user before making high‑impact changes (e.g. removing legacy support).
+### 4.3 Data Flow
+1. Пользователь выбирает стратегию/профиль
+2. Strategy Registry validates и готовит стратегию
+3. Runtime Layer запускает winws2/sing-box
+4. Test Engine проверяет работоспособность
+5. UI показывает статус и результаты
 
-## Future architecture direction
+---
 
-Refer to `PROGRAM_BLUEPRINT.md` and `REBUILD_PLAN.md` for a detailed blueprint and migration sequence.  In summary, the program will be rebuilt into layers: core utilities, upstream sync, runtime management, strategy registry, test engine, proxy layer, Windows operations, profiles, and user interfaces (console, tray and future GUI).  Each layer will have clear interfaces and unit tests.  Characterization tests will ensure that the new implementation preserves all existing behaviour while enabling safer and more powerful features.
+## 5. Технологический стек
+
+### 5.1 Язык и платформа
+- **Python 3.10+** — основной язык
+- **Windows-only** — специфичные Windows API
+- **Portable** — no installation required
+
+### 5.2 Зависимости
+- **pywin32** — Windows API
+- **PyYAML** — configuration parsing
+- **requests** — HTTP requests
+- **psutil** — process management
+- **rich** — enhanced console UI
+
+### 5.3 Внешние бинарники
+- **winws2.exe** — основной обходчик
+- **sing-box.exe** — proxy/VPN (опционально)
+- **WinDivert** — network capturing
+
+---
+
+## 6. Безопасность и конфиденциальность
+
+### 6.1 Принципы безопасности
+- **No hardcoded secrets** — все конфиденциальные данные в конфиге
+- **Admin checks** — явные проверки прав администратора
+- **Safe operations** — backup/rollback для всех изменений
+- **Audit logging** — все действия логируются
+- **Secret masking** — токены и пароли маскируются в логах
+
+### 6.2 Защита данных
+- **Portable layout** — данные хранятся в DedZapretData
+- **Encryption** — чувствительные данные шифруются
+- **No telemetry** — нет отправки данных разработчикам
+- **Local only** — все операции локальные
+
+---
+
+## 7. Тестирование
+
+### 7.1 Подход к тестированию
+- **Characterization testing** — тесты для существующего поведения
+- **Unit tests** — тесты для отдельных модулей
+- **Integration tests** — тесты для взаимодействия компонентов
+- **E2E tests** — тесты полного workflow
+- **Snapshot testing** — для стратегий и конфигов
+
+### 7.2 Инструменты
+- **pytest** — основной фреймворк
+- **unittest.mock** — мокирование зависимостей
+- **freezegun** — тестирование времени
+- **responses** — мокирование HTTP
+
+---
+
+## 8. Развертывание и распространение
+
+### 8.1 Формат распространения
+- **Portable ZIP** — включает все бинарники
+- **Installer (опционально)** — для удобства установки
+- **Auto-update** — встроенный механизм обновлений
+
+### 8.2 Требования к системе
+- **Windows 10+**
+- **Администраторские права**
+- **.NET Framework** (для winws2)
+- **WinPcap/WinDivert** (для сетевого захвата)
+
+---
+
+## 9. Жизненный цикл разработки
+
+### 9.1 Workflow
+1. **Documentation** — создание/обновление документации
+2. **Characterization tests** — тесты текущего поведения
+3. **Implementation** — написание кода
+4. **Testing** — модульные и интеграционные тесты
+5. **Verification** — проверка скриптами
+6. **Documentation update** — обновление документации
+
+### 9.2 Quality gates
+- Все тесты должны проходить
+- Нет новых блокеров
+- Документация актуальна
+- Verification скрипты проходят
+
+---
+
+## 10. История и контекст
+
+### 10.1 Происхождение проекта
+Проект основан на:
+- **bol-van/zapret** — техническая основа
+- **Flowseal/zapret-discord-youtube** — Windows runtime
+- **StressOzz/Zapret-Manager** — workflow и стратегии
+
+### 10.2 Ключевые уроки
+- Не делать миграцию на месте — fresh build
+- Сохранять полезное поведение, но не структуру
+- Тестировать перед рефакторингом
+- User-friendly сообщения вместо технических ошибок
+
+---
+
+## 11. Ресурсы
+
+### 11.1 Внутренние ресурсы
+- **PROGRAM_BLUEPRINT.md** — архитектурная карта
+- **IMPLEMENTATION_ORDER.md** — порядок разработки
+- **CONTEXT_MAP.md** — карта контекста
+- **REGRESSION_PREVENTION_CHECKLIST.md** — регрессии
+
+### 11.2 Внешние ресурсы
+- **GitHub Issues** — баги и фичи
+- **Discussions** — обсуждения
+- **Wiki** — подробная документация
+- **Changelog** — история изменений
+
+---
+
+## 12. Вопросы и ответы
+
+### Q: Почему не используется Docker?
+A: Потому что DPI bypass требует прямого доступа к сетевым интерфейсам Windows, что невозможно в Docker.
+
+### Q: Почему portable, а не installer?
+A: Для удобства разработки и тестирования, а также чтобы пользователи не имели прав на установку.
+
+### Q: Как обеспечить безопасность?
+A: Через explicit admin checks, atomic writes, audit logging и backup/rollback механизмы.
+
+---
+
+**Документация обновлена:** 2026-05-07  
+**Версия документа:** 1.0  
+**Автор:** DedZapret Team

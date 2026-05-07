@@ -17,11 +17,17 @@ Build and stabilize a **portable Windows utility** for managing:
 
 ## Build mode
 
-This is a **fresh rebuild** using the existing repository as reference.
+This is a **fresh build**, not an in-place migration.
 - Preserve useful behavior and requirements, not accidental code structure.
 - Do not copy messy modules directly.
 - Extract intent, write clean modules, cover with tests.
-- The old repository (Git history) is reference material for bugs to avoid, UI/UX lessons, strategy logic, and test scenarios.
+- The old repository is reference material only:
+  - useful behavior;
+  - bugs to avoid;
+  - strategy logic;
+  - UI/UX lessons;
+  - tests and diagnostics lessons.
+- Do not preserve old architecture if it is messy.
 
 ## Source of truth
 
