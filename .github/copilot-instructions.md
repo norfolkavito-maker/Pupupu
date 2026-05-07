@@ -8,7 +8,10 @@ Follow these rules when generating or editing code in this repository.
 2. `docs/ai/MASTER_TASK.md`
 3. `docs/ai/CONTEXT_MAP.md`
 4. `docs/ai/workflows/README.md` + all stage files under `docs/ai/workflows/`
-3. All files in `docs/ai/prompts/`
+5. All files in `docs/ai/prompts/`
+6. `docs/ai/DEDZAPRET_AGENT_RULES.md`
+7. `docs/ai/RUNTIME_SOURCE_POLICY.md`
+8. `docs/ai/development_history_merged.md` (if present)
 
 ## Core rules
 
@@ -28,3 +31,5 @@ Follow these rules when generating or editing code in this repository.
 - Use `docs/ai/BLOCKERS.md` only for real blockers with exact command + error.
 - Never expose secrets (tokens, credentials, subscription URLs with tokens, private keys, personal data).
 - Do not push directly to main/master unless explicitly instructed.
+- Before rebuilding risky areas, read `docs/ai/REGRESSION_PREVENTION_CHECKLIST.md`.
+- Use `docs/ai/DEDZAPRET_AGENT_RULES.md` and `docs/ai/RUNTIME_SOURCE_POLICY.md` for project-specific safety rules.

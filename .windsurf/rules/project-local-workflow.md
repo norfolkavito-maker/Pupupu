@@ -1,6 +1,6 @@
 # Windsurf rule: project-local-workflow
 
-This repository uses a local “task packet” workflow.
+This repository uses a local "task packet" workflow.
 
 ## Required reads
 
@@ -9,6 +9,9 @@ This repository uses a local “task packet” workflow.
 - `docs/ai/CONTEXT_MAP.md`
 - `docs/ai/workflows/README.md`
 - all `docs/ai/prompts/*.md`
+- `docs/ai/DEDZAPRET_AGENT_RULES.md`
+- `docs/ai/RUNTIME_SOURCE_POLICY.md`
+- `docs/ai/development_history_merged.md` (if present)
 
 ## Workflow
 
@@ -18,6 +21,7 @@ This repository uses a local “task packet” workflow.
    - `docs/ai/ACCEPTANCE_CHECKLIST.md`
    - `docs/ai/PROGRESS.md`
    - `docs/ai/BLOCKERS.md`
+   - `docs/ai/REGRESSION_PREVENTION_CHECKLIST.md`
 4. Run verification script.
 5. Update progress log.
 
@@ -31,6 +35,7 @@ Stages:
 - Avoid unrelated refactors.
 - Use BLOCKERS only when truly blocked.
 - Prefer CONTEXT_MAP before full-repo scans; update it when structure changes.
+- Before rebuilding risky areas, read `docs/ai/development_history_merged.md` and `docs/ai/REGRESSION_PREVENTION_CHECKLIST.md`.
 
 ## Stop condition
 

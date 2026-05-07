@@ -7,6 +7,9 @@ Additional mandatory startup reads (before broad exploration or edits):
 - `docs/ai/MASTER_TASK.md`
 - `docs/ai/CONTEXT_MAP.md`
 - `docs/ai/workflows/README.md`
+- `docs/ai/DEDZAPRET_AGENT_RULES.md`
+- `docs/ai/RUNTIME_SOURCE_POLICY.md`
+- `docs/ai/development_history_merged.md` (if present)
 
 ## Planning / execution
 - PLAN/READ-ONLY is required before major changes.
@@ -39,8 +42,11 @@ Additional mandatory startup reads (before broad exploration or edits):
   - cookies;
   - Authorization headers;
   - API keys;
-  - private keys.
+  - private keys;
+  - node UUIDs;
+  - personal data.
 - Diagnostic export must sanitize/redact secrets.
+- Mask secrets in logs, diagnostics, crash reports and bug report ZIPs.
 
 ## Console output
 - For Russian UI output in risk paths, use `safe_print` instead of raw `print`.
@@ -84,7 +90,7 @@ working in this repository.
 ## No invented features
 - Do not invent features, flags, settings, menu entries, network behavior, or
   file formats not explicitly described by task files or existing code.
-- If something is “логично” but not requested/implemented, mark it as
+- If something is "логично" but not requested/implemented, mark it as
   **Future / Planned**.
 
 ## Preserve existing behavior
@@ -93,29 +99,33 @@ working in this repository.
 - Preserve public interfaces and configuration semantics unless task explicitly
   requires changes.
 
-## Safety rules
+## Safety rules (general)
 - Any risky Windows/system/network change must include:
   - explicit user confirmation;
   - backup/restore path;
   - clear rollback steps.
 - Never enable system proxy / TUN silently.
+- Use atomic writes for `config.yaml`, `state.json`, `current.json`, `nodes.json`,
+  strategy index files and other critical state.
 
 ## Verification rule
 - After every meaningful change, run:
   - On Windows: `./scripts/agent-verify.ps1`
   - On non-Windows: `bash scripts/agent-verify.sh`
-- Never claim “verified” unless commands were actually run and succeeded.
+- Never claim "verified" unless commands were actually run and succeeded.
 
 ## Completion rule
 - A task is complete only when:
   - Definition of Done from `docs/ai/MASTER_TASK.md` is satisfied;
   - `docs/ai/ACCEPTANCE_CHECKLIST.md` items are checked;
   - verification scripts pass.
+  - No secrets are exposed in logs, fixtures, reports, screenshots, or generated files.
 
 ## Blocker rule
 - Use `docs/ai/BLOCKERS.md` only for **real blockers** that require human input.
 - A blocker entry must contain exact command + exact error + suspected cause +
   proposed next step.
+- Do not stop at the first error. At least one reasonable fix must be attempted first.
 
 ## Progress log rule
 - Update `docs/ai/PROGRESS.md` after each milestone.
@@ -133,34 +143,123 @@ working in this repository.
 - Do not delete completed tasks from checklists; mark them checked and keep the history.
 
 ## Workflows (staged) rule
-
 - Before starting feature work, read `docs/ai/workflows/README.md`.
 - Read all workflow stages for context.
 - Execute stages strictly in order unless the human explicitly overrides.
 
 ## Git rules
-- Do not push directly to `main/master` unless explicitly instructed.
-- Keep commits small and scoped.
-- Include meaningful commit messages.
+- Unless explicitly told otherwise:
+  - do not push directly to `main` or `master`;
+  - prefer a feature branch;
+  - keep changes reviewable;
+  - do not mix unrelated tasks;
+  - do not rewrite unrelated files;
+  - do not reformat the entire project unless required.
 
 ## Tests and quality
-- Keep changes minimal and targeted.
-- Add/update tests when behavior changes (when reasonable).
-- Prefer deterministic tests and stable output.
+- When behavior changes, add or update tests.
+- Prefer deterministic tests.
+- Avoid tests that depend on:
+  - real network access;
+  - real user secrets;
+  - local absolute paths;
+  - machine-specific state.
+- If external binaries are required, mock or gate tests safely.
 
 ## Documentation
 - If user-visible behavior changes, update docs in the same milestone.
 - Add "Future / Planned" notes rather than partially implementing.
+- Do not leave stale documentation that contradicts the code.
 
 ## UI / UX rules for desktop apps
 - User-facing Russian text should be clear and consistent.
 - Dangerous actions must have confirmations and rollback.
 - Keep UI responsive: long operations should show progress.
+- Do not hide critical errors.
+- Distinguish existing features from `Future / Planned`.
+- Show diagnostics and logs in copyable form.
+- Avoid technical jargon in user-facing Russian text unless necessary.
 
 ## Windows utility rules
 - Paths: be explicit about portable/data dirs, avoid hardcoded local paths.
 - Admin checks must be explicit and user-visible.
 - Network changes (DNS, proxy, firewall) must be reversible.
+- Use safe paths.
+- Keep logs and state under the app data root defined by the project.
+- Do not write to system directories without explicit requirement.
+- Do not break non-admin launch if the app currently supports it.
+
+## Upstream source roles
+
+- `bol-van/zapret` is the canonical technical source for zapret semantics:
+  desync methods, hostlist/ipset/autohostlist, fake packets, blockcheck logic
+  and low-level option meaning.
+- `Flowseal/zapret-discord-youtube` is the Windows runtime source: `winws2`,
+  WinDivert layout, `bin/lists/fake/utils`, Windows BAT strategy examples
+  and service lifecycle.
+- `StressOzz/Zapret-Manager` is the workflow and strategy reference: strategy
+  menu logic, Flowseal strategy selection, `Dv/Yv/Gv`, RKN/exclude/wssize
+  and test flow ideas.
+- DedZapret Manager is the product layer: it normalizes, validates, tests,
+  runs and diagnoses these sources safely on Windows.
+
+Do not copy upstream scripts blindly. Extract intent, normalize to DedZapret
+models, validate, then apply through safe Windows adapters.
+
+## DedZapret-specific safety rules
+
+Mandatory safety rules for this project:
+
+- Do not use `shell=True` for subprocess calls. Pass process arguments as arrays/lists.
+- Do not use `ZipFile.extractall()` directly. Use safe extraction with path traversal validation.
+- Do not overwrite user files, custom strategies, user lists, nodes, profiles, config or state without backup.
+- Do not start downloaded binaries until source, path and hash/checksum are verified or explicitly approved.
+- Do not modify hosts/DNS/firewall/system proxy without an audit log event and rollback path.
+- Do not log secrets, proxy links, subscription URLs with credentials, node UUIDs, passwords, tokens, private keys or personal data.
+- Do not silently fallback from `winws2.exe` to `winws.exe`.
+- Do not auto-activate newly imported Flowseal or StressOzz strategies.
+- Do not remove menu items. If not implemented, keep the item and mark it as `Future / Planned` or `Not implemented`.
+- Check administrator rights before hosts, DNS, firewall, WinDivert, Task Scheduler, service, driver or registry operations.
+- If administrator rights are missing, fail clearly and do not pretend the operation succeeded.
+
+## Runtime audit logging rule
+
+Every meaningful application action must produce a structured audit event.
+
+Must log:
+- app start / app exit;
+- preflight start / result;
+- runtime start / stop / restart;
+- strategy selected / applied / rejected;
+- strategy import / normalization / validation;
+- test started / cancelled / completed;
+- Flowseal sync / StressOzz sync;
+- repair runtime;
+- config/state/current write;
+- backup / restore;
+- hosts change;
+- DNS change / restore;
+- firewall change;
+- system proxy change;
+- autostart enable / disable / repair;
+- tray action;
+- bug report creation;
+- crash / handled error.
+
+Audit events must include timestamp, action, component, success/failure,
+user-facing message, files touched, process id if relevant, strategy/profile id
+if relevant, and masked sensitive values.
+
+## History and regression prevention
+
+Before rebuilding risky areas, read `docs/ai/development_history_merged.md`
+if present. Use it as a regression checklist for P-codes, TASK items, UX
+complaints and DEV issues. Do not reintroduce old defects such as unsafe unzip,
+`shell=True`, config/state corruption, user file overwrite, silent admin
+failure, missing checksums, file-in-use update errors or secret leakage.
+
+If `development_history_merged.md` is missing, proceed using
+`docs/ai/REGRESSION_PREVENTION_CHECKLIST.md`.
 
 ## Final response expected from agent
 When finishing a task, provide:

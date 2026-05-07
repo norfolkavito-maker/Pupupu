@@ -6,6 +6,10 @@
   - `docs/ai/CONTEXT_MAP.md`
   - `docs/ai/workflows/README.md`
   - all files under `docs/ai/prompts/`
+  - `docs/ai/DEDZAPRET_AGENT_RULES.md`
+  - `docs/ai/RUNTIME_SOURCE_POLICY.md`
+  - `docs/ai/development_history_merged.md` (if present)
+  - `docs/ai/REGRESSION_PREVENTION_CHECKLIST.md`
 - Work in small milestones.
 - After each milestone:
   - run verification (`./scripts/agent-verify.ps1` on Windows or `bash scripts/agent-verify.sh` elsewhere)
