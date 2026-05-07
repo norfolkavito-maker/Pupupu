@@ -1,150 +1,81 @@
-from __future__ import annotations
 
-import base64
-import json
 import re
-from dataclasses import is_dataclass, asdict
-from typing import Any
+from typing import Any, Dict, List, Union
 
 
-_UUID_RE = re.compile(
-    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+# Regex patterns for various secrets
+# VLESS/VMESS/TROJAN/SS links (simplified for common patterns, might need refinement)
+PROXY_LINK_PATTERN = re.compile(
+    r"((vless|vmess|trojan|ss)://[^\s]+)", re.IGNORECASE
+)
+# Generic tokens/passwords in query parameters or headers
+GENERIC_SECRET_PATTERN = re.compile(
+    r"([?&](?:token|password|pass|key|secret)=[^&\s]+)|(Authorization: Bearer [^\s]+)",
+    re.IGNORECASE,
+)
+# UUID-like credentials (e.g., node UUIDs)
+UUID_PATTERN = re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    re.IGNORECASE,
 )
 
 
-def _mask_uuid(s: str) -> str:
-    def repl(m: re.Match[str]) -> str:
-        u = m.group(0)
-        return u[:8] + "-****-****-****-" + u[-4:]
+def mask_secret(value: str, mask_char: str = "*", reveal_chars: int = 4) -> str:
+    """Masks a secret string, revealing only a few characters at the beginning and end."""
+    if not isinstance(value, str) or not value:
+        return value
 
-    return _UUID_RE.sub(repl, s)
+    if len(value) <= reveal_chars * 2:
+        return mask_char * len(value)
 
-
-def _mask_url_credentials(s: str) -> str:
-    # user:pass@host
-    s = re.sub(r"(://[^/\s:@]+):([^@/\s]+)@", r"\1:***@", s)
-    return s
-
-
-def _mask_query_params(s: str) -> str:
-    # Mask common secret query params.
-    for k in [
-        "uuid",
-        "password",
-        "pass",
-        "token",
-        "key",
-        "private_key",
-        "pk",
-        "secret",
-        "sni",
-        "host",
-        "server",
-        "address",
-    ]:
-        s = re.sub(
-            rf"([?&]{re.escape(k)}=)([^&#\s]+)",
-            r"\1***",
-            s,
-            flags=re.IGNORECASE,
-        )
-    return s
+    start = value[:reveal_chars]
+    end = value[-reveal_chars:]
+    return f"{start}{mask_char * (len(value) - 2 * reveal_chars)}{end}"
 
 
-def _mask_vless_like_links(s: str) -> str:
-    # vless://UUID@server:port?...
-    s = re.sub(r"\b(vless|vmess|trojan)://([^@/\s]+)@", r"\1://***@", s, flags=re.IGNORECASE)
-    # ss://BASE64 or ss://method:pass@host:port
-    s = re.sub(r"\bss://([^@/\s]+)@", r"ss://***@", s, flags=re.IGNORECASE)
-    return s
-
-
-def _mask_hostnames(s: str) -> str:
-    # Best-effort masking of IPs and hostnames inside links/configs.
-    # IP v4
-    s = re.sub(r"\b(\d{1,3}\.){3}\d{1,3}\b", "***.***.***.***", s)
-    # Hostnames (keep TLD)
-    s = re.sub(
-        r"\b([a-zA-Z0-9-]{2,})\.([a-zA-Z]{2,})\b",
-        lambda m: (m.group(1)[:2] + "***." + m.group(2)) if len(m.group(1)) > 2 else ("***." + m.group(2)),
-        s,
-    )
-    return s
-
-
-def mask_secrets_text(text: str) -> str:
-    if not text:
+def mask_text(text: str) -> str:
+    """Applies various masking patterns to a given text."""
+    if not isinstance(text, str):
         return text
-    s = str(text)
-    s = _mask_uuid(s)
-    s = _mask_url_credentials(s)
-    s = _mask_query_params(s)
-    s = _mask_vless_like_links(s)
-    # Keep host masking last to not break earlier regexes.
-    s = _mask_hostnames(s)
-    return s
+
+    masked_text = text
+
+    # Mask proxy links
+    masked_text = PROXY_LINK_PATTERN.sub(
+        lambda m: mask_secret(m.group(0), reveal_chars=5), masked_text
+    )
+
+    # Mask generic secrets (query params, auth headers)
+    masked_text = GENERIC_SECRET_PATTERN.sub(
+        lambda m: mask_secret(m.group(0), reveal_chars=3), masked_text
+    )
+
+    # Mask UUIDs
+    masked_text = UUID_PATTERN.sub(lambda m: mask_secret(m.group(0)), masked_text)
+
+    return masked_text
 
 
-def mask_secrets(obj: Any) -> Any:
-    """Recursively mask secrets in dict/list/str/dataclass.
+def mask_mapping(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively masks secrets in string values within a dictionary."""
+    if not isinstance(data, dict):
+        return data
 
-    Rules:
-    - Do not preserve raw VLESS/VMess/Trojan/SS links.
-    - Hide UUID/password/private keys/subscription URLs.
-    """
-    if obj is None:
-        return None
-
-    if isinstance(obj, str):
-        return mask_secrets_text(obj)
-
-    if isinstance(obj, bytes):
-        # Avoid binary blobs in reports; represent in a stable masked way.
-        try:
-            s = obj.decode("utf-8", errors="replace")
-            return mask_secrets_text(s)
-        except Exception:
-            return "<bytes>"
-
-    if isinstance(obj, (int, float, bool)):
-        return obj
-
-    if is_dataclass(obj):
-        return mask_secrets(asdict(obj))
-
-    if isinstance(obj, dict):
-        out: dict[str, Any] = {}
-        for k, v in obj.items():
-            ks = str(k)
-            # Key-based masking
-            if ks.lower() in {
-                "password",
-                "pass",
-                "uuid",
-                "token",
-                "secret",
-                "private_key",
-                "subscription",
-                "subscription_url",
-                "url",
-                "link",
-                "server",
-                "address",
-            }:
-                out[ks] = "***"
-            else:
-                out[ks] = mask_secrets(v)
-        return out
-
-    if isinstance(obj, list):
-        return [mask_secrets(x) for x in obj]
-
-    # Try JSON strings that may contain configs.
-    try:
-        if isinstance(obj, str) and obj.strip().startswith("{"):
-            data = json.loads(obj)
-            return json.dumps(mask_secrets(data), ensure_ascii=False)
-    except Exception:
-        pass
-
-    return mask_secrets_text(str(obj))
+    masked_data = {}
+    for key, value in data.items():
+        if isinstance(value, str):
+            # Apply masking to string values
+            masked_data[key] = mask_text(value)
+        elif isinstance(value, dict):
+            # Recurse into nested dictionaries
+            masked_data[key] = mask_mapping(value)
+        elif isinstance(value, list):
+            # Recurse into lists (e.g., list of dicts or strings)
+            masked_data[key] = [
+                mask_mapping(item) if isinstance(item, dict) else mask_text(item) if isinstance(item, str) else item
+                for item in value
+            ]
+        else:
+            # Keep other types as is
+            masked_data[key] = value
+    return masked_data

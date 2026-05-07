@@ -1,78 +1,99 @@
-from __future__ import annotations
 
-import sys
-from dataclasses import dataclass
 from pathlib import Path
+from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
-class Paths:
-    root: Path
-    config_file: Path
-    sources_file: Path
-    data_root: Path
+@dataclass
+class AppPaths:
+    root_dir: Path
     data_dir: Path
-    state_file: Path
+
+    config_path: Path
+    state_path: Path
+    current_state_path: Path
+    problem_domains_path: Path
+    nodes_path: Path
+
     logs_dir: Path
-    cache_dir: Path
-    lists_dir: Path
-    upstreams_dir: Path
+    reports_dir: Path
+    backups_dir: Path
+    snapshots_dir: Path
+    telemetry_dir: Path
+
     runtime_dir: Path
-    strategies_generated_dir: Path
-    strategies_builtin_dir: Path
-    strategies_custom_dir: Path
-    results_dir: Path
+    zapret_runtime_dir: Path
+    singbox_runtime_dir: Path
 
-    @staticmethod
-    def detect_root() -> Path:
-        # Prefer CWD (run.bat does cd into project root).
-        cwd = Path.cwd()
-        if (cwd / "config.yaml").exists() and (cwd / "sources.yaml").exists():
-            return cwd
+    strategies_dir: Path
+    builtin_strategies_dir: Path
+    generated_strategies_dir: Path
+    custom_strategies_dir: Path
 
-        # Fallback: directory of executable / script.
-        if getattr(sys, "frozen", False):
-            return Path(sys.executable).resolve().parent
+    upstreams_dir: Path
 
-        return Path(__file__).resolve().parents[3]
 
-    @staticmethod
-    def from_root(root: Path) -> "Paths":
-        # Portable layout: keep all mutable user data inside DedZapretData.
-        data_root = root / "DedZapretData"
-        data_dir = data_root / "data"
-        return Paths(
-            root=root,
-            config_file=data_root / "config.yaml",
-            sources_file=data_root / "sources.yaml",
-            data_root=data_root,
-            data_dir=data_dir,
-            state_file=data_dir / "state" / "state.json",
-            logs_dir=data_dir / "logs",
-            cache_dir=data_dir / "cache",
-            lists_dir=data_dir / "lists",
-            upstreams_dir=data_dir / "upstreams",
-            runtime_dir=data_root / "runtime",
-            strategies_generated_dir=data_dir / "strategies" / "generated",
-            strategies_builtin_dir=data_dir / "strategies" / "builtin",
-            strategies_custom_dir=data_dir / "strategies" / "custom",
-            results_dir=data_dir / "results",
-        )
+def get_project_root(start_path: Optional[Path] = None) -> Path:
+    # Find the project root by looking for a unique marker file, e.g., 'README.md'
+    if start_path is None:
+        start_path = Path(__file__).parent
 
-    def ensure_dirs(self) -> None:
-        for d in [
-            self.data_root,
-            self.data_dir,
-            self.state_file.parent,
-            self.logs_dir,
-            self.cache_dir,
-            self.lists_dir,
-            self.upstreams_dir,
-            self.runtime_dir,
-            self.strategies_generated_dir,
-            self.strategies_builtin_dir,
-            self.strategies_custom_dir,
-            self.results_dir,
-        ]:
-            d.mkdir(parents=True, exist_ok=True)
+    current_dir = start_path
+    for parent in current_dir.parents:
+        if (parent / "README.md").exists():
+            return parent
+    return Path.cwd() # Fallback if no marker found
 
+
+def create_app_paths() -> AppPaths:
+    root = get_project_root()
+    data = root / "DedZapretData"
+
+    paths = AppPaths(
+        root_dir=root,
+        data_dir=data,
+
+        config_path=root / "config.yaml",
+        state_path=data / "state.json",
+        current_state_path=data / "current.json",
+        problem_domains_path=data / "problem_domains.json",
+        nodes_path=data / "nodes.json",
+
+        logs_dir=data / "logs",
+        reports_dir=data / "reports",
+        backups_dir=data / "backups",
+        snapshots_dir=data / "snapshots",
+        telemetry_dir=data / "data" / "telemetry",
+
+        runtime_dir=data / "runtime",
+        zapret_runtime_dir=data / "runtime" / "zapret",
+        singbox_runtime_dir=data / "runtime" / "sing-box",
+
+        strategies_dir=data / "strategies",
+        builtin_strategies_dir=data / "strategies" / "builtin",
+        generated_strategies_dir=data / "strategies" / "generated",
+        custom_strategies_dir=data / "strategies" / "custom",
+
+        upstreams_dir=data / "data" / "upstreams",
+    )
+    return paths
+
+
+def ensure_directories(paths: AppPaths) -> None:
+    dirs_to_create = [
+        paths.data_dir,
+        paths.logs_dir,
+        paths.reports_dir,
+        paths.backups_dir,
+        paths.snapshots_dir,
+        paths.telemetry_dir,
+        paths.runtime_dir,
+        paths.zapret_runtime_dir,
+        paths.singbox_runtime_dir,
+        paths.strategies_dir,
+        paths.builtin_strategies_dir,
+        paths.generated_strategies_dir,
+        paths.custom_strategies_dir,
+        paths.upstreams_dir,
+    ]
+    for d in dirs_to_create:
+        d.mkdir(parents=True, exist_ok=True)
