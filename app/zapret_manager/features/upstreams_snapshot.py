@@ -37,6 +37,7 @@ class UpstreamSource:
     kind: str  # flowseal, stressozz, bolvan
     description: str = ""
     assets: List[str] = field(default_factory=list)  # known good assets
+    created_at: str = ""
 
 
 class UpstreamSnapshotManager:

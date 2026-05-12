@@ -75,7 +75,7 @@ class AppContext:
         
         # Stage 03.5: First launch setup from bundled upstream
         try:
-            from app.zapret_manager.features.upstreams_snapshot import ensure_first_launch_setup
+            from app.zapret_manager.features.runtime_repair import ensure_first_launch_setup
             if ensure_first_launch_setup(ctx):
                 log.info("First launch setup completed from bundled upstream")
             else:
@@ -83,15 +83,8 @@ class AppContext:
         except Exception as e:
             log.warning("First launch setup failed: %s", e)
         
-        # Stage 03.5: Runtime asset repair
-        try:
-            from app.zapret_manager.features.runtime_repair import ensure_first_launch_setup
-            if ensure_first_launch_setup(ctx):
-                log.info("Runtime asset repair completed")
-            else:
-                log.warning("Runtime asset repair failed")
-        except Exception as e:
-            log.warning("Runtime asset repair failed: %s", e)
+        # Stage 03.5: Runtime asset repair (already handled by ensure_first_launch_setup above)
+        # Note: ensure_first_launch_setup already handles runtime repair
         
         # Stage 03.6: Blockcheck setup
         try:

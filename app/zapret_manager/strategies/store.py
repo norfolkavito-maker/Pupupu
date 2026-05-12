@@ -52,6 +52,20 @@ def list_strategies(ctx: "AppContext", dir_path: Path, kind: str | None = None) 
             if not data.get("name"):
                 log.warning("invalid strategy file %s: missing required field 'name'", p)
                 continue
+            
+            # Handle legacy "args" format - normalize to "commands"
+            if "commands" not in data and "args" in data:
+                if not isinstance(data.get("args"), list):
+                    log.warning("invalid strategy file %s: field 'args' must be a list", p)
+                    continue
+                # Convert legacy args to commands format
+                args = data.get("args", [])
+                commands = []
+                for arg in args:
+                    commands.append({"type": "winws", "command": arg})
+                data["commands"] = commands
+                log.info("converted legacy args to commands for strategy %s", p)
+            
             if "commands" not in data:
                 log.warning("invalid strategy file %s: missing required field 'commands'", p)
                 continue

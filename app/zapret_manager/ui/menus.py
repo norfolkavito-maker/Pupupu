@@ -2063,3 +2063,41 @@ def _auto_tune_top5_by_problem_domains(ctx: AppContext) -> None:
     except Exception as e:
         print(f"\n{C.RED}Не удалось запустить с выбранной стратегией:{C.RESET} {e}\n")
     pause()
+
+
+def settings_menu(ctx: AppContext) -> None:
+    """Настройки - route to existing system_menu."""
+    log.warning("settings_menu called - routing to system_menu")
+    system_menu(ctx)
+
+
+def diagnostics_menu(ctx: AppContext) -> None:
+    """Диагностика и ремонт - route to existing runtime menu."""
+    log.warning("diagnostics_menu called - routing to _runtime_menu")
+    _runtime_menu(ctx)
+
+
+def logs_menu(ctx: AppContext) -> None:
+    """Логи и bug report - safe placeholder."""
+    log.warning("logs_menu called - not implemented yet")
+    clear()
+    print(f"{C.MAGENTA}Логи и bug report{C.RESET}\n")
+    print("Пока не реализовано в этой версии. Записано в лог.")
+    print(f"\n{C.DIM}Log file: {ctx.paths.logs_dir / 'zapret_manager.log'}{C.RESET}")
+    pause()
+
+
+def advanced_menu(ctx: AppContext) -> None:
+    """Advanced / Dev tools - safe placeholder."""
+    log.warning("advanced_menu called - not implemented yet")
+    clear()
+    print(f"{C.MAGENTA}Advanced / Dev tools{C.RESET}\n")
+    print("Пока не реализовано в этой версии. Записано в лог.")
+    print(f"\n{C.DIM}Data directory: {ctx.paths.data_dir}{C.RESET}")
+    pause()
+
+
+def updates_menu(ctx: AppContext) -> None:
+    """Обновления / sync - route to existing upstreams menu."""
+    log.warning("updates_menu called - routing to _upstreams_menu")
+    _upstreams_menu(ctx)

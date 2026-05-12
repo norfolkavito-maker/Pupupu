@@ -12,7 +12,7 @@ def setup_logging(log_file: Path) -> None:
     root = logging.getLogger()
     if root.handlers:
         return
-    root.setLevel(logging.INFO)
+    root.setLevel(logging.DEBUG)
 
     fmt = logging.Formatter(
         fmt="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -23,7 +23,7 @@ def setup_logging(log_file: Path) -> None:
         log_file, maxBytes=2_000_000, backupCount=3, encoding="utf-8"
     )
     file_handler.setFormatter(fmt)
-    file_handler.setLevel(logging.INFO)
+    file_handler.setLevel(logging.DEBUG)  # DEBUG level for file logging
     root.addHandler(file_handler)
 
     # User-facing console must stay readable. Raw subprocess/debug logs are noisy

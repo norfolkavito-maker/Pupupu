@@ -53,13 +53,13 @@ def run_blockcheck(ctx: AppContext, *, variant: str = "1") -> Dict[str, Any]:
         result = run(["cmd", "/c", str(script)], check=False, capture=True, cwd=str(d))
         
         # Decode output properly
-        stdout = _decode_windows_output(result.stdout or b"")
-        stderr = _decode_windows_output(result.stderr or b"")
+        stdout = _decode_windows_output(result.out.encode("utf-8") if result.out else b"")
+        stderr = _decode_windows_output(result.err.encode("utf-8") if result.err else b"")
         
         # Parse and structure the result
         blockcheck_result = {
-            "success": result.returncode == 0,
-            "returncode": result.returncode,
+            "success": result.code == 0,
+            "returncode": result.code,
             "stdout": stdout,
             "stderr": stderr,
             "variant": variant,
@@ -68,10 +68,10 @@ def run_blockcheck(ctx: AppContext, *, variant: str = "1") -> Dict[str, Any]:
         }
         
         # Log structured result
-        if result.returncode == 0:
+        if result.code == 0:
             log.info("Blockcheck completed successfully (variant %s)", variant)
         else:
-            log.warning("Blockcheck failed (variant %s): returncode=%d", variant, result.returncode)
+            log.warning("Blockcheck failed (variant %s): returncode=%d", variant, result.code)
             log.debug("Blockcheck stderr: %s", stderr)
         
         return blockcheck_result
