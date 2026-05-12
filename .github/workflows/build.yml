@@ -126,6 +126,19 @@ jobs:
           # Add marker files to preserve empty directories in artifact
           New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\custom\KEEP.txt | Out-Null
           New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\generated\KEEP.txt | Out-Null
+          
+          # Copy Flowseal resources
+          if (-not (Test-Path resources\flowseal\strategies)) {
+            throw "resources/flowseal/strategies directory not found or empty"
+          }
+          if (-not (Test-Path resources\flowseal\source_bat)) {
+            throw "resources/flowseal/source_bat directory not found or empty"
+          }
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\strategies\generated\flowseal | Out-Null
+          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\upstreams\flowseal | Out-Null
+          Copy-Item -Recurse -Force resources\flowseal\strategies\*.yaml bundle\DedZapret\DedZapretData\data\strategies\generated\flowseal\ -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Force resources\flowseal\source_bat\*.bat bundle\DedZapret\DedZapretData\data\upstreams\flowseal\ -ErrorAction SilentlyContinue
+          
           if (Test-Path data\lists) {
             Copy-Item -Recurse -Force data\lists\* bundle\DedZapret\DedZapretData\data\lists\
           }
@@ -147,6 +160,8 @@ jobs:
             "bundle\DedZapret\DedZapretData\data\strategies\builtin\v9.yaml",
             "bundle\DedZapret\DedZapretData\data\strategies\custom\KEEP.txt",
             "bundle\DedZapret\DedZapretData\data\strategies\generated\KEEP.txt",
+            "bundle\DedZapret\DedZapretData\data\strategies\generated\flowseal\flowseal_general*.yaml",
+            "bundle\DedZapret\DedZapretData\data\upstreams\flowseal\general.bat",
             "bundle\DedZapret\bin\sing-box\sing-box.exe"
           )
           foreach ($item in $required) {

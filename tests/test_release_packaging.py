@@ -115,9 +115,14 @@ def clean_bundle(tmp_path: Path) -> Path:
     (data / "data" / "strategies" / "builtin").mkdir(parents=True)
     (data / "data" / "strategies" / "custom").mkdir(parents=True)
     (data / "data" / "strategies" / "generated").mkdir(parents=True)
+    (data / "data" / "strategies" / "generated" / "flowseal").mkdir(parents=True)
+    (data / "data" / "upstreams" / "flowseal").mkdir(parents=True)
     (data / "runtime" / "zapret").mkdir(parents=True)
     (bundle / "bin" / "sing-box").mkdir(parents=True)
     (bundle / "bin" / "sing-box" / "sing-box.exe").write_text("fake exe")
+    # Add Flowseal resources for testing
+    (data / "data" / "strategies" / "generated" / "flowseal" / "flowseal_general.yaml").write_text("fake strategy")
+    (data / "data" / "upstreams" / "flowseal" / "general.bat").write_text("fake bat")
     # Add KEEP.txt markers to preserve empty directories
     (data / "data" / "strategies" / "custom" / "KEEP.txt").write_text("")
     (data / "data" / "strategies" / "generated" / "KEEP.txt").write_text("")
@@ -196,6 +201,51 @@ class TestReleasePreflight:
     def test_dirty_bundle_has_forbidden_ds_store(self, dirty_bundle: Path):
         matches = check_forbidden_glob(dirty_bundle, "**/.DS_Store")
         assert len(matches) > 0, "Should detect .DS_Store"
+
+    def test_clean_bundle_has_flowseal_resources(self, clean_bundle: Path):
+        """Test that clean bundle has Flowseal resources."""
+        # Check Flowseal strategies directory
+        flowseal_strategies_dir = clean_bundle / "DedZapretData" / "data" / "strategies" / "generated" / "flowseal"
+        assert flowseal_strategies_dir.exists(), "Missing Flowseal strategies directory"
+        
+        # Check for at least one flowseal_general*.yaml
+        flowseal_general_files = list(flowseal_strategies_dir.glob("flowseal_general*.yaml"))
+        assert len(flowseal_general_files) > 0, "Missing flowseal_general*.yaml files"
+        
+        # Check Flowseal upstreams directory
+        flowseal_upstreams_dir = clean_bundle / "DedZapretData" / "data" / "upstreams" / "flowseal"
+        assert flowseal_upstreams_dir.exists(), "Missing Flowseal upstreams directory"
+        
+        # Check for general.bat
+        general_bat = flowseal_upstreams_dir / "general.bat"
+        assert general_bat.exists(), "Missing general.bat"
+
+    def test_workflow_copies_flowseal_resources(self):
+        """Test that workflow contains Flowseal copy steps."""
+        from pathlib import Path
+        workflow_file = Path(__file__).parent.parent / ".github" / "workflows" / "build.yml"
+        workflow_content = workflow_file.read_text(encoding="utf-8")
+        
+        # Check for Flowseal strategies copy step
+        assert "Copy-Item -Recurse -Force resources\\flowseal\\strategies\\*.yaml" in workflow_content, "Missing Flowseal strategies copy step"
+        
+        # Check for Flowseal source_bat copy step
+        assert "Copy-Item -Recurse -Force resources\\flowseal\\source_bat\\*.bat" in workflow_content, "Missing Flowseal source_bat copy step"
+
+    def test_preflight_requires_flowseal_checks(self):
+        """Test that preflight script requires Flowseal resources."""
+        from pathlib import Path
+        preflight_file = Path(__file__).parent.parent / "scripts" / "release-preflight.sh"
+        preflight_content = preflight_file.read_text(encoding="utf-8")
+        
+        # Check for generated/flowseal directory check
+        assert "DedZapretData/data/strategies/generated/flowseal" in preflight_content, "Missing Flowseal generated/flowseal check"
+        
+        # Check for upstreams/flowseal directory check
+        assert "DedZapretData/data/upstreams/flowseal" in preflight_content, "Missing Flowseal upstreams/flowseal check"
+        
+        # Check for general.bat check
+        assert "DedZapretData/data/upstreams/flowseal/general.bat" in preflight_content, "Missing Flowseal general.bat check"
 
     def test_dirty_bundle_has_forbidden_session(self, dirty_bundle: Path):
         matches = check_forbidden_glob(dirty_bundle, "**/session_*.jsonl")
