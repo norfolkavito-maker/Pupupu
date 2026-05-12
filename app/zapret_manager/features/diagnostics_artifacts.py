@@ -329,7 +329,7 @@ def build_flowseal_asset_report(ctx: AppContext) -> dict[str, Any]:
         from app.zapret_manager.strategies.store import list_strategies
 
         generated = ctx.paths.strategies_generated_dir.resolve()
-        bases = list_strategies(generated, kind="base")
+        bases = list_strategies(ctx, generated, kind="base")
         flowseal_bases = [b for b in bases if (b.upstream or "").lower() == "flowseal"]
         rep["strategy_counts"]["generated_base_total"] = len(bases)
         rep["strategy_counts"]["generated_flowseal_base"] = len(flowseal_bases)

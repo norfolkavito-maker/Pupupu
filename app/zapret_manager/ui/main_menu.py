@@ -302,9 +302,9 @@ def run_main_menu(ctx: AppContext) -> int:
 
 def _all_strategies(ctx: AppContext):
     return (
-        list_strategies(ctx.paths.strategies_builtin_dir)
-        + list_strategies(ctx.paths.strategies_generated_dir)
-        + list_strategies(ctx.paths.strategies_custom_dir)
+        list_strategies(ctx, ctx.paths.strategies_builtin_dir)
+        + list_strategies(ctx, ctx.paths.strategies_generated_dir)
+        + list_strategies(ctx, ctx.paths.strategies_custom_dir)
     )
 
 

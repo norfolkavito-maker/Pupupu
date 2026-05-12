@@ -71,7 +71,7 @@ def build_tray_menu_spec(ctx: AppContext, worker: TrayWorker, *, status: Command
     try:
         from app.zapret_manager.core.singbox.nodes import load_nodes
 
-        nodes = load_nodes((ctx.paths.data_dir / "singbox" / "nodes.json").resolve())
+        nodes = load_nodes((ctx.paths.nodes_dir / "nodes.json").resolve())
         for n in nodes[:30]:
             label = n.masked_summary()
             node_items.append(MenuItemSpec(title=label, action_id=f"vpn.select_node:{n.node_id}", enabled=can_start))
