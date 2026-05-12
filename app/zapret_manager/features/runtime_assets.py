@@ -178,6 +178,8 @@ def ensure_fake_assets(ctx: AppContext) -> list[RepairItem]:
     - Do NOT create empty fake binaries.
     - If asset is found elsewhere under runtime root, copy into canonical fake dir.
     """
+    # Canonical fake dir (Phase 2): DedZapretData/runtime/zapret/files/fake
+    # Source material: DedZapretData/data/upstreams/flowseal/bin
     from app.zapret_manager.features.zapret_runtime import zapret_root
 
     rt_root = ctx.paths.runtime_dir.resolve()
@@ -200,19 +202,26 @@ def ensure_fake_assets(ctx: AppContext) -> list[RepairItem]:
 
     out: list[RepairItem] = []
 
-    upstreams_dir = getattr(getattr(ctx, "paths", None), "upstreams_dir", None)
-    flowseal_root: Path | None = None
+    # Prefer canonical flowseal_bin_dir if present on ctx.paths (new Paths resolver)
+    flowseal_bin: Path | None = None
     try:
-        if upstreams_dir:
-            flowseal_root = (Path(str(upstreams_dir)) / "flowseal").resolve()
+        flowseal_bin = Path(str(ctx.paths.flowseal_bin_dir)).resolve()  # type: ignore[attr-defined]
     except Exception:
-        flowseal_root = None
+        flowseal_bin = None
+    if not flowseal_bin:
+        # Backward compatibility: ctx.paths may be a minimal namespace with upstreams_dir
+        upstreams_dir = getattr(getattr(ctx, "paths", None), "upstreams_dir", None)
+        try:
+            if upstreams_dir:
+                flowseal_bin = (Path(str(upstreams_dir)) / "flowseal" / "bin").resolve()
+        except Exception:
+            flowseal_bin = None
 
     def find_anywhere(name: str) -> Path | None:
-        # Prefer upstreams/flowseal/bin if present (canonical source for Flowseal fakes)
-        if flowseal_root:
+        # Prefer flowseal bin cache if present (canonical source for Flowseal fakes)
+        if flowseal_bin:
             try:
-                p = (flowseal_root / "bin" / name).resolve()
+                p = (flowseal_bin / name).resolve()
                 if p.is_file() and p.stat().st_size > 0:
                     return p
             except Exception:
@@ -262,14 +271,20 @@ def ensure_flowseal_lists(ctx: AppContext) -> list[RepairItem]:
     upstream-local lists (e.g. list-general.txt) into DedZapretData/data/lists.
     """
 
-    upstreams_dir = getattr(getattr(ctx, "paths", None), "upstreams_dir", None)
-    if not upstreams_dir:
-        return []
-
     target = ctx.paths.lists_dir.resolve()
     target.mkdir(parents=True, exist_ok=True)
 
-    flowseal_lists = (Path(str(upstreams_dir)) / "flowseal" / "lists").resolve()
+    # Prefer canonical flowseal_lists_dir if present on ctx.paths (new Paths resolver)
+    flowseal_lists: Path | None = None
+    try:
+        flowseal_lists = Path(str(ctx.paths.flowseal_lists_dir)).resolve()  # type: ignore[attr-defined]
+    except Exception:
+        flowseal_lists = None
+    if not flowseal_lists:
+        upstreams_dir = getattr(getattr(ctx, "paths", None), "upstreams_dir", None)
+        if not upstreams_dir:
+            return []
+        flowseal_lists = (Path(str(upstreams_dir)) / "flowseal" / "lists").resolve()
     out: list[RepairItem] = []
 
     # Minimum required by Flowseal strategies
@@ -283,7 +298,7 @@ def ensure_flowseal_lists(ctx: AppContext) -> list[RepairItem]:
         except Exception:
             pass
 
-        src = (flowseal_lists / name).resolve()
+        src = (flowseal_lists / name).resolve() if flowseal_lists else (target / name).resolve()
         try:
             if src.exists() and src.is_file() and src.stat().st_size > 0:
                 dst.write_bytes(src.read_bytes())

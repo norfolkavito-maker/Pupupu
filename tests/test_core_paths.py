@@ -47,31 +47,21 @@ def app_paths(mock_project_root_env):
 
 def test_create_app_paths(mock_project_root_env, app_paths):
     assert app_paths.root_dir == mock_project_root_env
-    assert app_paths.data_dir == mock_project_root_env / "DedZapretData"
+    assert app_paths.data_dir == mock_project_root_env / "DedZapretData" / "data"
 
-    assert app_paths.config_path == mock_project_root_env / "config.yaml"
-    assert app_paths.state_path == mock_project_root_env / "DedZapretData" / "state.json"
+    # Phase 2 canonical: config is stored under DedZapretData
+    assert app_paths.config_file == mock_project_root_env / "DedZapretData" / "config.yaml"
+    assert app_paths.sources_file == mock_project_root_env / "DedZapretData" / "sources.yaml"
+    assert app_paths.state_file == mock_project_root_env / "DedZapretData" / "data" / "state" / "state.json"
     assert (
-        app_paths.current_state_path
-        == mock_project_root_env / "DedZapretData" / "current.json"
+        app_paths.current_state_file
+        == mock_project_root_env / "DedZapretData" / "data" / "state" / "current.json"
     )
-    assert (
-        app_paths.problem_domains_path
-        == mock_project_root_env / "DedZapretData" / "problem_domains.json"
-    )
-    assert app_paths.nodes_path == mock_project_root_env / "DedZapretData" / "nodes.json"
 
-    assert app_paths.logs_dir == mock_project_root_env / "DedZapretData" / "logs"
-    assert app_paths.reports_dir == mock_project_root_env / "DedZapretData" / "reports"
-    assert app_paths.backups_dir == mock_project_root_env / "DedZapretData" / "backups"
-    assert (
-        app_paths.snapshots_dir
-        == mock_project_root_env / "DedZapretData" / "snapshots"
-    )
-    assert (
-        app_paths.telemetry_dir
-        == mock_project_root_env / "DedZapretData" / "data" / "telemetry"
-    )
+    assert app_paths.logs_dir == mock_project_root_env / "DedZapretData" / "data" / "logs"
+    assert app_paths.reports_dir == mock_project_root_env / "DedZapretData" / "data" / "reports"
+    assert app_paths.backups_dir == mock_project_root_env / "DedZapretData" / "data" / "backups"
+    assert app_paths.telemetry_dir == mock_project_root_env / "DedZapretData" / "data" / "telemetry"
 
     assert app_paths.runtime_dir == mock_project_root_env / "DedZapretData" / "runtime"
     assert (
@@ -83,21 +73,18 @@ def test_create_app_paths(mock_project_root_env, app_paths):
         == mock_project_root_env / "DedZapretData" / "runtime" / "sing-box"
     )
 
+    assert app_paths.strategies_dir == mock_project_root_env / "DedZapretData" / "data" / "strategies"
     assert (
-        app_paths.strategies_dir
-        == mock_project_root_env / "DedZapretData" / "strategies"
+        app_paths.strategies_builtin_dir
+        == mock_project_root_env / "DedZapretData" / "data" / "strategies" / "builtin"
     )
     assert (
-        app_paths.builtin_strategies_dir
-        == mock_project_root_env / "DedZapretData" / "strategies" / "builtin"
+        app_paths.strategies_generated_dir
+        == mock_project_root_env / "DedZapretData" / "data" / "strategies" / "generated"
     )
     assert (
-        app_paths.generated_strategies_dir
-        == mock_project_root_env / "DedZapretData" / "strategies" / "generated"
-    )
-    assert (
-        app_paths.custom_strategies_dir
-        == mock_project_root_env / "DedZapretData" / "strategies" / "custom"
+        app_paths.strategies_custom_dir
+        == mock_project_root_env / "DedZapretData" / "data" / "strategies" / "custom"
     )
 
     assert (
@@ -118,20 +105,27 @@ def test_ensure_directories(tmp_path):
         ensure_directories(paths)
 
         expected_dirs = [
+            paths.data_root,
             paths.data_dir,
             paths.logs_dir,
             paths.reports_dir,
             paths.backups_dir,
-            paths.snapshots_dir,
+            paths.cache_dir,
+            paths.results_dir,
             paths.telemetry_dir,
+            paths.state_dir,
             paths.runtime_dir,
             paths.zapret_runtime_dir,
             paths.singbox_runtime_dir,
             paths.strategies_dir,
-            paths.builtin_strategies_dir,
-            paths.generated_strategies_dir,
-            paths.custom_strategies_dir,
+            paths.strategies_builtin_dir,
+            paths.strategies_generated_dir,
+            paths.strategies_custom_dir,
             paths.upstreams_dir,
+            paths.flowseal_dir,
+            paths.stressozz_dir,
+            paths.nodes_dir,
+            paths.profiles_dir,
         ]
 
         for d in expected_dirs:

@@ -62,6 +62,25 @@ def load_nodes(path: Path) -> list[SingBoxNode]:
     return out
 
 
+def serialize_nodes_for_report(nodes: list[SingBoxNode]) -> list[dict[str, Any]]:
+    """Serialize nodes for shareable reports with full masking."""
+    return [
+        {
+            "node_id": n.node_id,
+            "name": n.name,
+            "protocol": n.protocol,
+            "server": mask_secrets_text(n.server, mode="shareable_report"),
+            "port": n.port,
+            "raw": mask_secrets_text(n.raw, mode="shareable_report"),
+            "extra": n.extra,
+            "uuid": "***",  # Always mask UUID in reports
+            "password": "***",  # Always mask password in reports
+            "method": n.method,
+        }
+        for n in nodes
+    ]
+
+
 def save_nodes(path: Path, nodes: list[SingBoxNode]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     data = [

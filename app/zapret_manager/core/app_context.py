@@ -65,11 +65,49 @@ class AppContext:
             config=config,
             state=state,
             diagnostics=rec,
-            strategies_builtin=StrategyManager(paths.strategies_builtin_dir),
-            strategies_generated=StrategyManager(paths.strategies_generated_dir),
-            strategies_custom=StrategyManager(paths.strategies_custom_dir)
+            strategies_builtin=StrategyManager(ctx, paths.strategies_builtin_dir),
+            strategies_generated=StrategyManager(ctx, paths.strategies_generated_dir),
+            strategies_custom=StrategyManager(ctx, paths.strategies_custom_dir)
         )
         
+        # Stage 03.5: First launch setup from bundled upstream
+        try:
+            from app.zapret_manager.features.upstreams_snapshot import ensure_first_launch_setup
+            if ensure_first_launch_setup(ctx):
+                log.info("First launch setup completed from bundled upstream")
+            else:
+                log.warning("First launch setup failed")
+        except Exception as e:
+            log.warning("First launch setup failed: %s", e)
+        
+        # Stage 03.5: Runtime asset repair
+        try:
+            from app.zapret_manager.features.runtime_repair import ensure_first_launch_setup
+            if ensure_first_launch_setup(ctx):
+                log.info("Runtime asset repair completed")
+            else:
+                log.warning("Runtime asset repair failed")
+        except Exception as e:
+            log.warning("Runtime asset repair failed: %s", e)
+        
+        # Stage 03.6: Blockcheck setup
+        try:
+            from app.zapret_manager.features.blockcheck import run_blockcheck_settings
+            result = run_blockcheck_settings(ctx)
+            if result.get("success", False):
+                log.info("Blockcheck settings completed")
+            else:
+                log.warning("Blockcheck settings failed: %s", result.get("error", "Unknown error"))
+        except Exception as e:
+            log.warning("Blockcheck setup failed: %s", e)
+        
+        # Stage 03.7: Problem domains setup
+        try:
+            from app.zapret_manager.features.problem_domains_bridge import ensure_problem_domains_setup
+            ensure_problem_domains_setup(ctx)
+        except Exception as e:
+            log.warning("Problem domains setup failed: %s", e)
+
         # Авто-синхронизация при запуске (не блокирует старт)
         try:
             ctx.auto_sync()

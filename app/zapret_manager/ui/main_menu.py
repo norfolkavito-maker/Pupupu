@@ -203,7 +203,15 @@ def _status_lines(ctx: AppContext) -> list[str]:
     return lines
 
 
+def _show_status_summary(ctx: AppContext) -> None:
+    lines = _status_lines(ctx)
+    for ln in lines:
+        print(ln)
+    print()
+
+
 def run_main_menu(ctx: AppContext) -> int:
+    """Simplified main menu with status-first approach."""
     # One-time baseline prompt before showing the main loop.
     try:
         _startup_baseline_prompt(ctx)
@@ -212,24 +220,28 @@ def run_main_menu(ctx: AppContext) -> int:
         pass
     while True:
         clear()
+        _show_status_summary(ctx)
+        
         print(
-            "╔═══════════════════════════════╗\n"
+            "╔═══════════════════════════╗\n"
             f"║ {C.BLUE}DEDZAPRET (Windows){C.RESET}            ║\n"
-            "╚═══════════════════════════════╝\n"
+            "╚═══════════════════════════╝\n"
             f" {C.DIM}v{__version__}{C.RESET} {C.DIM}inspired by bol-van / StressOzz / Flowseal{C.RESET}\n"
         )
-        for ln in _status_lines(ctx):
-            print(ln)
-        print()
-
-        # New logical structure (StressOzz-like). We keep backward-compatible keys too.
-        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Старт/Стоп{C.RESET} Zapret")
-        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Автоматическая настройка{C.RESET} (мастер)")
+        
+        # Simplified main menu - 11 core items
+        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Старт / Стоп{C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Быстрый статус{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Стратегии{C.RESET}")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Тесты и автоподбор{C.RESET}")
-        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Дополнительные режимы{C.RESET} (YouTube/Discord/Games/TG/DNS/Hosts)")
-        print(f"{C.CYAN}6){C.RESET} {C.GREEN}Настройки / обслуживание{C.RESET} (Runtime/Updates/Network/Backup)")
-        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Proxy: sing-box (experimental){C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Тест стратегий{C.RESET}")
+        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Ноды / sing-box{C.RESET}")
+        print(f"{C.CYAN}6){C.RESET} {C.GREEN}DNS / hosts / системные настройки{C.RESET}")
+        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Диагностика и ремонт{C.RESET}")
+        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Логи и bug report{C.RESET}")
+        print(f"{C.CYAN}9){C.RESET} {C.GREEN}Обновления{C.RESET}")
+        print(f"{C.CYAN}10){C.RESET} {C.GREEN}Настройки{C.RESET}")
+        print(f"{C.CYAN}11){C.RESET} {C.GREEN}Advanced / Dev tools{C.RESET}")
+        
         choice = ask(f"\n{C.CYAN}Enter){C.RESET} выход\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not choice:
             return 0
@@ -253,45 +265,33 @@ def run_main_menu(ctx: AppContext) -> int:
                     print(f"{C.YELLOW}Стратегия:{C.RESET} {st.name}\n")
                     pause()
             elif choice == "2":
+                from app.zapret_manager.ui.menus import auto_setup_menu
                 auto_setup_menu(ctx)
             elif choice == "3":
                 strategies_menu(ctx)
             elif choice == "4":
                 test_menu(ctx)
             elif choice == "5":
-                extras_menu(ctx)
-            elif choice == "6":
-                service_menu(ctx)
-            elif choice == "7":
+                from app.zapret_manager.ui.menus import singbox_menu
                 singbox_menu(ctx)
-
-            # Backward-compatible shortcuts (old main menu numbering)
-            elif choice == "0":
-                service_menu(ctx)
-            elif choice == "8":
-                # old: hosts
+            elif choice == "6":
                 from app.zapret_manager.ui.menus import hosts_menu
-
                 hosts_menu(ctx)
+            elif choice == "7":
+                from app.zapret_manager.ui.menus import diagnostics_menu
+                diagnostics_menu(ctx)
+            elif choice == "8":
+                from app.zapret_manager.ui.menus import logs_menu
+                logs_menu(ctx)
             elif choice == "9":
-                # old: game launcher
-                from app.zapret_manager.ui.menus import game_launcher_menu
-
-                game_launcher_menu(ctx)
+                from app.zapret_manager.ui.menus import updates_menu
+                updates_menu(ctx)
             elif choice == "10":
-                # old: discord
-                from app.zapret_manager.ui.menus import discord_menu
-
-                discord_menu(ctx)
-            
-            elif choice.lower() == "tg":
-                from app.zapret_manager.ui.menus import tg_menu
-
-                tg_menu(ctx)
-            elif choice.lower() == "doh":
-                from app.zapret_manager.ui.menus import doh_menu
-
-                doh_menu(ctx)
+                from app.zapret_manager.ui.menus import settings_menu
+                settings_menu(ctx)
+            elif choice == "11":
+                from app.zapret_manager.ui.menus import advanced_menu
+                advanced_menu(ctx)
             else:
                 continue
         except Exception as e:

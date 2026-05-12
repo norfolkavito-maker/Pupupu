@@ -20,6 +20,112 @@ Additional mandatory startup reads (before broad exploration or edits):
 ## Validation honesty
 - Never claim "verified" unless commands were actually run.
 
+## Test completion and QA gate rules
+
+A task or stage is **NOT DONE** if relevant tests fail.
+
+An agent may only mark a task/stage complete when:
+- all required targeted tests pass;
+- all tests required by the workflow pass;
+- agent-verify passes;
+- full pytest passes when reasonable for the change scope;
+- OR every remaining failure is explicitly listed, reproduced, classified, and documented as an unrelated known failure with evidence.
+
+The agent must **never** write:
+- "complete" or "done";
+- "ready for next stage";
+- "Stage readiness: YES";
+- "fully verified";
+if relevant tests are failing or untriaged.
+
+If tests fail, the agent must:
+1. Stop progression to the next stage.
+2. Capture exact failing tests.
+3. Create a failure table:
+   - test file;
+   - test name;
+   - exact error;
+   - likely cause;
+   - related to current changes: YES/NO/UNKNOWN;
+   - action: fix now / document blocker / known unrelated failure.
+4. Fix failures related to current changes.
+5. Re-run verification.
+6. Update PROGRESS, BLOCKERS, ACCEPTANCE_CHECKLIST, and agent_worklog honestly.
+
+"Agent verification passed" is **not enough** if relevant pytest failures remain.
+
+Targeted tests passing is **not enough** if full pytest reveals failures caused by the current change.
+
+Masking/security/privacy tests are **relevant** to diagnostics and bug reports and must not be dismissed as unrelated without evidence.
+
+**Never hide, summarize away, or hand-wave failing tests.**
+
+## Test editing safety and anti-loop rules
+
+Agents must not repeatedly delete/recreate the same test file while trying to fix failures.
+
+If a test edit fails twice, stop and switch to a deterministic approach:
+1. Read the current file.
+2. Identify the exact failing assertion or syntax error.
+3. Make one minimal patch.
+4. Run `python3 -m py_compile <file>` for Python files.
+5. Run the smallest relevant pytest command.
+6. If still failing, report the exact blocker instead of looping.
+
+Forbidden behavior:
+- repeatedly creating files named `*_old.py`, `*_broken.py`, `*_fixed.py`, `*_corrected.py`;
+- deleting and recreating the same test file multiple times without verifying syntax;
+- writing invalid Python string literals;
+- changing test expectations without understanding the product decision;
+- weakening tests only to make them pass;
+- claiming success while pytest collection fails;
+- moving to the next stage while a test file has a syntax error.
+
+Required behavior after editing any Python test file:
+- run `python3 -m py_compile <changed_test_file>`;
+- run targeted pytest for that file;
+- only then run broader test suites.
+
+If an agent gets stuck in an edit loop, it must stop, document the failure, and ask for a concrete decision or provide a minimal patch plan.
+
+## Anti-loop and repeated-action rules
+
+Agents must not repeat the same failed action indefinitely.
+
+Hard limits:
+- Do not run the exact same failing terminal command more than 2 times.
+- Do not apply the same failed patch more than 2 times.
+- Do not delete/recreate the same file more than 1 time in a single task.
+- Do not repeat a diagnostic command after the result is already known.
+- Do not keep running a command with a known syntax error.
+
+If the same command or edit fails twice, the agent must stop and switch strategy:
+1. State the repeated failure.
+2. State the exact known fact from the failure.
+3. Inspect the source file or test directly.
+4. Make one minimal patch.
+5. Run py_compile for changed Python files.
+6. Run the smallest relevant pytest.
+7. If still failing, report a blocker instead of looping.
+
+Forbidden behavior:
+- repeating the same python -c command while expecting a different result;
+- repeating a command with unchanged input after unchanged output;
+- repeatedly creating/removing *_old.py, *_broken.py, *_fixed.py, *_corrected.py files;
+- deleting and recreating the same test file multiple times without verifying syntax;
+- writing invalid Python string literals;
+- changing test expectations without understanding the product decision;
+- weakening tests only to make them pass;
+- claiming success while pytest collection fails;
+- moving to the next stage while a test file has a syntax error.
+
+Required behavior after editing any Python test file:
+- run python3 -m py_compile <changed_test_file>;
+- run targeted pytest for that file;
+- only then run broader test suites.
+
+If an agent gets stuck in a loop, it must stop, summarize the failure, and ask for a concrete decision or provide a minimal patch plan.
+
 ## Worklog discipline
 - After each completed phase, append an entry to `docs/agent_worklog.md` including:
   - timestamp;

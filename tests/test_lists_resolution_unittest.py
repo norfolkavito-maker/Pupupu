@@ -10,10 +10,14 @@ class TestListsResolution(unittest.TestCase):
     def _ctx(self, root: Path):
         # minimal ctx for resolve_winws_args
         paths = SimpleNamespace(
+            data_dir=root / "DedZapretData" / "data",
             lists_dir=root / "DedZapretData" / "data" / "lists",
             runtime_dir=root / "DedZapretData" / "runtime",
+            zapret_runtime_dir=root / "DedZapretData" / "runtime" / "zapret",
+            flowseal_lists_dir=root / "DedZapretData" / "data" / "upstreams" / "flowseal" / "lists",
+            flowseal_bin_dir=root / "DedZapretData" / "data" / "upstreams" / "flowseal" / "bin",
         )
-        return SimpleNamespace(paths=paths)
+        return SimpleNamespace(paths=paths, state=SimpleNamespace(zapret=SimpleNamespace(discord_profile="", games_profile="")))
 
     def test_lists_placeholder_points_to_manager_lists(self):
         root = Path(".tmp_test_lists").resolve()

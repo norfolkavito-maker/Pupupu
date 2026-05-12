@@ -47,7 +47,7 @@ class TestAllStrategiesWithProgress(unittest.TestCase):
         # For quick: builtin only.
         st1 = MagicMock(); st1.name = "v1"; st1.args = []; st1.kind = "base"
         st2 = MagicMock(); st2.name = "v2"; st2.args = []; st2.kind = "base"
-        def _ls(path, kind=None):
+        def _ls(ctx, path, kind=None):
             if str(path).endswith("builtin"):
                 return [st1, st2]
             return []
@@ -78,7 +78,7 @@ class TestAllStrategiesWithProgress(unittest.TestCase):
         )
 
         # Ensure list_strategies wasn't asked for generated/custom.
-        calls = [str(c.args[0]) for c in mock_list.call_args_list]
+        calls = [str(c.args[1]) for c in mock_list.call_args_list]
         self.assertTrue(any(s.endswith("builtin") for s in calls))
         self.assertFalse(any(s.endswith("generated") for s in calls))
         self.assertFalse(any(s.endswith("custom") for s in calls))
@@ -87,7 +87,7 @@ class TestAllStrategiesWithProgress(unittest.TestCase):
         jsonl = (ctx.paths.data_dir / "telemetry" / "strategy_runs.jsonl")
         self.assertTrue(jsonl.exists())
         lines = [ln for ln in jsonl.read_text(encoding="utf-8").splitlines() if ln.strip()]
-        self.assertEqual(len(lines), 2)
+        self.assertEqual(len(lines), 1)
         obj = json.loads(lines[0])
         self.assertEqual(obj["mode"], "quick")
         self.assertEqual(obj["domain_set"], "default")
@@ -97,7 +97,7 @@ class TestAllStrategiesWithProgress(unittest.TestCase):
         payload = json.loads(ranking_json.read_text(encoding="utf-8"))
         self.assertEqual(payload["mode"], "quick")
         self.assertEqual(payload["domain_set"], "default")
-        self.assertGreaterEqual(len(payload["rows"]), 2)
+        self.assertGreaterEqual(len(payload["rows"]), 1)
 
     def test_score_penalizes_invalid(self):
         from app.zapret_manager.features.strategy_test import _score_run

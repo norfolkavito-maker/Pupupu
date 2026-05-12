@@ -129,6 +129,11 @@ jobs:
             Copy-Item -Force runtime\singbox\bin\sing-box\sing-box.exe bundle\DedZapret\bin\sing-box\sing-box.exe
           }
 
+      - name: Release preflight (forbid dirty artifacts)
+        shell: pwsh
+        run: |
+          bash scripts/release-preflight.sh bundle/DedZapret
+
       - name: Validate portable bundle contains required assets
         shell: pwsh
         run: |

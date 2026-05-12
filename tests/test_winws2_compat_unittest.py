@@ -18,9 +18,12 @@ class TestWinws2Compat(unittest.TestCase):
 
         paths = SimpleNamespace(
             runtime_dir=runtime_dir,
-            data_dir=data_dir,
             lists_dir=lists_dir,
             logs_dir=logs_dir,
+            data_dir=tmp / "DedZapretData" / "data",
+            zapret_runtime_dir=runtime_dir / "zapret",
+            flowseal_lists_dir=tmp / "DedZapretData" / "data" / "upstreams" / "flowseal" / "lists",
+            flowseal_bin_dir=tmp / "DedZapretData" / "data" / "upstreams" / "flowseal" / "bin",
             config_file=(tmp / "config.yaml"),
             sources_file=(tmp / "sources.yaml"),
             state_file=(tmp / "state.json"),
@@ -43,7 +46,7 @@ class TestWinws2Compat(unittest.TestCase):
 
     def test_build_command_uses_winws2_when_engine_winws2(self):
         from app.zapret_manager.features.zapret_runtime import build_command
-        from app.zapret_manager.strategies.model import Strategy
+        from app.zapret_manager.strategies.model import Strategy, Command, CommandType
 
         with tempfile.TemporaryDirectory(prefix="dedzapret_winws2_build_") as td:
             tmp = Path(td).resolve()
@@ -58,7 +61,15 @@ class TestWinws2Compat(unittest.TestCase):
             (ctx.paths.lists_dir / "exclude.txt").write_text("x", encoding="utf-8")
             (ctx.paths.lists_dir / "rkn.txt").write_text("x", encoding="utf-8")
 
-            st = Strategy(name="t", engine="winws2", args=["--wf-tcp=443"], source_file="", upstream="", kind="base")
+            st = Strategy(
+                id="t",
+                name="t", 
+                engine="winws2", 
+                commands=[Command(type=CommandType.WINWS, command="--wf-tcp=443")], 
+                source_file="", 
+                upstream="", 
+                kind="base"
+            )
             cmd = build_command(ctx, st)
             self.assertTrue(cmd)
             self.assertTrue(str(cmd[0]).lower().endswith("winws2.exe"))

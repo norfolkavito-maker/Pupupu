@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.zapret_manager.features.strategy_test import test_strategy
 from app.zapret_manager.features.zapret_runtime import WinwsStartError
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, Command, CommandType
 
 
 class TestStrategyInvalidFullScenario(unittest.TestCase):
@@ -44,7 +44,7 @@ class TestStrategyInvalidFullScenario(unittest.TestCase):
             paths = _Paths()
 
         ctx = _Ctx()
-        st = Strategy(name="v1", engine="winws", args=["--new"], kind="base")
+        st = Strategy(id="v1", name="v1", commands=[Command(type=CommandType.WINWS, command="--new")], engine="winws", kind="base")
         test_domains = ["https://example.com/", "https://google.com/"]
         
         # Mock stderr content

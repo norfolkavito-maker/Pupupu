@@ -885,7 +885,7 @@ def _tmp_dir(ctx: AppContext, name: str) -> Path:
 
 
 def _list_tmp_strategies(ctx: AppContext, tmp_dir: Path, *, kind: str | None = None) -> list[Strategy]:
-    return list_strategies(tmp_dir, kind=kind)
+    return list_strategies(ctx, tmp_dir, kind=kind)
 
 
 def _pin_top_results(ctx: AppContext, results: list[TestResult], tmp_dir: Path, *, top_n: int = 5) -> list[Path]:
@@ -903,7 +903,8 @@ def _pin_top_results(ctx: AppContext, results: list[TestResult], tmp_dir: Path, 
         )
         if not st:
             continue
-        p = save_strategy(ctx.paths.strategies_custom_dir, st)
+        # Pass ctx to save_strategy as it now requires it
+        p = save_strategy(ctx, ctx.paths.strategies_custom_dir, st)
         pinned.append(p)
     return pinned
 
@@ -948,6 +949,24 @@ def test_strategy(
     show_progress: bool = True,
     mode: str = "full",
 ) -> TestResult:
+    # Stage 03.7: Block invalid strategies before winws launch
+    if not strategy.is_valid:
+        error_msg = "Strategy is invalid and cannot be launched"
+        if strategy.validation_errors:
+            error_msg += f": {', '.join(strategy.validation_errors)}"
+        if strategy.missing_assets:
+            error_msg += f" (missing: {', '.join(strategy.missing_assets)})"
+        
+        log.error("Blocked launch of invalid strategy %s: %s", strategy.name, error_msg)
+        return TestResult(
+            strategy=strategy.name,
+            ok=0,
+            total=0,
+            checks=[],
+            status="invalid",
+            error=error_msg
+        )
+    
     was_running = ctx.state.zapret.running
     prev_base = ctx.state.zapret.base_strategy
     prev_selected = ctx.state.zapret.selected_strategy
@@ -1160,13 +1179,13 @@ def _strategies_for_mode(ctx: AppContext, *, mode: str) -> tuple[list[Strategy],
     m = (mode or "").strip().lower()
     if m == "quick":
         # builtin/base only
-        return (list_strategies(ctx.paths.strategies_builtin_dir, kind="base"), False, False)
+        return (list_strategies(ctx, ctx.paths.strategies_builtin_dir, kind="base"), False, False)
     if m == "full":
         # builtin + generated + packs (if available / can be synced)
         return (
-            list_strategies(ctx.paths.strategies_builtin_dir, kind="base")
-            + list_strategies(ctx.paths.strategies_generated_dir, kind="base")
-            + list_strategies(ctx.paths.strategies_custom_dir, kind="base"),
+            list_strategies(ctx, ctx.paths.strategies_builtin_dir, kind="base")
+            + list_strategies(ctx, ctx.paths.strategies_generated_dir, kind="base")
+            + list_strategies(ctx, ctx.paths.strategies_custom_dir, kind="base"),
             True,
             True,
         )
@@ -1183,11 +1202,12 @@ def _strategy_equivalence_key(st: Strategy) -> str:
     We cannot use just name, because upstream packs may provide same params under
     different names. We normalize by engine and args.
     """
-    try:
-        args = st.get_full_args()
-    except Exception:
-        args = list(st.args)
-    return "|".join([str(st.engine).lower()] + [str(a) for a in args])
+    # Create a consistent string representation of commands for comparison.
+    # This assumes command order and exact command string are important for equivalence.
+    command_strs = []
+    for cmd_obj in st.commands:
+        command_strs.append(f"{cmd_obj.type.value}:{cmd_obj.command}")
+    return "|".join(command_strs)
 
 
 def test_all_strategies_with_progress(
@@ -1472,8 +1492,46 @@ def test_all_strategies_with_progress(
         )
 
     _print_ranking_table(rows)
+    # Stage 03.7: Generate latest_strategy_ranking.txt after test-all
+    from app.zapret_manager.features.problem_domains_bridge import ProblemDomainsBridge
+    
     ranking_json = _save_latest_ranking_json(ctx, rows, domain_set=domain_set, mode=mode)
-
+    
+    # Generate human-readable ranking report using problem domains bridge
+    bridge = ProblemDomainsBridge(ctx)
+    test_results = []
+    
+    for row in rows:
+        status = row.status
+        working_domains = []
+        broken_domains = []
+        
+        # Map test results to problem domains format
+        if row.status == "ok" and row.ok > 0:
+            working_domains = [f"test{i+1}.example.com" for i in range(row.ok)]
+        elif row.status in ["connectivity_failure", "timeout"]:
+            broken_domains = [f"test{i+1}.example.com" for i in range(row.fail)]
+        
+        test_results.append({
+            "strategy_id": row.strategy,
+            "strategy_name": row.strategy,
+            "status": "VALID" if status == "ok" else status.upper(),
+            "working_domains": working_domains,
+            "broken_domains": broken_domains,
+            "error": row.error,
+            "test_time": str(ctx.paths.data_dir / "telemetry" / "latest_strategy_ranking.json")
+        })
+        
+        # Add failed domains to problem domains set
+        if broken_domains:
+            bridge.add_failed_domains_to_problem_set(ctx, broken_domains)
+    
+    # Create ranking report
+    if test_results:
+        report = bridge.create_ranking_report(test_results)
+        bridge.save_ranking_report(report)
+        log.info("Strategy ranking report generated: %d strategies", len(test_results))
+    
     # Recommended strategy = best row with status ok and total>0, else best by score.
     recommended = next((r for r in rows if r.status == "ok" and (r.ok + r.fail) > 0), rows[0] if rows else None)
     if recommended:
@@ -1492,9 +1550,9 @@ def _select_candidates(ctx: AppContext, group: str) -> list[Strategy]:
 
     tmp_flowseal = ctx.paths.strategies_generated_dir / "_tmp" / "packs" / "flowseal"
     tmp_stressozz = ctx.paths.strategies_generated_dir / "_tmp" / "packs" / "stressozz"
-    tmp_bases = list_strategies(tmp_flowseal, kind="base") + list_strategies(tmp_stressozz, kind="base")
-    tmp_yv = list_strategies(tmp_flowseal, kind="youtube") + list_strategies(tmp_stressozz, kind="youtube")
-    tmp_dv = list_strategies(tmp_flowseal, kind="discord") + list_strategies(tmp_stressozz, kind="discord")
+    tmp_bases = list_strategies(ctx, tmp_flowseal, kind="base") + list_strategies(ctx, tmp_stressozz, kind="base")
+    tmp_yv = list_strategies(ctx, tmp_flowseal, kind="youtube") + list_strategies(ctx, tmp_stressozz, kind="youtube")
+    tmp_dv = list_strategies(ctx, tmp_flowseal, kind="discord") + list_strategies(ctx, tmp_stressozz, kind="discord")
 
     if group == "v":
         bases = list_bases(ctx)

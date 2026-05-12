@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from app.zapret_manager.features.strategy_test import test_strategy
 from app.zapret_manager.features.zapret_runtime import WinwsStartError
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, Command, CommandType
 
 
 class TestStrategyInvalidWhenWinwsFails(unittest.TestCase):
@@ -38,7 +38,7 @@ class TestStrategyInvalidWhenWinwsFails(unittest.TestCase):
             paths = _Paths()
 
         ctx = _Ctx()
-        st = Strategy(name="v1", engine="winws", args=["--new"], kind="base")
+        st = Strategy(id="v1", name="v1", commands=[Command(type=CommandType.WINWS, command="--new")], engine="winws", kind="base")
 
         with patch("app.zapret_manager.features.strategy_test.stop_zapret") as _stop, patch(
             "app.zapret_manager.features.strategy_test.start_zapret_interactive",

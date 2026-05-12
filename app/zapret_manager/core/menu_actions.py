@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
-from app.zapret_manager.core.audit import AuditEvent, append_audit
+from app.zapret_manager.core.audit import AuditLogger, create_audit_logger
+
+
+
+
+
+
 from app.zapret_manager.core.diagnostics import diag_log
 from app.zapret_manager.core.mask import mask_secrets_text
 from app.zapret_manager.ui.colors import C
@@ -21,13 +27,12 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 @dataclass(frozen=True)
 class MenuActionCtx:
-    audit_log: Path
+    audit_logger: AuditLogger
 
 
 def _default_action_ctx(ctx) -> MenuActionCtx:
     # ctx.paths.logs_dir exists in real AppContext.
-    audit = (ctx.paths.logs_dir / "audit.jsonl").resolve()  # type: ignore[attr-defined]
-    return MenuActionCtx(audit_log=audit)
+    return MenuActionCtx(audit_logger=create_audit_logger(ctx.paths))
 
 
 def menu_handler(action_id: str) -> Callable[[F], F]:
@@ -46,11 +51,11 @@ def menu_handler(action_id: str) -> Callable[[F], F]:
             actx = _default_action_ctx(ctx) if ctx is not None else None
             try:
                 if actx:
-                    append_audit(actx.audit_log, AuditEvent(category="action.start", action_id=action_id, ok=True))
+                    actx.audit_logger.log_event(action_id, "ui", True, f"Menu action {action_id} started")
                 diag_log("action.start", "ui", {"action_id": action_id})
                 res = fn(*args, **kwargs)
                 if actx:
-                    append_audit(actx.audit_log, AuditEvent(category="action.end", action_id=action_id, ok=True))
+                    actx.audit_logger.log_event(action_id, "ui", True, f"Menu action {action_id} completed")
                 diag_log("action.end", "ui", {"action_id": action_id})
                 return res
             except Exception as e:
@@ -62,9 +67,12 @@ def menu_handler(action_id: str) -> Callable[[F], F]:
                     {"action_id": action_id, "error": str(e), "traceback": tb},
                 )
                 if actx:
-                    append_audit(
-                        actx.audit_log,
-                        AuditEvent(category="action.error", action_id=action_id, ok=False, message=str(e)),
+                    actx.audit_logger.log_event(
+                        action_id,
+                        "ui",
+                        False,
+                        str(e),
+                        errors=[tb],
                     )
 
                 # User-facing message must be safe and not leak secrets.

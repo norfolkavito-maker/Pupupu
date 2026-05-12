@@ -11,10 +11,21 @@ if TYPE_CHECKING:
     from app.zapret_manager.core.app_context import AppContext
 from app.zapret_manager.core.state import save_state
 from app.zapret_manager.strategies.composer import compose
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, Command, CommandType
 from app.zapret_manager.strategies.overlays import apply_overlays
 from app.zapret_manager.utils.platform import is_admin, is_windows
 from app.zapret_manager.utils.subprocessx import popen_detached, run
+
+log = logging.getLogger(__name__)
+
+def start_zapret_interactive(*args, **kwargs):
+    log.warning("start_zapret_interactive is a placeholder and does nothing.")
+    pass
+
+def stop_zapret(*args, **kwargs):
+    log.warning("stop_zapret is a placeholder and does nothing.")
+    pass
+
 
 
 log = logging.getLogger(__name__)
@@ -731,19 +742,18 @@ def resolve_winws_args(ctx: "AppContext", *, exe_dir: Path, args: list[str]) -> 
             return None
         return f"{opt}{normalized}"
 
+    from app.zapret_manager.core.assets import expand_placeholders
+
     for a in args:
         a = a.replace("{BIN}", str(exe_dir) + sep)
-        # Explicit Flowseal placeholders
+        # Keep legacy Flowseal placeholders for now (Phase 3 will normalize inputs)
         a = a.replace("{FLOWSEAL_ROOT}", str(flowseal_root) + sep)
         a = a.replace("{FLOWSEAL_BIN}", str(flowseal_bin) + sep)
         a = a.replace("{FLOWSEAL_LISTS}", str(flowseal_lists) + sep)
-        # Canonical lists dir: DedZapretData/data/lists
-        a = a.replace("{LISTS}", str(mgr_lists_dir) + sep)
-        a = a.replace("{MGR_LISTS}", str(mgr_lists_dir) + sep)
-        # Legacy runtime lists dir: DedZapretData/runtime/zapret/lists
+        # Canonical placeholders via resolver (ensures {FAKE:...} picks runtime fake first)
+        a = expand_placeholders(ctx, a)
+        # Legacy runtime lists dir placeholder
         a = a.replace("{RT_LISTS}", str(rt_lists_dir) + sep)
-        a = a.replace("{FAKE}", str(fake_dir.resolve()) + sep)
-        a = _resolve_fake(ctx, a)
         # Apply compat mapping for list file names (google.txt vs list-google.txt, etc.)
         if a.startswith("--hostlist=") or a.startswith("--hostlist-exclude=") or a.startswith("--ipset=") or a.startswith("--ipset-exclude="):
             try:
@@ -1050,121 +1060,42 @@ def preflight_summary(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> dict[s
     }
 
 
-def start_zapret_interactive(
-    ctx: "AppContext",
-    strategy: Strategy,
-    youtube: Strategy | None = None,
-    discord: Strategy | None = None,
-) -> list[str]:
-    if not is_windows():
-        raise RuntimeError("This action is Windows-only")
-    if not is_admin():
-        raise RuntimeError("Нужны права администратора (запусти от имени администратора).")
+    def start_zapret_interactive(
+        ctx: "AppContext",
+        strategy: Strategy,
+        youtube: Strategy | None = None,
+        discord: Strategy | None = None,
+    ) -> list[str]:
+        if not is_windows():
+            raise RuntimeError("This action is Windows-only")
+        if not is_admin():
+            raise RuntimeError("Нужны права администратора (запусти от имени администратора).")
 
-    require_runtime_ok(ctx)
-    detect_runtime_files(ctx)
-    if not ctx.state.runtime.installed:
-        raise RuntimeError(
-            "Runtime not detected. Re-download/re-extract the release (expected runtime/zapret/*)."
-        )
+        require_runtime_ok(ctx)
+        detect_runtime_files(ctx)
+        if not ctx.state.runtime.installed:
+            raise WinwsStartError(
+                "Runtime not detected. Re-download/re-extract the release (expected runtime/zapret/*)."
+            )
 
-    warnings: list[str] = []
-    args_override: list[str] | None = None
-    engine_override: str | None = None
-    if (
-        youtube
-        or discord
-        or ctx.state.zapret.discord_script
-        or ctx.state.zapret.games_profile
-        or ctx.state.zapret.rkn_enabled
-        or ctx.state.zapret.wssize_enabled
-    ):
-        composed = compose(
-            base=strategy,
-            youtube=youtube,
-            discord=discord,
-            discord_script=ctx.state.zapret.discord_script,
-            games_profile=ctx.state.zapret.games_profile,
-            rkn_enabled=ctx.state.zapret.rkn_enabled,
-            wssize_enabled=ctx.state.zapret.wssize_enabled,
-        )
-        args_override = composed.args
-        engine_override = composed.engine
-        warnings = list(composed.warnings)
+        warnings: list[str] = []
 
-    # Optional engine override (does not modify strategy files).
-    # Default "auto" preserves current behavior: engine is taken from strategy/compose.
-    try:
-        mode = str(getattr(getattr(ctx, "state", None), "zapret", None).engine_mode or "auto").strip().lower()
-    except Exception:
-        mode = "auto"
-    if mode in {"winws", "winws2"}:
-        engine_override = mode
-
-    # Preflight: stale PID cleanup (do not trust state blindly).
-    if ctx.state.zapret.pid and not is_pid_alive(int(ctx.state.zapret.pid)):
-        log.warning("state has stale winws pid=%s; clearing", ctx.state.zapret.pid)
-        ctx.state.zapret.running = False
-        ctx.state.zapret.pid = None
-        save_state(ctx.paths.state_file, ctx.state)
-        warnings.append("state had stale winws pid; cleared")
-
-    try:
-        cmd = build_command(ctx, strategy, args_override=args_override, engine_override=engine_override)
-    except Exception as e:
-        # Convert build/preflight errors into WinwsStartError so UI renders as INVALID.
-        raise WinwsStartError(f"winws preflight failed: {e}")
-
-    # Log final argv + summary for diagnostics.
-    log.info("winws command (argv):\n%s", dump_winws_command(cmd))
-
-    # Validate BEFORE start.
-    cwd = zapret_root(ctx)
-    problems = validate_winws_command(ctx, cmd=cmd, cwd=cwd)
-    warn_lines = [p for p in problems if str(p).startswith("WARN:")]
-    err_lines = [p for p in problems if not str(p).startswith("WARN:")]
-
-    # add warnings into returned warnings (and log)
-    if warn_lines:
-        for w in warn_lines:
-            log.warning("preflight warning: %s", w)
-        warnings.extend([w.replace("WARN:", "").strip() for w in warn_lines])
-
-    if err_lines:
-        report = format_preflight_diagnostics_ru(
-            strategy_name=strategy.name,
-            cmd=cmd,
-            problems=problems,
-            warnings=warnings,
-            ctx=ctx,
-        )
-        raise WinwsStartError("winws command is invalid:\n- " + "\n- ".join(err_lines) + "\n\n" + report)
-
-    try:
-        summary = preflight_summary(ctx, cmd=cmd, cwd=cwd)
-        log.info("winws preflight summary: %s", summary)
-    except Exception:
-        pass
-
-    logs = winws_log_paths(ctx)
-    p = popen_detached(cmd, cwd=str(cwd), stdout_path=logs.stdout, stderr_path=logs.stderr)
-
-    try:
-        verify_winws_started(pid=int(p.pid), stderr_path=logs.stderr, grace_s=0.7)
-    except WinwsStartError as e:
-        # do not mark zapret running
-        tail = e.stderr_tail or tail_text_file(logs.stderr)
-        msg = str(e)
-        if tail.strip():
-            msg += "\n\n--- winws stderr (tail) ---\n" + tail.strip() + "\n--- end ---"
-        raise WinwsStartError(msg, exit_code=e.exit_code, stderr_tail=tail)
-
-    ctx.state.zapret.running = True
-    ctx.state.zapret.mode = "interactive"
-    ctx.state.zapret.pid = int(p.pid)
-    ctx.state.zapret.selected_strategy = strategy.name
-    save_state(ctx.paths.state_file, ctx.state)
-    return warnings
+        # --- First-pass validation from strategy object itself ---
+        if not strategy.is_valid:
+            # Strategy is already marked invalid during load time.
+            report_lines = []
+            if strategy.validation_errors:
+                report_lines.append("Validation errors:")
+                report_lines.extend([f"- {e}" for e in strategy.validation_errors])
+            if strategy.missing_assets:
+                report_lines.append("Missing assets:")
+                report_lines.extend([f"- {a}" for a in strategy.missing_assets])
+            if strategy.unresolved_placeholders:
+                report_lines.append("Unresolved placeholders:")
+                report_lines.extend([f"- {p}" for p in strategy.unresolved_placeholders])
+            
+            report_text = "\n".join(report_lines) if report_lines else "No specific details (check logs)."
+            raise WinwsStartError(f"Стратегия невалидна:\n{report_text}")
 
 
 def stop_zapret(ctx: "AppContext") -> None:
@@ -1192,14 +1123,8 @@ def _find_first(root: Path, names: list[str]) -> Path | None:
 
 
 def _resolve_fake(ctx: "AppContext", token: str) -> str:
-    if "{FAKE:" not in token:
-        return token
-    rt = _runtime_root(ctx)
-    import re
+    """Legacy helper (deprecated).
 
-    def repl(m: re.Match[str]) -> str:
-        fname = m.group(1)
-        found = _find_first(rt, [fname])
-        return str(found) if found else fname
-
-    return re.sub(r"\{FAKE:([^}]+)\}", repl, token)
+    Placeholder expansion is now centralized in app.zapret_manager.core.assets.
+    """
+    return token

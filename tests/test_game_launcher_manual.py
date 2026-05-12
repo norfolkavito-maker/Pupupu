@@ -5,21 +5,39 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, Command, CommandType
 
 
 class FakeCtx:
     """Minimal fake context for generate_bat testing."""
-    class FakeConfig:
-        class FakeZapret:
-            winws_path = r".\zapret-win-bundle\winws.exe"
-        class FakePaths:
-            lists_dir = r".\data\lists"
-            fake_files_dir = r".\zapret-win-bundle\files\fake"
-        zapret = FakeZapret()
-        paths = FakePaths()
-    config = FakeConfig()
+    class FakePaths:
+        # Mocking attributes used by zapret_runtime.py
+        runtime_dir = Path(".") / "zapret-win-bundle"
+        zapret_runtime_dir = Path(".") / "zapret-win-bundle" / "zapret"
+        lists_dir = Path(".") / "data" / "lists"
+        flowseal_lists_dir = Path(".") / "data" / "upstreams" / "flowseal" / "lists"
+        flowseal_bin_dir = Path(".") / "data" / "upstreams" / "flowseal" / "bin"
+        state_file = Path(".") / "state.json"
+        config_file = Path(".") / "config.yaml"
+        sources_file = Path(".") / "sources.yaml"
+        logs_dir = Path(".") / "logs"
+
+    class FakeState:
+        class FakeZapretState:
+            discord_profile: str = ""
+            games_profile: str = ""
+            winws_path: str = ""
+            winws2_path: str = ""
+            installed: bool = True
+        zapret = FakeZapretState()
+        runtime = FakeZapretState() # Reuse for runtime paths, though it's not ideal.
+    
+    paths = FakePaths()
+    state = FakeState()
     root = Path(".")
+
+
+
 
 
 class TestGameLauncher(unittest.TestCase):
@@ -34,12 +52,11 @@ class TestGameLauncher(unittest.TestCase):
         original_find = gl.find_strategy
 
         def fake_find(ctx, name, kind=None):
-            return Strategy(
-                name="v7",
-                engine="winws",
-                args=["--filter-tcp=443", "--dpi-desync=fake"],
-                kind="base",
-            )
+            commands = [
+                Command(type=CommandType.WINWS, command="--filter-tcp=443"),
+                Command(type=CommandType.WINWS, command="--dpi-desync=fake"),
+            ]
+            return Strategy(id="v7", name="v7", commands=commands, kind="base")
 
         gl.find_strategy = fake_find
         try:

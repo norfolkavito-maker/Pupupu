@@ -192,9 +192,18 @@ Full agent verification:
 - `docs/ai/BLOCKERS.md` — blocker log.
 - `docs/ai/workflows/` — staged implementation plans (read all, execute in order).
   - `docs/ai/workflows/README.md` — stage order and execution rules.
-  - `docs/ai/workflows/01_stabilization_fixes_test10.md` — stabilization fixes from test.10 audit.
-  - `docs/ai/workflows/02_test_engine_performance.md` — test engine performance workflow.
-  - `docs/ai/workflows/03_tray_and_menu_ux.md` — tray and menu UX workflow.
+  - `docs/ai/workflows/00_clean_rebuild_overview.md` — strategic overview (current).
+  - `docs/ai/workflows/01_release_packaging_cleanup.md` — clean portable releases (current).
+  - `docs/ai/workflows/02_path_resolver_runtime_assets.md` — canonical paths, asset model (current).
+  - `docs/ai/workflows/03_strategy_import_validation.md` — normalize, validate, index strategies (current).
+  - `docs/ai/workflows/04_menu_simplification.md` — short main menu, status-first UI (current).
+  - `docs/ai/workflows/05_singbox_pipeline.md` — node import, config build, lifecycle (current).
+  - `docs/ai/workflows/06_diagnostics_bug_report.md` — masked diagnostics, structured reports (current).
+  - `docs/ai/workflows/07_release_verification.md` — full test suite, smoke test (current).
+  - Legacy workflows (superseded by clean rebuild phases):
+    - `docs/ai/workflows/01_stabilization_fixes_test10.md`
+    - `docs/ai/workflows/02_test_engine_performance.md`
+    - `docs/ai/workflows/03_tray_and_menu_ux.md`
 - `docs/ai/prompts/` — legacy prompt folder (optional / may be deprecated).
 - `scripts/agent-verify.ps1` — Windows verification.
 - `scripts/agent-verify.sh` — Unix verification.
@@ -215,6 +224,5 @@ Full agent verification:
 
 ## Last updated
 
-- Date: 2026-05-03
+- Date: 2026-05-09
 - Updated by: AI coding agent
-- Reason: Add staged workflows folder references and recommended read order.

@@ -8,7 +8,7 @@ from app.zapret_manager.features.zapret_runtime import (
     validate_winws_command,
     normalize_winws_args,
 )
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, Command, CommandType
 
 
 class _Ctx(SimpleNamespace):
@@ -42,7 +42,16 @@ def _make_ctx(tmp: Path) -> _Ctx:
         runtime=SimpleNamespace(winws_path=str(winws), winws2_path="", installed=True, runtime_path=str(runtime_dir)),
         zapret=zapret_state,
     )
-    paths = SimpleNamespace(runtime_dir=runtime_dir, lists_dir=lists_dir, state_file=tmp / "state.json", logs_dir=tmp / "logs")
+    paths = SimpleNamespace(
+        runtime_dir=runtime_dir, 
+        lists_dir=lists_dir, 
+        state_file=tmp / "state.json", 
+        logs_dir=tmp / "logs",
+        data_dir=tmp / "DedZapretData" / "data",
+        zapret_runtime_dir=runtime_dir / "zapret",
+        flowseal_lists_dir=tmp / "DedZapretData" / "data" / "upstreams" / "flowseal" / "lists",
+        flowseal_bin_dir=tmp / "DedZapretData" / "data" / "upstreams" / "flowseal" / "bin"
+    )
     return _Ctx(root=tmp, paths=paths, state=state)
 
 
@@ -52,7 +61,14 @@ class TestWfInference(unittest.TestCase):
 
         with TemporaryDirectory() as td:
             ctx = _make_ctx(Path(td))
-            st = Strategy(name="t", engine="winws", args=["--filter-tcp=443"], kind="base")
+            st = Strategy(
+                id="t",
+                name="t",
+                commands=[
+                    Command(type=CommandType.WINWS, command="--filter-tcp=443")
+                ],
+                kind="base"
+            )
             cmd = build_command(ctx, st)
             self.assertIn("--wf-tcp=443", cmd)
             # must be right after exe
@@ -64,9 +80,14 @@ class TestWfInference(unittest.TestCase):
         with TemporaryDirectory() as td:
             ctx = _make_ctx(Path(td))
             st = Strategy(
+                id="t",
                 name="t",
                 engine="winws",
-                args=["--filter-tcp=443", "--new", "--filter-tcp=80,443"],
+                commands=[
+                    Command(type=CommandType.WINWS, command="--filter-tcp=443"),
+                    Command(type=CommandType.WINWS, command="--new"),
+                    Command(type=CommandType.WINWS, command="--filter-tcp=80,443")
+                ],
                 kind="base",
             )
             cmd = build_command(ctx, st)
@@ -77,7 +98,15 @@ class TestWfInference(unittest.TestCase):
 
         with TemporaryDirectory() as td:
             ctx = _make_ctx(Path(td))
-            st = Strategy(name="t", engine="winws", args=["--wf-tcp=443", "--filter-tcp=443"], kind="base")
+            st = Strategy(
+                id="t",
+                name="t",
+                commands=[
+                    Command(type=CommandType.WINWS, command="--wf-tcp=443"),
+                    Command(type=CommandType.WINWS, command="--filter-tcp=443")
+                ],
+                kind="base"
+            )
             cmd = build_command(ctx, st)
             self.assertEqual(sum(1 for a in cmd if a.startswith("--wf-tcp=")), 1)
 
@@ -86,7 +115,14 @@ class TestWfInference(unittest.TestCase):
 
         with TemporaryDirectory() as td:
             ctx = _make_ctx(Path(td))
-            st = Strategy(name="t", engine="winws", args=["--filter-udp=443"], kind="base")
+            st = Strategy(
+                id="t",
+                name="t",
+                commands=[
+                    Command(type=CommandType.WINWS, command="--filter-udp=443")
+                ],
+                kind="base"
+            )
             cmd = build_command(ctx, st)
             self.assertIn("--wf-udp=443", cmd)
 
@@ -119,9 +155,14 @@ class TestNormalizeWinwsArgs(unittest.TestCase):
             # Simulated Dv1 args with escaped newline
             raw_arg = "--filter-tcp=8443\\n--hostlist-domains=discord.media\\n--dpi-desync=multisplit"
             st = Strategy(
+                id="dv1",
                 name="Dv1",
                 engine="winws",
-                args=[raw_arg, "--new", "--dpi-desync=fake,tls-split,sni,split2"],
+                commands=[
+                    Command(type=CommandType.WINWS, command=raw_arg),
+                    Command(type=CommandType.WINWS, command="--new"),
+                    Command(type=CommandType.WINWS, command="--dpi-desync=fake,tls-split,sni,split2")
+                ],
                 kind="discord",
             )
             # Should NOT raise "invalid range token"

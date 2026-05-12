@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, CommandType
 from app.zapret_manager.strategies.overlays import games_profile_args
 
 
@@ -29,14 +29,16 @@ def compose(
     if base.kind != "base":
         raise ValueError("base strategy must be kind=base")
 
-    args = list(base.args)
+    args = [cmd.command for cmd in base.commands if cmd.type == CommandType.WINWS]
     warnings: list[str] = []
 
     if youtube:
-        args = _insert_before_first_new(args, youtube.args)
+        youtube_args = [cmd.command for cmd in youtube.commands if cmd.type == CommandType.WINWS]
+        args = _insert_before_first_new(args, youtube_args)
 
     if discord:
-        args = _replace_discord_block(args, discord.args)
+        discord_args = [cmd.command for cmd in discord.commands if cmd.type == CommandType.WINWS]
+        args = _replace_discord_block(args, discord_args)
 
     if discord_script:
         args = _append_block(args, _discord_script_args(discord_script))
@@ -54,7 +56,8 @@ def compose(
     if any("=ts" in a or a.endswith("ts") or "fooling=ts" in a for a in args):
         warnings.append("Для работы стратегии включи TCP timestamps: netsh int tcp set global timestamps=enabled")
 
-    return ComposedStrategy(engine=base.engine, args=_compact(args), warnings=warnings)
+    composed_engine = base.commands[0].type.value if base.commands else CommandType.UNKNOWN.value
+    return ComposedStrategy(engine=composed_engine, args=_compact(args), warnings=warnings)
 
 
 def _compact(args: list[str]) -> list[str]:

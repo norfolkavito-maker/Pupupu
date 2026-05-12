@@ -1761,37 +1761,9 @@ def game_launcher_menu(ctx: AppContext) -> None:
             pause()
 
 
-def doh_menu(ctx: AppContext) -> None:
-    """Меню DNS over HTTPS."""
-    while True:
-        clear()
-        print(f"{C.MAGENTA}Меню DNS over HTTPS{C.RESET}\n")
-        print(f"{C.YELLOW}Статус:{C.RESET} {'ON' if ctx.state.doh.enabled else 'OFF'} ({ctx.state.doh.profile})\n")
-        for i, (name, url) in enumerate(PROFILES.items(), start=1):
-            mark = "*" if ctx.state.doh.profile == name and ctx.state.doh.enabled else " "
-            print(f"{mark} {C.CYAN}{i}){C.RESET} {name} {C.DIM}({url}){C.RESET}")
-        print(f"\n{C.CYAN}0){C.RESET} {C.GREEN}Сбросить DNS на DHCP{C.RESET}")
-        c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите профиль (1-{len(PROFILES)}) или 0 для сброса:{C.RESET} ").strip()
-        if not c:
-            return
-        try:
-            if c == "0":
-                stop_doh(ctx)
-                print(f"\n{C.GREEN}DNS сброшен на DHCP.{C.RESET}\n")
-                pause()
-            elif c.isdigit():
-                idx = int(c)
-                if 1 <= idx <= len(PROFILES):
-                    profile_name = list(PROFILES.keys())[idx - 1]
-                    if ctx.state.doh.enabled:
-                        stop_doh(ctx)
-                    start_doh(ctx, profile_name)
-                    print(f"\n{C.GREEN}DoH запущен: {profile_name}{C.RESET}\n")
-                    pause()
-        except Exception as e:
-            log.exception("doh_menu failed")
-            print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
-            pause()
+def pause(msg: str = "\nНажмите Enter...") -> None:
+    """Simple pause with message."""
+    ask(msg)
 
 
 def _problem_domains_menu(ctx: AppContext) -> None:
