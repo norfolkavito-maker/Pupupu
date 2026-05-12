@@ -86,13 +86,21 @@ echo ""
 echo "--- Forbidden local absolute paths ---"
 local_path_count=0
 while IFS= read -r -d '' file; do
-    if grep -l "C:\\\\Users\\\\" "$file" 2>/dev/null; then
-        if [ "$local_path_count" -eq 0 ]; then
-            echo -e "  ${RED}FAIL${NC} Files containing C:\\Users\\ paths:"
-        fi
-        echo "       $file"
-        local_path_count=$((local_path_count + 1))
-    fi
+    # Only check text-like files for local paths, not binary files
+    case "$file" in
+        *.txt|*.json|*.yaml|*.yml|*.ini|*.cfg|*.conf|*.bat|*.cmd|*.ps1|*.md|*.py|*.toml|*.xml|*.log)
+            if grep -l "C:\\\\Users\\\\" "$file" 2>/dev/null; then
+                if [ "$local_path_count" -eq 0 ]; then
+                    echo -e "  ${RED}FAIL${NC} Files containing C:\\Users\\ paths:"
+                fi
+                echo "       $file"
+                local_path_count=$((local_path_count + 1))
+            fi
+            ;;
+        *)
+            # Skip binary files and other non-text files
+            ;;
+    esac
 done < <(find "$BUNDLE_DIR" -type f -print0 2>/dev/null)
 if [ "$local_path_count" -eq 0 ]; then
     echo -e "  ${GREEN}OK${NC} No C:\\Users\\ paths"

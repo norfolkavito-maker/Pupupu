@@ -257,7 +257,7 @@ def extras_menu(ctx: AppContext) -> None:
             elif c == "4":
                 tg_menu(ctx)
             elif c == "5":
-                doh_menu(ctx)
+                hosts_menu(ctx)
             elif c == "6":
                 hosts_menu(ctx)
             elif c == "7":
