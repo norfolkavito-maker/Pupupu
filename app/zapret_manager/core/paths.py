@@ -61,6 +61,7 @@ class Paths:
     runtime_dir: Path  # DedZapretData/runtime
     zapret_runtime_dir: Path  # DedZapretData/runtime/zapret
     singbox_runtime_dir: Path  # DedZapretData/runtime/sing-box
+    singbox_bin: Path  # bin/sing-box/sing-box.exe
 
     # Working data roots
     data_dir: Path  # DedZapretData/data
@@ -149,6 +150,7 @@ class Paths:
             runtime_dir=runtime_dir,
             zapret_runtime_dir=zapret_runtime_dir,
             singbox_runtime_dir=singbox_runtime_dir,
+            singbox_bin=(root / "bin" / "sing-box" / "sing-box.exe").resolve(),
             data_dir=data_dir,
             lists_dir=lists_dir,
             strategies_dir=strategies_dir,
