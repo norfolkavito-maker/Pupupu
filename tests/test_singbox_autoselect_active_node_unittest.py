@@ -15,6 +15,7 @@ class TestSingBoxAutoSelectActiveNode(unittest.TestCase):
         ctx.paths.data_dir = data_dir
         ctx.paths.logs_dir = data_dir / "logs"
         ctx.paths.root = data_dir
+        ctx.paths.current_state_file = data_dir / "state" / "current.json"
         return ctx
 
     def test_autoselect_first_node_when_empty(self):
@@ -32,6 +33,7 @@ class TestSingBoxAutoSelectActiveNode(unittest.TestCase):
             # seed subscriptions
             sb_dir = d / "singbox"
             sb_dir.mkdir(parents=True, exist_ok=True)
+            (sb_dir / "nodes.json").write_text("[]", encoding="utf-8")
             (sb_dir / "subscriptions.json").write_text(
                 json.dumps(
                     [
@@ -56,6 +58,12 @@ class TestSingBoxAutoSelectActiveNode(unittest.TestCase):
                 "app.zapret_manager.features.singbox_menu.safe_print", return_value=None
             ), patch(
                 "app.zapret_manager.features.singbox_menu.clear", return_value=None
+            ), patch(
+                "app.zapret_manager.core.menu_actions.ask", return_value="b"
+            ), patch(
+                "app.zapret_manager.features.singbox_menu._subscriptions_path", return_value=sb_dir / "subscriptions.json"
+            ), patch(
+                "app.zapret_manager.features.singbox_menu._nodes_path", return_value=sb_dir / "nodes.json"
             ):
                 _sb_update_subscriptions(ctx)
 

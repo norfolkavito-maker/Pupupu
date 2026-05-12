@@ -17,7 +17,6 @@ from zapret_manager.ui.main_menu import run_main_menu
 from zapret_manager.ui.menus import (
     auto_setup_menu,
     strategies_menu,
-    test_menu,
     hosts_menu,
     diagnostics_menu,
     logs_menu,
@@ -58,6 +57,7 @@ class TestMenuDependencies(unittest.TestCase):
 
     def test_test_menu_import(self):
         """Test test menu handler exists and is callable."""
+        from zapret_manager.ui.menus import test_menu
         self.assertTrue(callable(test_menu))
 
     def test_singbox_menu_import(self):
