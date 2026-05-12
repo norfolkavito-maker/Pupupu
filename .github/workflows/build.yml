@@ -131,6 +131,9 @@ jobs:
           }
           Copy-Item -Recurse -Force data\strategies\custom\* bundle\DedZapret\DedZapretData\data\strategies\custom\ -ErrorAction SilentlyContinue
           Copy-Item -Recurse -Force data\strategies\generated\* bundle\DedZapret\DedZapretData\data\strategies\generated\ -ErrorAction SilentlyContinue
+          # Add marker files to preserve empty directories in artifact
+          New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\custom\.keep | Out-Null
+          New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\generated\.keep | Out-Null
           if (Test-Path data\lists) {
             Copy-Item -Recurse -Force data\lists\* bundle\DedZapret\DedZapretData\data\lists\
           }

@@ -45,6 +45,7 @@ check_required "DedZapretData/sources.yaml"  "sources.yaml"
 check_required "DedZapretData/data/lists"    "data/lists directory"
 check_required "DedZapretData/data/strategies/builtin" "data/strategies/builtin directory"
 check_required "DedZapretData/data/strategies/custom" "data/strategies/custom directory"
+check_required "DedZapretData/data/strategies/generated" "data/strategies/generated directory"
 
 # --- Forbidden patterns ---
 check_forbidden_pattern() {
