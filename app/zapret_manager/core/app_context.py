@@ -69,9 +69,9 @@ class AppContext:
         )
         
         # Initialize Strategy Managers after ctx exists
-        ctx.strategies_builtin = StrategyManager(ctx, paths.strategies_builtin_dir)
-        ctx.strategies_generated = StrategyManager(ctx, paths.strategies_generated_dir)
-        ctx.strategies_custom = StrategyManager(ctx, paths.strategies_custom_dir)
+        object.__setattr__(ctx, "strategies_builtin", StrategyManager(ctx, paths.strategies_builtin_dir))
+        object.__setattr__(ctx, "strategies_generated", StrategyManager(ctx, paths.strategies_generated_dir))
+        object.__setattr__(ctx, "strategies_custom", StrategyManager(ctx, paths.strategies_custom_dir))
         
         # Stage 03.5: First launch setup from bundled upstream
         try:
