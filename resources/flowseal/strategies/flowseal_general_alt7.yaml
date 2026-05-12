@@ -1,0 +1,49 @@
+id: flowseal_general_alt7
+name: Flowseal General (ALT7)
+source: flowseal
+source_repo: Flowseal/zapret-discord-youtube
+source_ref: main
+source_file: general (ALT7).bat
+category: general_mixed
+description_ru: 'Flowseal General/ALT: общая mixed-стратегия для сайтов, YouTube/Google, Discord/STUN и игровых UDP/TCP фильтров. Источник: general (ALT7).bat.'
+engine: winws
+kind: base
+commands:
+- type: winws
+  command: --wf-tcp=80,443,2053,2083,2087,2096,8443,{GAME_FILTER_TCP} --wf-udp=443,19294-19344,50000-50100,{GAME_FILTER_UDP} --filter-udp=443 --hostlist="{FLOWSEAL_LISTS}\list-general.txt" --hostlist="{FLOWSEAL_LISTS}\list-general-user.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude-user.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude-user.txt" --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-quic="{FLOWSEAL_BIN}\quic_initial_www_google_com.bin" --new --filter-udp=19294-19344,50000-50100 --filter-l7=discord,stun --dpi-desync=fake --dpi-desync-fake-discord="{FLOWSEAL_BIN}\quic_initial_dbankcloud_ru.bin" --dpi-desync-fake-stun="{FLOWSEAL_BIN}\quic_initial_dbankcloud_ru.bin" --dpi-desync-repeats=6 --new --filter-tcp=2053,2083,2087,2096,8443 --hostlist-domains=discord.media --dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1 --dpi-desync-split-seqovl=679 --dpi-desync-split-seqovl-pattern="{FLOWSEAL_BIN}\tls_clienthello_www_google_com.bin" --new --filter-tcp=443 --hostlist="{FLOWSEAL_LISTS}\list-google.txt" --ip-id=zero --dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1 --dpi-desync-split-seqovl=679 --dpi-desync-split-seqovl-pattern="{FLOWSEAL_BIN}\tls_clienthello_www_google_com.bin" --new --filter-tcp=80,443 --hostlist="{FLOWSEAL_LISTS}\list-general.txt" --hostlist="{FLOWSEAL_LISTS}\list-general-user.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude-user.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude-user.txt" --dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1 --dpi-desync-split-seqovl=679 --dpi-desync-split-seqovl-pattern="{FLOWSEAL_BIN}\tls_clienthello_www_google_com.bin" --new --filter-udp=443 --ipset="{FLOWSEAL_LISTS}\ipset-all.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude-user.txt"
+    --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude-user.txt" --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-quic="{FLOWSEAL_BIN}\quic_initial_www_google_com.bin" --new --filter-tcp=80,443,8443 --ipset="{FLOWSEAL_LISTS}\ipset-all.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude.txt" --hostlist-exclude="{FLOWSEAL_LISTS}\list-exclude-user.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude-user.txt" --dpi-desync=syndata --new --filter-tcp={GAME_FILTER_TCP} --ipset="{FLOWSEAL_LISTS}\ipset-all.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude-user.txt" --dpi-desync=syndata --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n4 --new --filter-udp={GAME_FILTER_UDP} --ipset="{FLOWSEAL_LISTS}\ipset-all.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude.txt" --ipset-exclude="{FLOWSEAL_LISTS}\ipset-exclude-user.txt" --dpi-desync=fake --dpi-desync-repeats=12 --dpi-desync-any-protocol=1 --dpi-desync-fake-unknown-udp="{FLOWSEAL_BIN}\quic_initial_dbankcloud_ru.bin" --dpi-desync-cutoff=n2
+required_assets:
+  fake:
+  - quic_initial_dbankcloud_ru.bin
+  - quic_initial_www_google_com.bin
+  - tls_clienthello_www_google_com.bin
+  lists:
+  - ipset-all.txt
+  - ipset-exclude-user.txt
+  - ipset-exclude.txt
+  - list-exclude-user.txt
+  - list-exclude.txt
+  - list-general-user.txt
+  - list-general.txt
+  - list-google.txt
+tags:
+- alt
+- discord
+- flowseal
+- games
+- general
+- mixed
+- youtube
+warnings:
+- Использует плейсхолдеры {GAME_FILTER_TCP}/{GAME_FILTER_UDP}; сборщик профиля должен подставлять игровые порты или удалять пустые фильтры.
+- Использует ipset-all.txt; требуется корректный ipset список для IP-фильтра.
+- Содержит Discord/STUN слой.
+- Содержит Google/YouTube слой через list-google.txt.
+conflicts:
+  may_overlap_layers:
+  - youtube
+  - discord
+  - games
+  - ipset
+  requires_profile_composer: true
+source_sha256: 24ab51d1808f113720b1625ed15742d0abb96fc61ca1f951588d78e50f7d002e
