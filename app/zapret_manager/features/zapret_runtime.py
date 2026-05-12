@@ -18,17 +18,6 @@ from app.zapret_manager.utils.subprocessx import popen_detached, run
 
 log = logging.getLogger(__name__)
 
-def start_zapret_interactive(*args, **kwargs):
-    log.warning("start_zapret_interactive is a placeholder and does nothing.")
-    pass
-
-def stop_zapret(*args, **kwargs):
-    log.warning("stop_zapret is a placeholder and does nothing.")
-    pass
-
-
-
-log = logging.getLogger(__name__)
 
 
 def _mask_cmd_preview(cmd: list[str], *, limit: int = 120) -> str:
@@ -1060,42 +1049,93 @@ def preflight_summary(ctx: "AppContext", *, cmd: list[str], cwd: Path) -> dict[s
     }
 
 
-    def start_zapret_interactive(
-        ctx: "AppContext",
-        strategy: Strategy,
-        youtube: Strategy | None = None,
-        discord: Strategy | None = None,
-    ) -> list[str]:
-        if not is_windows():
-            raise RuntimeError("This action is Windows-only")
-        if not is_admin():
-            raise RuntimeError("Нужны права администратора (запусти от имени администратора).")
+def start_zapret_interactive(
+    ctx: "AppContext",
+    strategy: Strategy,
+    youtube: Strategy | None = None,
+    discord: Strategy | None = None,
+) -> list[str]:
+    if not is_windows():
+        raise RuntimeError("This action is Windows-only")
+    if not is_admin():
+        raise RuntimeError("Нужны права администратора (запусти от имени администратора).")
 
-        require_runtime_ok(ctx)
-        detect_runtime_files(ctx)
-        if not ctx.state.runtime.installed:
-            raise WinwsStartError(
-                "Runtime not detected. Re-download/re-extract the release (expected runtime/zapret/*)."
-            )
+    require_runtime_ok(ctx)
+    detect_runtime_files(ctx)
+    if not ctx.state.runtime.installed:
+        raise WinwsStartError(
+            "Runtime not detected. Re-download/re-extract the release (expected runtime/zapret/*)."
+        )
 
-        warnings: list[str] = []
+    warnings: list[str] = []
 
-        # --- First-pass validation from strategy object itself ---
-        if not strategy.is_valid:
-            # Strategy is already marked invalid during load time.
-            report_lines = []
-            if strategy.validation_errors:
-                report_lines.append("Validation errors:")
-                report_lines.extend([f"- {e}" for e in strategy.validation_errors])
-            if strategy.missing_assets:
-                report_lines.append("Missing assets:")
-                report_lines.extend([f"- {a}" for a in strategy.missing_assets])
-            if strategy.unresolved_placeholders:
-                report_lines.append("Unresolved placeholders:")
-                report_lines.extend([f"- {p}" for p in strategy.unresolved_placeholders])
-            
-            report_text = "\n".join(report_lines) if report_lines else "No specific details (check logs)."
-            raise WinwsStartError(f"Стратегия невалидна:\n{report_text}")
+    # --- First-pass validation from strategy object itself ---
+    if not strategy.is_valid:
+        # Strategy is already marked invalid during load time.
+        report_lines = []
+        if strategy.validation_errors:
+            report_lines.append("Validation errors:")
+            report_lines.extend([f"- {e}" for e in strategy.validation_errors])
+        if strategy.missing_assets:
+            report_lines.append("Missing assets:")
+            report_lines.extend([f"- {a}" for a in strategy.missing_assets])
+        if strategy.unresolved_placeholders:
+            report_lines.append("Unresolved placeholders:")
+            report_lines.extend([f"- {p}" for p in strategy.unresolved_placeholders])
+        
+        report_text = "\n".join(report_lines) if report_lines else "No specific details (check logs)."
+        raise WinwsStartError(f"Стратегия невалидна:\n{report_text}")
+
+    # --- Build command ---
+    try:
+        cmd = build_command(ctx, strategy)
+    except Exception as e:
+        raise WinwsStartError(f"Не удалось собрать команду: {e}")
+
+    if not cmd:
+        raise WinwsStartError("Команда пуста после сборки")
+
+    # --- Validate command (preflight) ---
+    cwd = zapret_root(ctx)
+    problems = validate_winws_command(ctx, cmd=cmd, cwd=cwd)
+    if problems:
+        # Format readable Russian error
+        raise WinwsStartError(format_preflight_diagnostics_ru(
+            strategy_name=strategy.name,
+            cmd=cmd,
+            problems=problems,
+            warnings=warnings,
+            ctx=ctx,
+        ))
+
+    # --- Start winws process ---
+    logs = winws_log_paths(ctx)
+    try:
+        proc = popen_detached(
+            cmd,
+            stdout=logs.stdout,
+            stderr=logs.stderr,
+            cwd=cwd,
+        )
+        pid = proc.pid
+    except Exception as e:
+        raise WinwsStartError(f"Не удалось запустить winws: {e}")
+
+    # --- Verify process started ---
+    try:
+        verify_winws_started(pid=pid, stderr_path=logs.stderr, grace_s=0.7)
+    except WinwsStartError as e:
+        # Process died immediately
+        raise
+
+    # --- Save state ---
+    ctx.state.zapret.running = True
+    ctx.state.zapret.pid = pid
+    ctx.state.zapret.base_strategy = strategy.name
+    ctx.state.zapret.selected_strategy = strategy.name
+    save_state(ctx.paths.state_file, ctx.state)
+
+    return cmd
 
 
 def stop_zapret(ctx: "AppContext") -> None:
