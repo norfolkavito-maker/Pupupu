@@ -45,7 +45,18 @@ check_required "DedZapretData/sources.yaml"  "sources.yaml"
 check_required "DedZapretData/data/lists"    "data/lists directory"
 check_required "DedZapretData/data/strategies/builtin" "data/strategies/builtin directory"
 check_required "DedZapretData/data/strategies/custom" "data/strategies/custom directory"
+check_required "DedZapretData/data/strategies/custom/KEEP.txt" "data/strategies/custom/KEEP.txt marker"
 check_required "DedZapretData/data/strategies/generated" "data/strategies/generated directory"
+check_required "DedZapretData/data/strategies/generated/KEEP.txt" "data/strategies/generated/KEEP.txt marker"
+check_required "DedZapretData/runtime/zapret" "runtime/zapret directory"
+check_required "bin/sing-box/sing-box.exe" "bin/sing-box/sing-box.exe"
+check_required "DedZapretData/data/strategies/builtin" "data/strategies/builtin directory"
+check_required "DedZapretData/data/strategies/custom" "data/strategies/custom directory"
+check_required "DedZapretData/data/strategies/custom/KEEP.txt" "data/strategies/custom/KEEP.txt marker"
+check_required "DedZapretData/data/strategies/generated" "data/strategies/generated directory"
+check_required "DedZapretData/data/strategies/generated/KEEP.txt" "data/strategies/generated/KEEP.txt marker"
+check_required "DedZapretData/runtime/zapret" "runtime/zapret directory"
+check_required "bin/sing-box/sing-box.exe" "bin/sing-box/sing-box.exe"
 
 # --- Forbidden patterns ---
 check_forbidden_pattern() {
@@ -98,8 +109,11 @@ while IFS= read -r -d '' file; do
                 local_path_count=$((local_path_count + 1))
             fi
             ;;
+        *.exe|*.dll|*.sys|*.bin|*.dat|*.zip|*.7z)
+            # Skip binary files - do not scan for local paths
+            ;;
         *)
-            # Skip binary files and other non-text files
+            # Skip other non-text files
             ;;
     esac
 done < <(find "$BUNDLE_DIR" -type f -print0 2>/dev/null)

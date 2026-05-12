@@ -19,6 +19,7 @@ jobs:
       # name so artifacts don't spam versioned files.
       VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'snapshot' }}
       DEDZAPRET_GIT_COMMIT: ${{ github.sha }}
+      SING_BOX_VERSION: "1.12.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -59,13 +60,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path runtime\singbox | Out-Null
 
-          $api = "https://api.github.com/repos/SagerNet/sing-box/releases/latest"
-          $release = Invoke-RestMethod -Uri $api
-          $asset = $release.assets | Where-Object { $_.name -match "windows-amd64\.zip$" } | Select-Object -First 1
-          if (-not $asset) { throw "cannot find sing-box windows-amd64 zip in latest release" }
-
-          $zip = "sing-box-windows-amd64.zip"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
+          $zip = "sing-box-$env:SING_BOX_VERSION-windows-amd64.zip"
+          Invoke-WebRequest -Uri "https://github.com/SagerNet/sing-box/releases/download/v$env:SING_BOX_VERSION/$zip" -OutFile $zip
           Expand-Archive -Force $zip -DestinationPath runtime\singbox
 
           $exe = Get-ChildItem -Path runtime\singbox -Recurse -File -Filter "sing-box.exe" | Select-Object -First 1
@@ -132,14 +128,64 @@ jobs:
           Copy-Item -Recurse -Force data\strategies\custom\* bundle\DedZapret\DedZapretData\data\strategies\custom\ -ErrorAction SilentlyContinue
           Copy-Item -Recurse -Force data\strategies\generated\* bundle\DedZapret\DedZapretData\data\strategies\generated\ -ErrorAction SilentlyContinue
           # Add marker files to preserve empty directories in artifact
-          New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\custom\.keep | Out-Null
-          New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\generated\.keep | Out-Null
+          New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\custom\KEEP.txt | Out-Null
+          New-Item -ItemType File -Force -Path bundle\DedZapret\DedZapretData\data\strategies\generated\KEEP.txt | Out-Null
           if (Test-Path data\lists) {
             Copy-Item -Recurse -Force data\lists\* bundle\DedZapret\DedZapretData\data\lists\
           }
           if (Test-Path runtime\singbox\bin\sing-box\sing-box.exe) {
             Copy-Item -Force runtime\singbox\bin\sing-box\sing-box.exe bundle\DedZapret\bin\sing-box\sing-box.exe
           }
+
+      - name: CI layout assertion
+        shell: pwsh
+        run: |
+          $root = "bundle\DedZapret\DedZapretData"
+          $required = @(
+            "bundle\DedZapret\DedZapret.exe",
+            "bundle\DedZapret\DedZapretData\config.yaml",
+            "bundle\DedZapret\DedZapretData\sources.yaml",
+            "bundle\DedZapret\DedZapretData\data\lists\google.txt",
+            "bundle\DedZapret\DedZapretData\data\lists\exclude.txt",
+            "bundle\DedZapret\DedZapretData\data\strategies\builtin\v1.yaml",
+            "bundle\DedZapret\DedZapretData\data\strategies\builtin\v9.yaml",
+            "bundle\DedZapret\DedZapretData\data\strategies\custom\KEEP.txt",
+            "bundle\DedZapret\DedZapretData\data\strategies\generated\KEEP.txt",
+            "bundle\DedZapret\bin\sing-box\sing-box.exe"
+          )
+          foreach ($item in $required) {
+            if (-not (Test-Path $item)) {
+              throw "CI layout assertion failed: missing $item"
+            }
+          }
+          Write-Host "CI layout assertion: all required items present"
+
+      - name: CI dirty artifact check
+        shell: pwsh
+        run: |
+          $forbidden = @(
+            "bundle\DedZapret\__MACOSX",
+            "bundle\DedZapret\.DS_Store",
+            "bundle\DedZapret\._*",
+            "bundle\DedZapret\session_*.jsonl",
+            "bundle\DedZapret\report_*.zip",
+            "bundle\DedZapret\DedZapretData\data\logs",
+            "bundle\DedZapret\DedZapretData\data\results",
+            "bundle\DedZapret\DedZapretData\data\telemetry",
+            "bundle\DedZapret\DedZapretData\data\state\state.json",
+            "bundle\DedZapret\DedZapretData\data\state\current.json"
+          )
+          $found = $false
+          foreach ($item in $forbidden) {
+            if (Test-Path $item) {
+              Write-Host "CI dirty artifact check: FOUND $item"
+              $found = $true
+            }
+          }
+          if ($found) {
+            throw "CI dirty artifact check: forbidden items found"
+          }
+          Write-Host "CI dirty artifact check: no forbidden items"
 
       - name: Release preflight (forbid dirty artifacts)
         shell: pwsh

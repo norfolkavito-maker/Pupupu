@@ -46,6 +46,11 @@ REQUIRED_FILES = [
     "DedZapretData/data/lists",
     "DedZapretData/data/strategies/builtin",
     "DedZapretData/data/strategies/custom",
+    "DedZapretData/data/strategies/custom/KEEP.txt",
+    "DedZapretData/data/strategies/generated",
+    "DedZapretData/data/strategies/generated/KEEP.txt",
+    "DedZapretData/runtime/zapret",
+    "bin/sing-box/sing-box.exe",
 ]
 
 
@@ -105,6 +110,15 @@ def clean_bundle(tmp_path: Path) -> Path:
     (data / "data" / "lists").mkdir(parents=True)
     (data / "data" / "strategies" / "builtin").mkdir(parents=True)
     (data / "data" / "strategies" / "custom").mkdir(parents=True)
+    (data / "data" / "strategies" / "generated").mkdir(parents=True)
+    (data / "runtime" / "zapret").mkdir(parents=True)
+    (data / "data" / "strategies" / "custom").mkdir(parents=True)
+    (data / "data" / "strategies" / "generated").mkdir(parents=True)
+    (bundle / "bin" / "sing-box").mkdir(parents=True)
+    (bundle / "bin" / "sing-box" / "sing-box.exe").write_text("fake exe")
+    # Add KEEP.txt markers to preserve empty directories
+    (data / "data" / "strategies" / "custom" / "KEEP.txt").write_text("")
+    (data / "data" / "strategies" / "generated" / "KEEP.txt").write_text("")
     return bundle
 
 
