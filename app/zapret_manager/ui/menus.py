@@ -411,7 +411,23 @@ def _set_base(ctx: AppContext, name: str) -> None:
 
 
 def _pick_flowseal_base(ctx: AppContext) -> None:
+    # Check both list_bases and direct file scan for bundled Flowseal YAMLs
     bases = [b for b in list_bases(ctx) if (b.upstream or "").lower() == "flowseal"]
+    
+    # Also check for bundled Flowseal YAML files in generated/flowseal (release layout)
+    if not bases:
+        from app.zapret_manager.strategies.store import list_strategies
+        flowseal_strategies = list_strategies(ctx.paths.strategies_generated_dir / "flowseal", kind="generated")
+        bases = [s for s in flowseal_strategies if s.kind == "base"]
+    
+    # In development environment, also check resources/flowseal/strategies
+    if not bases:
+        from app.zapret_manager.strategies.store import list_strategies
+        resources_flowseal = ctx.paths.root / "resources" / "flowseal" / "strategies"
+        if resources_flowseal.exists():
+            flowseal_strategies = list_strategies(ctx, resources_flowseal, kind="base")
+            bases = [s for s in flowseal_strategies if s.kind == "base"]
+    
     if not bases:
         print(f"\n{C.YELLOW}Flowseal стратегий нет. Сделай sync в меню стратегий (или system->updates).{C.RESET}\n")
         pause()

@@ -38,7 +38,7 @@ def singbox_menu(ctx: AppContext) -> None:
     """Experimental sing-box local proxy menu (opt-in)."""
     while True:
         clear()
-        cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+        cur_path = ctx.paths.current_state_file
         cur = load_current_state(cur_path)
         proc = cur.processes.get("singbox")
         running = bool(proc and proc.running)
@@ -124,7 +124,7 @@ def _sb_health_check(ctx: AppContext) -> None:
 @menu_handler("singbox.status")
 def _sb_status(ctx: AppContext) -> None:
     clear()
-    hs = singbox_health_summary((ctx.paths.data_dir / "state" / "current.json").resolve())
+    hs = singbox_health_summary(ctx.paths.current_state_file)
     bin = detect_singbox_binary(ctx.paths.root)
     if not bin:
         safe_print(f"\n{C.RED}sing-box.exe не найден.{C.RESET}\nОжидается: bin/sing-box/sing-box.exe\n")
@@ -139,19 +139,19 @@ def _sb_status(ctx: AppContext) -> None:
 
 
 def _nodes_path(ctx: AppContext) -> Path:
-    return (ctx.paths.data_dir / "singbox" / "nodes.json").resolve()
+    return ctx.paths.nodes_dir / "nodes.json"
 
 
 def _config_path(ctx: AppContext) -> Path:
-    return (ctx.paths.data_dir / "singbox" / "generated_config.json").resolve()
+    return ctx.paths.nodes_dir / "generated_config.json"
 
 
 def _subscriptions_path(ctx: AppContext) -> Path:
-    return (ctx.paths.data_dir / "singbox" / "subscriptions.json").resolve()
+    return ctx.paths.nodes_dir / "subscriptions.json"
 
 
 def _system_proxy_backup_path(ctx: AppContext) -> Path:
-    return (ctx.paths.data_dir / "singbox" / "system_proxy_backup.json").resolve()
+    return ctx.paths.nodes_dir / "system_proxy_backup.json"
 
 
 @menu_handler("singbox.enable_system_proxy")
@@ -209,7 +209,7 @@ def _sb_update_subscriptions(ctx: AppContext) -> None:
     total_unsupported = 0
     updated: list = []
 
-    cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+    cur_path = ctx.paths.current_state_file
     cur = load_current_state(cur_path)
 
     for s in subs:
@@ -321,7 +321,7 @@ def _sb_select_node(ctx: AppContext) -> None:
     idx = int(s)
     if not (1 <= idx <= len(nodes)):
         return
-    cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+    cur_path = ctx.paths.current_state_file
     cur = load_current_state(cur_path)
     cur.active_singbox_node_id = nodes[idx - 1].node_id
     save_current_state(cur_path, cur)
@@ -330,7 +330,7 @@ def _sb_select_node(ctx: AppContext) -> None:
 
 
 def _active_node(ctx: AppContext):
-    cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+    cur_path = ctx.paths.current_state_file
     cur = load_current_state(cur_path)
     nodes = load_nodes(_nodes_path(ctx))
     node = next((n for n in nodes if n.node_id == cur.active_singbox_node_id), None)
@@ -368,7 +368,7 @@ def _sb_start(ctx: AppContext) -> None:
     cfg = build_config(node=node, opt=opt)
     write_config(cfg_path, cfg)
 
-    sup = ProcessSupervisor(current_state_file=(ctx.paths.data_dir / "state" / "current.json").resolve())
+    sup = ProcessSupervisor(current_state_file=ctx.paths.current_state_file)
     proc = SingBoxProcess(
         supervisor=sup,
         bin_path=bin.path,
@@ -385,7 +385,7 @@ def _sb_start(ctx: AppContext) -> None:
 
 @menu_handler("singbox.stop")
 def _sb_stop(ctx: AppContext) -> None:
-    cur_path = (ctx.paths.data_dir / "state" / "current.json").resolve()
+    cur_path = ctx.paths.current_state_file
     cur = load_current_state(cur_path)
     pid = None
     if cur.processes.get("singbox"):

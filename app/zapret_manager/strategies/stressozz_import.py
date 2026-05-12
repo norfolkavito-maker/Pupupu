@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, Command
 from app.zapret_manager.strategies.store import save_strategy
 
 
@@ -44,10 +44,12 @@ def import_liststryou(
                 continue
             args.append(ln)
         args = _map_linux_paths(args)
+        commands = [Command(type="winws", command=arg) for arg in args]
         st = Strategy(
+            id=f"{upstream_name}_{current_name}",
             name=current_name,
+            commands=commands,
             engine="winws",
-            args=args,
             source_file="ListStrYou",
             upstream=upstream_name,
             kind="youtube",
@@ -90,10 +92,12 @@ def import_v_strategies_from_script(
         if not args:
             continue
         args = _map_linux_paths(args)
+        commands = [Command(type="winws", command=arg) for arg in args]
         st = Strategy(
+            id=f"{upstream_name}_{name}",
             name=name,
+            commands=commands,
             engine="winws",
-            args=args,
             source_file="Zapret-Manager.sh",
             upstream=upstream_name,
             kind="base",
@@ -123,10 +127,12 @@ def import_dv_strategies_from_script(
         if not args:
             continue
         args = _map_linux_paths(args)
+        commands = [Command(type="winws", command=arg) for arg in args]
         st = Strategy(
+            id=f"{upstream_name}_{name}",
             name=name,
+            commands=commands,
             engine="winws",
-            args=args,
             source_file="Zapret-Manager.sh",
             upstream=upstream_name,
             kind="discord",

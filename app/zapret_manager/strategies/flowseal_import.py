@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 from app.zapret_manager.strategies.flowseal_parser import extract_winws_command
-from app.zapret_manager.strategies.model import Strategy
+from app.zapret_manager.strategies.model import Strategy, Command
 from app.zapret_manager.strategies.store import save_strategy
 
 
@@ -114,10 +114,14 @@ def import_flowseal_strategies(
             kind = "youtube"
         elif low.startswith("dv"):
             kind = "discord"
+        # Convert args to Command objects
+        commands = [Command(type="winws", command=arg) for arg in cmd.args]
+        
         st = Strategy(
+            id=f"{upstream_name}_{name}",
             name=name,
+            commands=commands,
             engine=cmd.engine,
-            args=cmd.args,
             source_file=str(bat),
             upstream=upstream_name,
             kind=kind,
