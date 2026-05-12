@@ -23,10 +23,10 @@ class AppContext:
     state: AppState
     diagnostics: SessionRecorder
     
-    # Strategy Managers
-    strategies_builtin: StrategyManager
-    strategies_generated: StrategyManager
-    strategies_custom: StrategyManager
+    # Strategy Managers - initialized after ctx creation
+    strategies_builtin: Optional[StrategyManager] = None
+    strategies_generated: Optional[StrategyManager] = None
+    strategies_custom: Optional[StrategyManager] = None
 
     @staticmethod
     def bootstrap(argv: list[str]) -> "AppContext":
@@ -59,6 +59,7 @@ class AppContext:
         )
         set_global_recorder(rec)
 
+        # Create AppContext first without StrategyManager instances
         ctx = AppContext(
             root=root,
             paths=paths,
