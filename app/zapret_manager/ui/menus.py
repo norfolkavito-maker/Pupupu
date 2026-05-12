@@ -417,7 +417,7 @@ def _pick_flowseal_base(ctx: AppContext) -> None:
     # Also check for bundled Flowseal YAML files in generated/flowseal (release layout)
     if not bases:
         from app.zapret_manager.strategies.store import list_strategies
-        flowseal_strategies = list_strategies(ctx, ctx.paths.strategies_generated_dir / "flowseal", kind="generated")
+        flowseal_strategies = list_strategies(ctx, ctx.paths.strategies_generated_dir / "flowseal", kind="base")
         bases = [s for s in flowseal_strategies if s.kind == "base"]
     
     # In development environment, also check resources/flowseal/strategies
