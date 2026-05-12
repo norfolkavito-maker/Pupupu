@@ -257,7 +257,7 @@ def extras_menu(ctx: AppContext) -> None:
             elif c == "4":
                 tg_menu(ctx)
             elif c == "5":
-                hosts_menu(ctx)
+                doh_menu(ctx)
             elif c == "6":
                 hosts_menu(ctx)
             elif c == "7":
@@ -1764,6 +1764,58 @@ def game_launcher_menu(ctx: AppContext) -> None:
 def pause(msg: str = "\nНажмите Enter...") -> None:
     """Simple pause with message."""
     ask(msg)
+
+
+def doh_menu(ctx: AppContext) -> None:
+    """DoH/DNS configuration menu."""
+    print(f"{C.CYAN}Настройки DoH/DNS{C.RESET}\n")
+    print(f"{C.CYAN}1){C.RESET} {C.GREEN}Статус DoH{C.RESET}")
+    print(f"{C.CYAN}2){C.RESET} {C.GREEN}Выбрать профиль DoH{C.RESET}")
+    print(f"{C.CYAN}3){C.RESET} {C.GREEN}Настроить DoH{C.RESET}")
+    print(f"{C.CYAN}4){C.RESET} {C.GREEN}Отключить DoH{C.RESET}")
+    print(f"{C.CYAN}5){C.RESET} {C.GREEN}Сбросить DNS кэш{C.RESET}")
+    print(f"{C.CYAN}6){C.RESET} {C.GREEN}Восстановить hosts{C.RESET}")
+    print(f"{C.CYAN}7){C.RESET} {C.GREEN}В главное меню{C.RESET}")
+    
+    choice = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not choice:
+        return
+    
+    try:
+        if choice == "1":
+            from app.zapret_manager.features.doh import get_status as get_doh_status
+            status = get_doh_status(ctx)
+            print(f"\n{C.YELLOW}Статус DoH:{C.RESET}")
+            print(f"  Включен: {status.enabled}")
+            print(f"  Профиль: {status.profile}")
+            print(f"  PID: {status.pid}")
+            print(f"  Адаптер: {status.adapter}")
+            print(f"  Слушает: {status.listen}")
+            pause()
+        elif choice == "2":
+            from app.zapret_manager.features.doh import select_profile
+            select_profile(ctx)
+        elif choice == "3":
+            from app.zapret_manager.features.doh import set_profile
+            set_profile(ctx)
+        elif choice == "4":
+            from app.zapret_manager.features.doh import stop_doh
+            stop_doh(ctx)
+        elif choice == "5":
+            from app.zapret_manager.features.doh import reset_to_dhcp
+            reset_to_dhcp(ctx)
+        elif choice == "6":
+            from app.zapret_manager.features.doh import flush_dns
+            flush_dns(ctx)
+        elif choice == "7":
+            return
+        else:
+            print(f"\n{C.RED}Неверный выбор: {choice}{C.RESET}")
+            pause()
+    except Exception as e:
+        log.exception("doh_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
 
 
 def _problem_domains_menu(ctx: AppContext) -> None:
