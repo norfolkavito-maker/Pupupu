@@ -91,6 +91,8 @@ check_forbidden_pattern "*/winws_stderr*.log" "winws stderr logs"
 
 echo ""
 echo "--- Forbidden stale state files ---"
+# Note: logs/state directories are not created by workflow
+# Only forbid actual state files if they exist
 check_forbidden_pattern "*/data/state/state.json" "state.json (generated on first run)"
 check_forbidden_pattern "*/data/state/current.json" "current.json (generated on first run)"
 

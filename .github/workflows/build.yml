@@ -98,10 +98,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\strategies\builtin | Out-Null
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\strategies\custom | Out-Null
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\strategies\generated | Out-Null
-          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\logs | Out-Null
-          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\state | Out-Null
-          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\backups | Out-Null
-          New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\profiles | Out-Null
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\DedZapretData\data\lists | Out-Null
           New-Item -ItemType Directory -Force -Path bundle\DedZapret\bin\sing-box | Out-Null
 
