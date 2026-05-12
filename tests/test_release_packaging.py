@@ -100,6 +100,10 @@ def check_local_absolute_paths(bundle_dir: Path) -> list[str]:
 def clean_bundle(tmp_path: Path) -> Path:
     """Create a clean minimal bundle structure."""
     bundle = tmp_path / "DedZapret"
+    # Clean up any existing bundle to avoid FileExistsError
+    if bundle.exists():
+        import shutil
+        shutil.rmtree(bundle)
     bundle.mkdir()
 
     (bundle / "DedZapret.exe").write_text("fake exe")
@@ -112,8 +116,6 @@ def clean_bundle(tmp_path: Path) -> Path:
     (data / "data" / "strategies" / "custom").mkdir(parents=True)
     (data / "data" / "strategies" / "generated").mkdir(parents=True)
     (data / "runtime" / "zapret").mkdir(parents=True)
-    (data / "data" / "strategies" / "custom").mkdir(parents=True)
-    (data / "data" / "strategies" / "generated").mkdir(parents=True)
     (bundle / "bin" / "sing-box").mkdir(parents=True)
     (bundle / "bin" / "sing-box" / "sing-box.exe").write_text("fake exe")
     # Add KEEP.txt markers to preserve empty directories
