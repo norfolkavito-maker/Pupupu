@@ -33,7 +33,8 @@ def list_strategies(ctx: "AppContext", dir_path: Path, kind: str | None = None) 
 
     validator = StrategyValidator(ctx)
     out: list[Strategy] = []
-    files = sorted(list(dir_path.glob("*.json")) + list(dir_path.glob("*.yaml")) + list(dir_path.glob("*.yml")))
+    # Recursively scan for strategy files in subdirectories
+    files = sorted(list(dir_path.rglob("*.json")) + list(dir_path.rglob("*.yaml")) + list(dir_path.rglob("*.yml")))
     for p in files:
         if not _is_strategy_file(p):
             continue
@@ -83,7 +84,9 @@ def list_strategies(ctx: "AppContext", dir_path: Path, kind: str | None = None) 
             st.missing_assets = validation_result.missing_assets
             st.unresolved_placeholders = validation_result.unresolved_placeholders
 
-            if kind is None or st.kind == kind:
+            # For kind="generated", load all strategies regardless of their internal kind
+            # This allows Flowseal strategies (kind=base) to be loaded from generated directories
+            if kind is None or (kind == "generated" and "generated" in str(p)) or st.kind == kind:
                 out.append(st)
 
         except Exception as e:

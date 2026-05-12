@@ -41,6 +41,31 @@ class Strategy:
             command_str = cmd_data.get("command", "")
             commands.append(Command(type=cmd_type, command=command_str))
 
+        # Handle Flowseal required_assets schema normalization
+        missing_assets = []
+        if "required_assets" in data:
+            required_assets = data["required_assets"]
+            if isinstance(required_assets, dict):
+                # Flowseal format: {fake: [...], lists: [...]}
+                for asset_type, asset_list in required_assets.items():
+                    if isinstance(asset_list, list):
+                        missing_assets.extend([f"{asset_type}/{asset}" for asset in asset_list])
+            elif isinstance(required_assets, list):
+                # Standard format: ["asset1", "asset2", ...]
+                missing_assets.extend([str(x) for x in required_assets])
+        
+        # Merge with existing missing_assets if present
+        if "missing_assets" in data:
+            existing_missing = [str(x) for x in (data.get("missing_assets") or [])]
+            # Add existing missing assets that aren't duplicates
+            for asset in existing_missing:
+                if asset not in missing_assets:
+                    missing_assets.append(asset)
+        
+        # Ensure missing_assets is always a list
+        if not missing_assets:
+            missing_assets = []
+
         return Strategy(
             id=str(data.get("id", "")),
             name=str(data["name"]),
@@ -50,7 +75,7 @@ class Strategy:
             kind=str(data.get("kind", "base")),
             is_valid=bool(data.get("is_valid", True)),
             validation_errors=[str(x) for x in (data.get("validation_errors") or [])],
-            missing_assets=[str(x) for x in (data.get("missing_assets") or [])],
+            missing_assets=missing_assets,
             unresolved_placeholders=[str(x) for x in (data.get("unresolved_placeholders") or [])],
         )
 

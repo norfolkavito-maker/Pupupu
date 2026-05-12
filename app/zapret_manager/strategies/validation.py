@@ -38,6 +38,9 @@ class StrategyValidator:
         if not strategy.id:
             errors.append("Strategy ID is missing.")
 
+        # Start with any missing_assets already normalized from required_assets
+        missing_assets.extend(strategy.missing_assets)
+
         for cmd in strategy.commands:
             if not cmd.type:
                 errors.append(f"Command type is missing for command '{cmd.command}'.")
