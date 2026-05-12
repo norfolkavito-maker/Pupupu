@@ -122,6 +122,15 @@ jobs:
           if (Test-Path data\strategies\builtin) {
             Copy-Item -Recurse -Force data\strategies\builtin\* bundle\DedZapret\DedZapretData\data\strategies\builtin\
           }
+          # Ensure custom and generated directories exist even if empty
+          if (-not (Test-Path data\strategies\custom) {
+            New-Item -ItemType Directory -Force -Path data\strategies\custom | Out-Null
+          }
+          if (-not (Test-Path data\strategies\generated) {
+            New-Item -ItemType Directory -Force -Path data\strategies\generated | Out-Null
+          }
+          Copy-Item -Recurse -Force data\strategies\custom\* bundle\DedZapret\DedZapretData\data\strategies\custom\ -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Force data\strategies\generated\* bundle\DedZapret\DedZapretData\data\strategies\generated\ -ErrorAction SilentlyContinue
           if (Test-Path data\lists) {
             Copy-Item -Recurse -Force data\lists\* bundle\DedZapret\DedZapretData\data\lists\
           }
