@@ -186,16 +186,16 @@ def _status_lines(ctx: AppContext) -> list[str]:
     except Exception:
         pass
 
-    # sing-box status (best-effort; does not require binary to exist).
+    # VPN status (best-effort; does not require binary to exist).
     try:
         from app.zapret_manager.core.current_state import load_current_state
 
         cur = load_current_state(ctx.paths.data_dir / "state" / "current.json")
         p = cur.processes.get("singbox")
         if p and p.running and p.pid:
-            lines.append(f"{C.YELLOW}sing-box:{C.RESET} {C.GREEN}running{C.RESET} (pid={p.pid})")
+            lines.append(f"{C.YELLOW}VPN:{C.RESET} {C.GREEN}running{C.RESET} (pid={p.pid})")
         else:
-            lines.append(f"{C.YELLOW}sing-box:{C.RESET} {C.DIM}stopped{C.RESET}")
+            lines.append(f"{C.YELLOW}VPN:{C.RESET} {C.DIM}stopped{C.RESET}")
     except Exception:
         # Do not spam; if file doesn't exist yet just skip.
         pass
@@ -211,7 +211,7 @@ def _show_status_summary(ctx: AppContext) -> None:
 
 
 def run_main_menu(ctx: AppContext) -> int:
-    """Simplified main menu with status-first approach."""
+    """Grouped main menu with status-first approach."""
     # One-time baseline prompt before showing the main loop.
     try:
         _startup_baseline_prompt(ctx)
@@ -229,18 +229,26 @@ def run_main_menu(ctx: AppContext) -> int:
             f" {C.DIM}v{__version__}{C.RESET} {C.DIM}inspired by bol-van / StressOzz / Flowseal{C.RESET}\n"
         )
         
-        # Simplified main menu - 11 core items
-        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Старт / Стоп{C.RESET}")
-        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Быстрый статус{C.RESET}")
-        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Стратегии{C.RESET}")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Тест стратегий{C.RESET}")
-        print(f"{C.CYAN}5){C.RESET} {C.GREEN}Ноды / sing-box{C.RESET}")
-        print(f"{C.CYAN}6){C.RESET} {C.GREEN}DNS / hosts / системные настройки{C.RESET}")
-        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Диагностика и ремонт{C.RESET}")
-        print(f"{C.CYAN}8){C.RESET} {C.GREEN}Логи и bug report{C.RESET}")
-        print(f"{C.CYAN}9){C.RESET} {C.GREEN}Обновления{C.RESET}")
-        print(f"{C.CYAN}10){C.RESET} {C.GREEN}Настройки{C.RESET}")
-        print(f"{C.CYAN}11){C.RESET} {C.GREEN}Advanced / Dev tools{C.RESET}")
+        # Dynamic Start / Stop label
+        if ctx.state.zapret.running:
+            start_stop_label = f"{C.RED}Остановить{C.RESET}"
+        else:
+            start_stop_label = f"{C.GREEN}Запустить{C.RESET}"
+        
+        # Grouped main menu - 10 core items
+        print(f"{C.CYAN}1){C.RESET} {start_stop_label}")
+        print()
+        print(f"{C.CYAN}2){C.RESET} Мастер настройки (первичная настройка и безопасный запуск)")
+        print(f"{C.CYAN}3){C.RESET} Стратегии (выбор основной стратегии)")
+        print(f"{C.CYAN}4){C.RESET} Тестирование (быстрый тест, полный тест, blockcheck)")
+        print()
+        print(f"{C.CYAN}5){C.RESET} Списки / IPSet / Hostlist (обновление, проверка, режимы)")
+        print(f"{C.CYAN}6){C.RESET} Игры / GameFilter (профили игр и режим фильтрации)")
+        print(f"{C.CYAN}7){C.RESET} Discord / YouTube / Telegram (сервисы, правила, прокси)")
+        print()
+        print(f"{C.CYAN}8){C.RESET} VPN (серверы, подписки, локальный прокси)")
+        print(f"{C.CYAN}9){C.RESET} Обслуживание / Repair (backup, ремонт, проверка файлов)")
+        print(f"{C.CYAN}0){C.RESET} System / Advanced (автозапуск, игры, системные настройки)")
         
         choice = ask(f"\n{C.CYAN}Enter){C.RESET} выход\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not choice:
@@ -265,33 +273,32 @@ def run_main_menu(ctx: AppContext) -> int:
                     print(f"{C.YELLOW}Стратегия:{C.RESET} {st.name}\n")
                     pause()
             elif choice == "2":
-                from app.zapret_manager.ui.menus import auto_setup_menu
-                auto_setup_menu(ctx)
+                from app.zapret_manager.ui.menus import wizard_menu
+                wizard_menu(ctx)
             elif choice == "3":
-                strategies_menu(ctx)
+                from app.zapret_manager.ui.menus import base_strategies_menu
+                base_strategies_menu(ctx)
             elif choice == "4":
-                test_menu(ctx)
+                from app.zapret_manager.ui.menus import testing_submenu
+                testing_submenu(ctx)
             elif choice == "5":
-                from app.zapret_manager.ui.menus import singbox_menu
-                singbox_menu(ctx)
+                from app.zapret_manager.ui.menus import lists_menu
+                lists_menu(ctx)
             elif choice == "6":
-                from app.zapret_manager.ui.menus import hosts_menu
-                hosts_menu(ctx)
+                from app.zapret_manager.ui.menus import games_menu
+                games_menu(ctx)
             elif choice == "7":
-                from app.zapret_manager.ui.menus import diagnostics_menu
-                diagnostics_menu(ctx)
+                from app.zapret_manager.ui.menus import services_menu
+                services_menu(ctx)
             elif choice == "8":
-                from app.zapret_manager.ui.menus import logs_menu
-                logs_menu(ctx)
+                from app.zapret_manager.ui.menus import vpn_menu
+                vpn_menu(ctx)
             elif choice == "9":
-                from app.zapret_manager.ui.menus import updates_menu
-                updates_menu(ctx)
-            elif choice == "10":
-                from app.zapret_manager.ui.menus import settings_menu
-                settings_menu(ctx)
-            elif choice == "11":
-                from app.zapret_manager.ui.menus import advanced_menu
-                advanced_menu(ctx)
+                from app.zapret_manager.ui.menus import repair_menu
+                repair_menu(ctx)
+            elif choice == "0":
+                from app.zapret_manager.ui.menus import system_advanced_menu
+                system_advanced_menu(ctx)
             else:
                 continue
         except Exception as e:

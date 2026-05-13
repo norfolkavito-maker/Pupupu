@@ -64,7 +64,16 @@ def key_setup(ctx: AppContext) -> list[str]:
         lines.extend([f"warn: {w}" for w in warnings])
         return lines
     except Exception:
-        ctx.state = state_backup
+        # Restore state by updating individual fields instead of replacing ctx.state
+        # to avoid "cannot assign to field 'state'" error with frozen AppContext
+        ctx.state.zapret.base_strategy = state_backup.zapret.base_strategy
+        ctx.state.zapret.selected_strategy = state_backup.zapret.selected_strategy
+        ctx.state.zapret.youtube_layer = state_backup.zapret.youtube_layer
+        ctx.state.zapret.discord_layer = state_backup.zapret.discord_layer
+        ctx.state.zapret.discord_script = state_backup.zapret.discord_script
+        ctx.state.zapret.games_profile = state_backup.zapret.games_profile
+        ctx.state.zapret.rkn_enabled = state_backup.zapret.rkn_enabled
+        ctx.state.zapret.wssize_enabled = state_backup.zapret.wssize_enabled
         save_state(ctx.paths.state_file, ctx.state)
         if hosts_backup:
             HostsManager(ctx).restore(hosts_backup)
@@ -179,7 +188,16 @@ def key_setup_full_check(ctx: AppContext) -> list[str]:
 
         return lines
     except Exception:
-        ctx.state = state_backup
+        # Restore state by updating individual fields instead of replacing ctx.state
+        # to avoid "cannot assign to field 'state'" error with frozen AppContext
+        ctx.state.zapret.base_strategy = state_backup.zapret.base_strategy
+        ctx.state.zapret.selected_strategy = state_backup.zapret.selected_strategy
+        ctx.state.zapret.youtube_layer = state_backup.zapret.youtube_layer
+        ctx.state.zapret.discord_layer = state_backup.zapret.discord_layer
+        ctx.state.zapret.discord_script = state_backup.zapret.discord_script
+        ctx.state.zapret.games_profile = state_backup.zapret.games_profile
+        ctx.state.zapret.rkn_enabled = state_backup.zapret.rkn_enabled
+        ctx.state.zapret.wssize_enabled = state_backup.zapret.wssize_enabled
         save_state(ctx.paths.state_file, ctx.state)
         if hosts_backup:
             HostsManager(ctx).restore(hosts_backup)

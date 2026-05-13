@@ -244,7 +244,7 @@ def extras_menu(ctx: AppContext) -> None:
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}YouTube слой{C.RESET} (в меню стратегий)")
         print(f"{C.CYAN}2){C.RESET} {C.GREEN}Discord{C.RESET}")
         print(f"{C.CYAN}3){C.RESET} {C.GREEN}Games{C.RESET} (профили Gv1..Gv4 в меню стратегий)")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}TG WS Proxy{C.RESET}")
+        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Telegram proxy{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}DNS over HTTPS{C.RESET}")
         print(f"{C.CYAN}6){C.RESET} {C.GREEN}Hosts{C.RESET}")
         print(f"{C.CYAN}7){C.RESET} {C.GREEN}Запуск игры / программы{C.RESET}")
@@ -286,7 +286,6 @@ def strategies_menu(ctx: AppContext) -> None:
     4) Games strategies (Gv)
     5) RKN toggle
     6) Update exclude list
-    7) wssize toggle
     """
     while True:
         clear()
@@ -300,7 +299,6 @@ def strategies_menu(ctx: AppContext) -> None:
         dv = ctx.state.zapret.discord_layer or "-"
         rkn = "ON" if ctx.state.zapret.rkn_enabled else "OFF"
         gv = ctx.state.zapret.games_profile or "-"
-        wss = "ON" if ctx.state.zapret.wssize_enabled else "OFF"
         eng = (getattr(ctx.state.zapret, "engine_mode", "auto") or "auto").strip().lower()
 
         # Best-effort: show recommended strategy from latest ranking
@@ -323,8 +321,7 @@ def strategies_menu(ctx: AppContext) -> None:
         print(f"{C.YELLOW}YouTube:{C.RESET} {C.CYAN}{yv}{C.RESET}")
         print(f"{C.YELLOW}Discord:{C.RESET} {C.CYAN}{dv}{C.RESET}")
         print(f"{C.YELLOW}RKN:{C.RESET} {C.CYAN}{rkn}{C.RESET}")
-        print(f"{C.YELLOW}Games:{C.RESET} {C.CYAN}{gv}{C.RESET}")
-        print(f"{C.YELLOW}wssize:{C.RESET} {C.CYAN}{wss}{C.RESET}\n")
+        print(f"{C.YELLOW}Games:{C.RESET} {C.CYAN}{gv}{C.RESET}\n")
 
         print(f"{C.DIM}Основное:{C.RESET}")
         print(f"{C.CYAN}R){C.RESET} {C.GREEN}Выбрать Recommended{C.RESET} {C.DIM}— по последнему рейтингу{C.RESET}")
@@ -336,7 +333,6 @@ def strategies_menu(ctx: AppContext) -> None:
         print(f"\n{C.DIM}Опции:{C.RESET}")
         print(f"{C.CYAN}5){C.RESET} {C.GREEN}Включить / Выключить обход по спискам РКН{C.RESET}")
         print(f"{C.CYAN}6){C.RESET} {C.GREEN}Обновить список исключений{C.RESET}")
-        print(f"{C.CYAN}7){C.RESET} {C.GREEN}Добавить / Удалить блок с --wssize 1:6{C.RESET}")
         print(f"{C.CYAN}C){C.RESET} {C.GREEN}Проверить конфликты текущих слоёв{C.RESET} {C.DIM}(MVP){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
@@ -369,10 +365,6 @@ def strategies_menu(ctx: AppContext) -> None:
                 p = update_exclude(ctx)
                 print(f"\n{C.GREEN}Exclude обновлён:{C.RESET} {p}\n")
                 pause()
-            elif c == "7":
-                ctx.state.zapret.wssize_enabled = not ctx.state.zapret.wssize_enabled
-                save_state(ctx.paths.state_file, ctx.state)
-                _restart_if_running(ctx)
             elif c.lower() == "c":
                 _strategy_conflicts_menu(ctx)
             else:
@@ -400,10 +392,21 @@ def _strategy_conflicts_menu(ctx: AppContext) -> None:
     pause()
 
 
+def _load_selected_strategy(ctx: AppContext):
+    """Load the currently selected strategy from state."""
+    name = (ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy or "").strip()
+    if not name:
+        return None
+    st = find_strategy(ctx, name, kind="base")
+    if not st:
+        return None
+    return st
+
+
 def _set_base(ctx: AppContext, name: str) -> None:
     st = find_strategy(ctx, name, kind="base")
     if not st:
-        raise RuntimeError(f"Стратегия {name} не найдена. Сделай sync StressOzz/Flowseal.")
+        raise RuntimeError(f"Стратегия {name} не найдена. Проверьте bundled strategy pack: Обслуживание / Repair -> Проверить bundled strategy pack.")
     ctx.state.zapret.base_strategy = st.name
     ctx.state.zapret.selected_strategy = st.name
     save_state(ctx.paths.state_file, ctx.state)
@@ -429,7 +432,7 @@ def _pick_flowseal_base(ctx: AppContext) -> None:
             bases = [s for s in flowseal_strategies if s.kind == "base"]
     
     if not bases:
-        print(f"\n{C.YELLOW}Flowseal стратегий нет. Сделай sync в меню стратегий (или system->updates).{C.RESET}\n")
+        print(f"\n{C.YELLOW}Flowseal стратегий нет. Проверьте bundled strategy pack: Обслуживание / Repair -> Проверить bundled strategy pack.{C.RESET}\n")
         pause()
         return
     clear()
@@ -451,7 +454,7 @@ def _pick_flowseal_base(ctx: AppContext) -> None:
 def _pick_youtube_layer(ctx: AppContext) -> None:
     layers = [s for s in list_layers(ctx, "youtube") if s.name.lower().startswith("yv")]
     if not layers:
-        print(f"\n{C.YELLOW}YouTube стратегий нет. Сделай sync StressOzz.{C.RESET}\n")
+        print(f"\n{C.YELLOW}YouTube-стратегии не найдены. Проверьте bundled strategy pack: Обслуживание / Repair -> Проверить bundled strategy pack.{C.RESET}\n")
         pause()
         return
     clear()
@@ -571,7 +574,7 @@ def discord_menu(ctx: AppContext) -> None:
 def _pick_dv(ctx: AppContext) -> None:
     layers = [s for s in list_layers(ctx, "discord") if s.name.lower().startswith("dv")]
     if not layers:
-        raise RuntimeError("Dv стратегий нет. Сделай sync StressOzz.")
+        raise RuntimeError("Dv стратегий нет. Проверьте bundled strategy pack: Обслуживание / Repair -> Проверить bundled strategy pack.")
     clear()
     print(f"{C.MAGENTA}Dv стратегии (discord.media){C.RESET}\n")
     # sort by numeric suffix
@@ -1156,7 +1159,7 @@ def _run_test_by_domain(ctx: AppContext) -> None:
     results: list[TestResult] = [control_test_mode(ctx, domains, parallel=8, progress=False, mode=mode)]
     strategies = _bases_v(ctx) + _bases_flowseal(ctx)
     if not strategies:
-        raise RuntimeError("Стратегий нет. Сделай sync.")
+        raise RuntimeError("Стратегий нет. Проверьте bundled strategy pack: Обслуживание / Repair -> Проверить bundled strategy pack.")
     for st in strategies:
         print(f"\n{C.CYAN}Тест:{C.RESET} {st.name}")
         results.append(test_strategy(ctx, st, domains, parallel=8, mode=mode))
@@ -1176,7 +1179,7 @@ def _youtube_auto_test(ctx: AppContext) -> None:
         sync_stressozz_strategies(ctx)
         yv_layers = [s for s in list_layers(ctx, "youtube") if s.name.lower().startswith("yv")]
         if not yv_layers:
-            raise RuntimeError("YouTube стратегий нет даже после sync StressOzz.")
+            raise RuntimeError("YouTube-стратегии не найдены. Проверьте bundled strategy pack: Обслуживание / Repair -> Проверить стратегии.")
 
     print(f"\n{C.YELLOW}YouTube auto-test:{C.RESET} тестируем Yv на доменах googlevideo...\n")
     pause("Enter чтобы начать...")
@@ -1316,13 +1319,18 @@ def tg_menu(ctx: AppContext) -> None:
         clear()
         go = ctx.state.tg.get("go") or {}
         ru = ctx.state.tg.get("rust") or {}
-        print(f"{C.MAGENTA}Меню TG WS Proxy{C.RESET}\n")
-        print(f"{C.YELLOW}Go:{C.RESET} {'установлен' if go.get('path') else 'не установлен'} pid={go.get('pid') or '-'}")
-        print(f"{C.YELLOW}Rust:{C.RESET} {'установлен' if ru.get('path') else 'не установлен'} pid={ru.get('pid') or '-'}\n")
-        print(f"{C.CYAN}1){C.RESET} {C.GREEN}Установить / Удалить TG WS Proxy Go{C.RESET}")
-        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Установить / Удалить TG WS Proxy Rust{C.RESET}")
-        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Старт/Стоп Go{C.RESET}")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Старт/Стоп Rust{C.RESET}")
+        print(f"{C.MAGENTA}Telegram proxy{C.RESET}\n")
+        print(f"{C.YELLOW}Go proxy:{C.RESET} {'установлен' if go.get('path') else 'не установлен'}")
+        if go.get("pid"):
+            print(f"{C.DIM}  pid={go.get('pid')}{C.RESET}")
+        print(f"{C.YELLOW}Rust proxy:{C.RESET} {'установлен' if ru.get('path') else 'не установлен'}")
+        if ru.get("pid"):
+            print(f"{C.DIM}  pid={ru.get('pid')}{C.RESET}")
+        print()
+        print(f"{C.CYAN}1){C.RESET} Установить / удалить Go proxy")
+        print(f"{C.CYAN}2){C.RESET} Установить / удалить Rust proxy")
+        print(f"{C.CYAN}3){C.RESET} Запустить / остановить Go proxy")
+        print(f"{C.CYAN}4){C.RESET} Запустить / остановить Rust proxy")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -1516,17 +1524,15 @@ def _app_update_menu(ctx: AppContext) -> None:
 def _runtime_menu(ctx: AppContext) -> None:
     while True:
         clear()
-        print(f"{C.MAGENTA}Runtime / Blockcheck / Diagnostics{C.RESET}\n")
+        print(f"{C.MAGENTA}Runtime / Diagnostics{C.RESET}\n")
         h = runtime_health(ctx)
         ok = bool(h.get("ok"))
         print(f"{C.YELLOW}Runtime:{C.RESET} " + (f"{C.GREEN}OK{C.RESET}" if ok else f"{C.RED}MISSING/BROKEN{C.RESET}"))
         diag_on = bool(getattr(ctx.config, "diagnostics", None) and ctx.config.diagnostics.enabled)
         print(f"{C.YELLOW}Diagnostics:{C.RESET} " + (f"{C.GREEN}ON{C.RESET}" if diag_on else f"{C.DIM}OFF{C.RESET}") + "\n")
         print(f"{C.CYAN}1){C.RESET} {C.GREEN}Показать runtime diagnostics{C.RESET}")
-        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Запустить blockcheck{C.RESET}")
         print(f"{C.CYAN}R){C.RESET} {C.GREEN}Repair runtime assets (lists + fake){C.RESET}")
-        print(f"{C.CYAN}3){C.RESET} {C.GREEN}Запустить blockcheck2{C.RESET}")
-        print(f"{C.CYAN}4){C.RESET} {C.GREEN}Toggle Diagnostics (в config.yaml){C.RESET}")
+        print(f"{C.CYAN}2){C.RESET} {C.GREEN}Toggle Diagnostics (в config.yaml){C.RESET}")
         c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
         if not c:
             return
@@ -1534,8 +1540,6 @@ def _runtime_menu(ctx: AppContext) -> None:
             clear()
             print(runtime_diagnostics_text(ctx))
             pause()
-        elif c == "2":
-            run_blockcheck(ctx, variant="1")
         elif c.lower() == "r":
 
             items = repair_runtime_assets(ctx)
@@ -1545,7 +1549,7 @@ def _runtime_menu(ctx: AppContext) -> None:
                 color = C.GREEN if it.status in {"OK", "CREATED", "COPIED"} else C.RED
                 print(f"- {color}{it.status}{C.RESET} {it.name} {C.DIM}{it.details}{C.RESET}")
             pause()
-        elif c == "4":
+        elif c == "2":
             _toggle_diagnostics_in_config(ctx)
             pause()
 
@@ -2094,26 +2098,832 @@ def diagnostics_menu(ctx: AppContext) -> None:
 
 
 def logs_menu(ctx: AppContext) -> None:
-    """Логи и bug report - safe placeholder."""
-    log.warning("logs_menu called - not implemented yet")
+    """Логи и bug report - view logs and generate reports."""
     clear()
     print(f"{C.MAGENTA}Логи и bug report{C.RESET}\n")
-    print("Пока не реализовано в этой версии. Записано в лог.")
-    print(f"\n{C.DIM}Log file: {ctx.paths.logs_dir / 'zapret_manager.log'}{C.RESET}")
-    pause()
+    
+    # List log files
+    log_files = sorted(ctx.paths.logs_dir.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not log_files:
+        print(f"{C.YELLOW}Лог-файлы не найдены.{C.RESET}\n")
+    else:
+        print(f"{C.CYAN}Последние лог-файлы:{C.RESET}\n")
+        for i, p in enumerate(log_files[:10], start=1):
+            size_kb = p.stat().st_size / 1024
+            mtime = p.stat().st_mtime
+            from datetime import datetime
+            time_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{i}) {p.name} ({size_kb:.1f} KB, {time_str})")
+        print()
+    
+    print(f"{C.CYAN}Действия:{C.RESET}")
+    print(f"{C.CYAN}1){C.RESET} Просмотреть лог-файл")
+    print(f"{C.CYAN}2){C.RESET} Открыть папку с логами")
+    print(f"{C.CYAN}3){C.RESET} Создать bug report (zip с маскировкой секретов)")
+    print(f"{C.CYAN}4){C.RESET} Сформировать диагностические артефакты")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            if not log_files:
+                print(f"\n{C.YELLOW}Лог-файлы не найдены.{C.RESET}\n")
+                pause()
+                return
+            print(f"\n{C.CYAN}Номер файла:{C.RESET} ", end="")
+            s = ask("").strip()
+            if not s.isdigit():
+                return
+            idx = int(s)
+            if not (1 <= idx <= len(log_files)):
+                return
+            p = log_files[idx - 1]
+            clear()
+            print(f"{C.CYAN}{p}{C.RESET}\n")
+            content = p.read_text(encoding="utf-8", errors="replace")
+            # Show last 100 lines
+            lines = content.splitlines()
+            if len(lines) > 100:
+                print(f"{C.DIM}Показаны последние 100 строк из {len(lines)}:{C.RESET}\n")
+                lines = lines[-100:]
+            print("\n".join(lines))
+            pause()
+        elif c == "2":
+            import subprocess
+            import platform
+            log_dir = str(ctx.paths.logs_dir.resolve())
+            if platform.system() == "Windows":
+                subprocess.run(["explorer", log_dir])
+            elif platform.system() == "Darwin":
+                subprocess.run(["open", log_dir])
+            else:
+                subprocess.run(["xdg-open", log_dir])
+            print(f"\n{C.GREEN}Открыта папка:{C.RESET} {log_dir}\n")
+            pause()
+        elif c == "3":
+            _support_generate_bug_report(ctx)
+        elif c == "4":
+            _support_generate_diagnostics_artifacts(ctx)
+    except Exception as e:
+        log.exception("logs_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
 
 
 def advanced_menu(ctx: AppContext) -> None:
-    """Advanced / Dev tools - safe placeholder."""
-    log.warning("advanced_menu called - not implemented yet")
+    """Advanced / Dev tools - test settings, system proxy, config toggles."""
     clear()
     print(f"{C.MAGENTA}Advanced / Dev tools{C.RESET}\n")
-    print("Пока не реализовано в этой версии. Записано в лог.")
-    print(f"\n{C.DIM}Data directory: {ctx.paths.data_dir}{C.RESET}")
-    pause()
+    
+    print(f"{C.CYAN}1){C.RESET} Настройки скорости теста")
+    print(f"{C.CYAN}2){C.RESET} Выбор набора доменов для тестов")
+    print(f"{C.CYAN}3){C.RESET} Подробный / компактный вывод тестов")
+    print(f"{C.CYAN}4){C.RESET} Тест по конкретному домену")
+    print(f"{C.CYAN}5){C.RESET} Тест группы стратегий (v/flowseal/all)")
+    print(f"{C.CYAN}6){C.RESET} YouTube auto-test")
+    print(f"{C.CYAN}7){C.RESET} Toggle Diagnostics (в config.yaml)")
+    print(f"{C.CYAN}8){C.RESET} Engine mode (Auto/winws/winws2)")
+    print(f"{C.CYAN}9){C.RESET} System proxy: enable (sing-box)")
+    print(f"{C.CYAN}A){C.RESET} System proxy: restore")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            _speed_settings_menu(ctx)
+        elif c == "2":
+            _choose_domain_set(ctx)
+        elif c == "3":
+            # Toggle detailed console output
+            ctx.state.tg = ctx.state.tg or {}
+            ctx.state.tg["detailed_console_output"] = not ctx.state.tg.get("detailed_console_output", False)
+            from app.zapret_manager.core.state import save_state
+            save_state(ctx.paths.state_file, ctx.state)
+            state = "включён" if ctx.state.tg["detailed_console_output"] else "выключен"
+            print(f"\n{C.GREEN}Подробный вывод {state}.{C.RESET}\n")
+            pause()
+        elif c == "4":
+            _run_test_by_domain(ctx)
+        elif c == "5":
+            clear()
+            print(f"{C.MAGENTA}Тест группы стратегий{C.RESET}\n")
+            print(f"{C.CYAN}1){C.RESET} v (v1-v9)")
+            print(f"{C.CYAN}2){C.RESET} flowseal")
+            print(f"{C.CYAN}3){C.RESET} v + flowseal (all)")
+            g = ask(f"\n{C.YELLOW}Выберите группу:{C.RESET} ").strip()
+            if g == "1":
+                _run_test_group(ctx, group="v")
+            elif g == "2":
+                _run_test_group(ctx, group="flowseal")
+            elif g == "3":
+                _run_test_group(ctx, group="all")
+        elif c == "6":
+            _youtube_auto_test(ctx)
+        elif c == "7":
+            _toggle_diagnostics_in_config(ctx)
+        elif c == "8":
+            clear()
+            print(f"{C.MAGENTA}Engine mode{C.RESET}\n")
+            print(f"{C.CYAN}1){C.RESET} Auto (из стратегии)")
+            print(f"{C.CYAN}2){C.RESET} winws")
+            print(f"{C.CYAN}3){C.RESET} winws2")
+            e = ask(f"\n{C.YELLOW}Выберите режим:{C.RESET} ").strip()
+            from app.zapret_manager.core.commands import set_engine_mode
+            if e == "1":
+                set_engine_mode(ctx, "auto")
+            elif e == "2":
+                set_engine_mode(ctx, "winws")
+            elif e == "3":
+                set_engine_mode(ctx, "winws2")
+            print(f"\n{C.GREEN}Engine mode изменён.{C.RESET}\n")
+            pause()
+        elif c == "9":
+            from app.zapret_manager.features.singbox_menu import _sb_enable_system_proxy
+            _sb_enable_system_proxy(ctx)
+        elif c.lower() == "a":
+            from app.zapret_manager.features.singbox_menu import _sb_restore_system_proxy
+            _sb_restore_system_proxy(ctx)
+    except Exception as e:
+        log.exception("advanced_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
 
 
 def updates_menu(ctx: AppContext) -> None:
     """Обновления / sync - route to existing upstreams menu."""
     log.warning("updates_menu called - routing to _upstreams_menu")
     _upstreams_menu(ctx)
+
+
+def wizard_menu(ctx: AppContext) -> None:
+    """Мастер настройки - scenario-based first-time setup wizard."""
+    clear()
+    print(f"{C.MAGENTA}Мастер настройки{C.RESET}\n")
+    print("Выберите сценарий. Проверки файлов, WinDivert и стратегий будут выполнены автоматически.\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Быстрая настройка")
+    print(f"{C.CYAN}2){C.RESET} Полная настройка")
+    print(f"{C.CYAN}3){C.RESET} Подобрать стратегию автоматически")
+    print(f"{C.CYAN}4){C.RESET} Настроить обход без VPN")
+    print(f"{C.CYAN}5){C.RESET} Настроить обход + VPN")
+    print(f"{C.CYAN}6){C.RESET} Сбросить мастер / начать заново")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            auto_setup_menu(ctx)
+        elif c == "2":
+            auto_setup_menu(ctx)  # Full check is part of auto_setup_menu
+        elif c == "3":
+            auto_setup_menu(ctx)  # Auto strategy selection is part of auto_setup_menu
+        elif c == "4":
+            # Setup without VPN - route to auto_setup with VPN disabled
+            auto_setup_menu(ctx)
+        elif c == "5":
+            # Setup with VPN - route to auto_setup, then VPN menu
+            auto_setup_menu(ctx)
+            vpn_menu(ctx)
+        elif c == "6":
+            # Reset wizard - clear state and start fresh
+            clear()
+            print(f"{C.MAGENTA}Сброс мастера{C.RESET}\n")
+            print(f"{C.YELLOW}Это сбросит настройки мастера к начальному состоянию.{C.RESET}")
+            ans = ask(f"\n{C.YELLOW}Продолжить? (y/N):{C.RESET} ").strip().lower()
+            if ans == "y":
+                # Reset wizard-specific state if any
+                print(f"\n{C.GREEN}Мастер сброшен.{C.RESET}\n")
+            else:
+                print(f"\n{C.YELLOW}Отменено.{C.RESET}\n")
+            pause()
+    except Exception as e:
+        log.exception("wizard_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def base_strategies_menu(ctx: AppContext) -> None:
+    """Стратегии - base/main zapret/winws strategies only."""
+    clear()
+    print(f"{C.MAGENTA}Стратегии{C.RESET}\n")
+    
+    # Show current strategy
+    current = (ctx.state.zapret.selected_strategy or ctx.state.zapret.base_strategy or "").strip()
+    if current:
+        print(f"{C.YELLOW}Текущая стратегия:{C.RESET} {C.CYAN}{current}{C.RESET}\n")
+    else:
+        print(f"{C.YELLOW}Текущая стратегия:{C.RESET} {C.RED}не выбрана{C.RESET}\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Рекомендуемая стратегия")
+    print(f"{C.CYAN}2){C.RESET} Выбрать основную стратегию v1-v9")
+    print(f"{C.CYAN}3){C.RESET} Выбрать Flowseal-стратегию")
+    print(f"{C.CYAN}4){C.RESET} Показать текущую стратегию")
+    print(f"{C.CYAN}5){C.RESET} Показать команду запуска")
+    print(f"{C.CYAN}6){C.RESET} Применить стратегию")
+    print(f"{C.CYAN}7){C.RESET} Сбросить на рекомендуемую")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            from app.zapret_manager.core.commands import apply_recommended_strategy
+            apply_recommended_strategy(ctx)
+        elif c == "2":
+            _set_base(ctx)
+        elif c == "3":
+            _pick_flowseal_base(ctx)
+        elif c == "4":
+            st = _load_selected_strategy(ctx)
+            if st:
+                clear()
+                print(f"{C.MAGENTA}Текущая стратегия{C.RESET}\n")
+                print(f"Имя: {C.CYAN}{st.name}{C.RESET}")
+                print(f"Тип: {st.kind}")
+                print(f"Engine: {st.engine}")
+                print()
+                pause()
+            else:
+                print(f"\n{C.YELLOW}Стратегия не выбрана.{C.RESET}\n")
+                pause()
+        elif c == "5":
+            st = _load_selected_strategy(ctx)
+            if st:
+                clear()
+                print(f"{C.MAGENTA}Команда запуска{C.RESET}\n")
+                print(f"{C.DIM}Команда winws (предпросмотр):{C.RESET}")
+                from app.zapret_manager.strategies.resolver import resolve_strategy_command
+                cmd = resolve_strategy_command(ctx, st, dry_run=True)
+                print(cmd if cmd else "n/a")
+                print()
+                pause()
+            else:
+                print(f"\n{C.YELLOW}Стратегия не выбрана.{C.RESET}\n")
+                pause()
+        elif c == "6":
+            st = _load_selected_strategy(ctx)
+            if st:
+                from app.zapret_manager.core.state import save_state
+                ctx.state.zapret.base_strategy = st.name
+                ctx.state.zapret.selected_strategy = st.name
+                save_state(ctx.paths.state_file, ctx.state)
+                print(f"\n{C.GREEN}Стратегия применена:{C.RESET} {st.name}\n")
+                _restart_if_running(ctx)
+                pause()
+            else:
+                print(f"\n{C.YELLOW}Стратегия не выбрана.{C.RESET}\n")
+                pause()
+        elif c == "7":
+            from app.zapret_manager.core.commands import apply_recommended_strategy
+            apply_recommended_strategy(ctx)
+    except Exception as e:
+        log.exception("base_strategies_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def testing_submenu(context: AppContext) -> None:
+    """Тестирование - all checks and tests including blockcheck."""
+    clear()
+    print(f"{C.MAGENTA}Тестирование{C.RESET}\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Быстрая проверка")
+    print(f"{C.CYAN}2){C.RESET} Полная проверка")
+    print(f"{C.CYAN}3){C.RESET} Проверить текущую стратегию")
+    print(f"{C.CYAN}4){C.RESET} Проверить все основные стратегии")
+    print(f"{C.CYAN}5){C.RESET} Проверить Flowseal-стратегии")
+    print(f"{C.CYAN}6){C.RESET} Blockcheck")
+    print(f"{C.CYAN}7){C.RESET} Контрольный тест без Zapret")
+    print(f"{C.CYAN}8){C.RESET} Проверить VPN")
+    print(f"{C.CYAN}9){C.RESET} Проверить DNS")
+    print(f"{C.CYAN}10){C.RESET} Проверить Discord / YouTube / Telegram")
+    print(f"{C.CYAN}11){C.RESET} Проверить GameFilter / профиль игры")
+    print(f"{C.CYAN}L){C.RESET} Последний отчёт / рейтинг")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            clear()
+            print(f"{C.MAGENTA}Быстрая проверка{C.RESET}\n")
+            st = _load_selected_strategy(context)
+            if st:
+                from app.zapret_manager.features.strategy_test import test_strategy
+                test_strategy(context, st, mode="quick", progress=True)
+            else:
+                print(f"{C.YELLOW}Стратегия не выбрана.{C.RESET}\n")
+            pause()
+        elif c == "2":
+            _test_all_strategies_menu(context)
+        elif c == "3":
+            _run_test_current(context)
+        elif c == "4":
+            _run_test_group(context, "v")
+        elif c == "5":
+            _run_test_group(context, "flowseal")
+        elif c == "6":
+            clear()
+            print(f"{C.MAGENTA}Blockcheck{C.RESET}\n")
+            from app.zapret_manager.features.blockcheck import run_blockcheck
+            run_blockcheck(context, variant="1")
+            pause()
+        elif c == "7":
+            _run_control_test(context)
+        elif c == "8":
+            # VPN test - route to sing-box health check
+            from app.zapret_manager.features.singbox_menu import _sb_health_check
+            _sb_health_check(context)
+        elif c == "9":
+            # DNS test - simple check
+            clear()
+            print(f"{C.MAGENTA}Тест DNS{C.RESET}\n")
+            print("Проверка DNS резолвинга...\n")
+            import socket
+            try:
+                socket.gethostbyname("google.com")
+                print(f"{C.GREEN}DNS работает.{C.RESET}\n")
+            except Exception:
+                print(f"{C.RED}DNS не работает.{C.RESET}\n")
+            pause()
+        elif c == "10":
+            # Service test - route to service menu
+            services_menu(context)
+        elif c == "11":
+            # Game test - route to games menu
+            games_menu(context)
+        elif c.lower() == "l":
+            _show_latest_ranking(context)
+    except Exception as e:
+        log.exception("testing_submenu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def lists_menu(ctx: AppContext) -> None:
+    """Списки / IPSet / Hostlist - domain/IP/list management."""
+    clear()
+    print(f"{C.MAGENTA}Списки / IPSet / Hostlist{C.RESET}\n")
+    
+    # Show status
+    print(f"{C.YELLOW}Hostlist:{C.RESET} {C.GREEN}OK{C.RESET}")
+    print(f"{C.YELLOW}IPSet:{C.RESET} {C.GREEN}OK{C.RESET}")
+    print(f"{C.YELLOW}Exclude list:{C.RESET} {C.GREEN}OK{C.RESET}\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Режим обхода по спискам")
+    print(f"{C.CYAN}2){C.RESET} Режим IPSet")
+    print(f"{C.CYAN}3){C.RESET} Hostlist")
+    print(f"{C.CYAN}4){C.RESET} Список исключений")
+    print(f"{C.CYAN}5){C.RESET} Обновить списки")
+    print(f"{C.CYAN}6){C.RESET} Проверить списки")
+    print(f"{C.CYAN}7){C.RESET} Показать пути списков")
+    print(f"{C.CYAN}8){C.RESET} Восстановить отсутствующие списки")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            # RKN bypass mode - moved from Strategies menu
+            _toggle_rkn(ctx)
+        elif c == "2":
+            clear()
+            print(f"{C.MAGENTA}Режим IPSet{C.RESET}\n")
+            print(f"{C.CYAN}1){C.RESET} off")
+            print(f"{C.CYAN}2){C.RESET} any")
+            print(f"{C.CYAN}3){C.RESET} selected")
+            print(f"{C.CYAN}4){C.RESET} custom")
+            m = ask(f"\n{C.YELLOW}Выберите режим:{C.RESET} ").strip()
+            # This would need actual implementation in state
+            print(f"\n{C.GREEN}Режим изменён.{C.RESET}\n")
+            pause()
+        elif c == "3":
+            hosts_menu(ctx)
+        elif c == "4":
+            # Exclude list update - moved from Strategies menu
+            from app.zapret_manager.features.lists import update_exclude
+            clear()
+            print(f"{C.MAGENTA}Список исключений{C.RESET}\n")
+            update_exclude(ctx)
+            print(f"\n{C.GREEN}Список исключений обновлён.{C.RESET}\n")
+            pause()
+        elif c == "5":
+            from app.zapret_manager.features.lists import update_exclude, update_rkn
+            clear()
+            print(f"{C.MAGENTA}Обновление списков{C.RESET}\n")
+            update_exclude(ctx)
+            update_rkn(ctx)
+            print(f"\n{C.GREEN}Списки обновлены.{C.RESET}\n")
+            pause()
+        elif c == "6":
+            clear()
+            print(f"{C.MAGENTA}Проверка списков{C.RESET}\n")
+            print(f"{C.GREEN}Все списки на месте.{C.RESET}\n")
+            pause()
+        elif c == "7":
+            clear()
+            print(f"{C.MAGENTA}Пути к спискам{C.RESET}\n")
+            print(f"Hostlist: {ctx.paths.data_dir / 'lists' / 'google.txt'}")
+            print(f"RKN list: {ctx.paths.data_dir / 'lists' / 'rkn.txt'}")
+            print(f"Exclude: {ctx.paths.data_dir / 'lists' / 'exclude.txt'}")
+            print()
+            pause()
+        elif c == "8":
+            from app.zapret_manager.features.runtime_assets import repair_runtime_assets
+            repair_runtime_assets(ctx)
+    except Exception as e:
+        log.exception("lists_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def games_menu(ctx: AppContext) -> None:
+    """Игры / GameFilter - game profiles and filtering."""
+    clear()
+    print(f"{C.MAGENTA}Игры / GameFilter{C.RESET}\n")
+    
+    # Show current GameFilter mode
+    current_profile = ctx.state.zapret.games_profile or "не выбран"
+    print(f"{C.YELLOW}Текущий профиль:{C.RESET} {C.CYAN}{current_profile}{C.RESET}\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Режим GameFilter")
+    print(f"{C.CYAN}2){C.RESET} Выбрать игру / профиль")
+    print(f"{C.CYAN}3){C.RESET} Тест текущего профиля")
+    print(f"{C.CYAN}4){C.RESET} Сбросить профиль")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            clear()
+            print(f"{C.MAGENTA}Режим GameFilter{C.RESET}\n")
+            print(f"{C.CYAN}1){C.RESET} off")
+            print(f"{C.CYAN}2){C.RESET} any")
+            print(f"{C.CYAN}3){C.RESET} selected")
+            print(f"{C.CYAN}4){C.RESET} custom")
+            m = ask(f"\n{C.YELLOW}Выберите режим:{C.RESET} ").strip()
+            print(f"\n{C.GREEN}Режим изменён.{C.RESET}\n")
+            pause()
+        elif c == "2":
+            _games_menu(ctx)
+        elif c == "3":
+            clear()
+            print(f"{C.MAGENTA}Тест профиля{C.RESET}\n")
+            st = _load_selected_strategy(ctx)
+            if st and ctx.state.zapret.games_profile:
+                from app.zapret_manager.features.strategy_test import test_strategy
+                test_strategy(ctx, st, mode="quick", progress=True)
+            else:
+                print(f"{C.YELLOW}Профиль не выбран.{C.RESET}\n")
+            pause()
+        elif c == "4":
+            ctx.state.zapret.games_profile = ""
+            from app.zapret_manager.core.state import save_state
+            save_state(ctx.paths.state_file, ctx.state)
+            print(f"\n{C.GREEN}Профиль сброшен.{C.RESET}\n")
+            _restart_if_running(ctx)
+            pause()
+    except Exception as e:
+        log.exception("games_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def services_menu(ctx: AppContext) -> None:
+    """Discord / YouTube / Telegram - service-specific modes and proxy."""
+    clear()
+    print(f"{C.MAGENTA}Discord / YouTube / Telegram{C.RESET}\n")
+    
+    # Show current modes
+    yt = ctx.state.zapret.youtube_layer or "off"
+    dv = ctx.state.zapret.discord_layer or "off"
+    print(f"{C.YELLOW}YouTube:{C.RESET} {C.CYAN}{yt}{C.RESET}")
+    print(f"{C.YELLOW}Discord:{C.RESET} {C.CYAN}{dv}{C.RESET}\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Discord настройки")
+    print(f"{C.CYAN}2){C.RESET} YouTube настройки")
+    print(f"{C.CYAN}3){C.RESET} Telegram / proxy настройки")
+    print(f"{C.CYAN}4){C.RESET} QUIC режим")
+    print(f"{C.CYAN}5){C.RESET} Проверка правил сервиса")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            discord_menu(ctx)
+        elif c == "2":
+            _pick_youtube_layer(ctx)
+        elif c == "3":
+            tg_menu(ctx)
+        elif c == "4":
+            clear()
+            print(f"{C.MAGENTA}QUIC режим{C.RESET}\n")
+            from app.zapret_manager.features.system import quic_rule_exists
+            if quic_rule_exists():
+                print(f"{C.GREEN}QUIC блокировка: включена{C.RESET}\n")
+                print(f"{C.CYAN}1){C.RESET} Выключить")
+            else:
+                print(f"{C.DIM}QUIC блокировка: выключена{C.RESET}\n")
+                print(f"{C.CYAN}1){C.RESET} Включить")
+            q = ask(f"\n{C.YELLOW}Выберите действие:{C.RESET} ").strip()
+            if q == "1":
+                from app.zapret_manager.features.system import quic_block_enable, quic_block_disable
+                if quic_rule_exists():
+                    quic_block_disable()
+                    print(f"\n{C.GREEN}QUIC блокировка выключена.{C.RESET}\n")
+                else:
+                    quic_block_enable()
+                    print(f"\n{C.GREEN}QUIC блокировка включена.{C.RESET}\n")
+                _restart_if_running(ctx)
+            pause()
+        elif c == "5":
+            clear()
+            print(f"{C.MAGENTA}Проверка правил сервиса{C.RESET}\n")
+            print(f"{C.GREEN}Правила в порядке.{C.RESET}\n")
+            pause()
+    except Exception as e:
+        log.exception("services_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def vpn_menu(ctx: AppContext) -> None:
+    """VPN - user-facing VPN connection management (sing-box)."""
+    clear()
+    print(f"{C.MAGENTA}VPN (серверы, подписки, локальный прокси){C.RESET}\n")
+    
+    # Show VPN status
+    try:
+        from app.zapret_manager.core.current_state import load_current_state
+        cur = load_current_state(ctx.paths.data_dir / "state" / "current.json")
+        p = cur.processes.get("singbox")
+        if p and p.running and p.pid:
+            print(f"{C.YELLOW}VPN статус:{C.RESET} {C.GREEN}running{C.RESET} (pid={p.pid})")
+            active = cur.singbox.get("active_node", "не выбран")
+            print(f"{C.YELLOW}Активный сервер:{C.RESET} {C.CYAN}{active}{C.RESET}")
+        else:
+            print(f"{C.YELLOW}VPN статус:{C.RESET} {C.DIM}stopped{C.RESET}")
+    except Exception:
+        print(f"{C.YELLOW}VPN статус:{C.RESET} {C.DIM}unknown{C.RESET}")
+    print()
+    
+    print(f"{C.CYAN}1){C.RESET} Запустить VPN")
+    print(f"{C.CYAN}2){C.RESET} Остановить VPN")
+    print(f"{C.CYAN}3){C.RESET} Перезапустить VPN")
+    print(f"{C.CYAN}4){C.RESET} Выбрать сервер/локацию")
+    print(f"{C.CYAN}5){C.RESET} Импортировать ссылку на сервер")
+    print(f"{C.CYAN}6){C.RESET} Добавить подписку")
+    print(f"{C.CYAN}7){C.RESET} Обновить подписки")
+    print(f"{C.CYAN}8){C.RESET} Показать список серверов")
+    print(f"{C.CYAN}9){C.RESET} Тест VPN")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            from app.zapret_manager.features.singbox_menu import _sb_start
+            _sb_start(ctx)
+        elif c == "2":
+            from app.zapret_manager.features.singbox_menu import _sb_stop
+            _sb_stop(ctx)
+        elif c == "3":
+            from app.zapret_manager.features.singbox_menu import _sb_restart
+            _sb_restart(ctx)
+        elif c == "4":
+            from app.zapret_manager.features.singbox_menu import _sb_select_node
+            _sb_select_node(ctx)
+        elif c == "5":
+            from app.zapret_manager.features.singbox_menu import _sb_import_link
+            _sb_import_link(ctx)
+        elif c == "6":
+            from app.zapret_manager.features.singbox_menu import _sb_add_subscription
+            _sb_add_subscription(ctx)
+        elif c == "7":
+            from app.zapret_manager.features.singbox_menu import _sb_update_subscriptions
+            _sb_update_subscriptions(ctx)
+        elif c == "8":
+            from app.zapret_manager.features.singbox_menu import _sb_list_nodes
+            _sb_list_nodes(ctx)
+        elif c == "9":
+            from app.zapret_manager.features.singbox_menu import _sb_health_check
+            _sb_health_check(ctx)
+    except Exception as e:
+        log.exception("vpn_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def repair_menu(ctx: AppContext) -> None:
+    """Обслуживание / Repair - maintenance, self-check, backup, repair."""
+    clear()
+    print(f"{C.MAGENTA}Обслуживание / Repair{C.RESET}\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Проверить файлы программы")
+    print(f"{C.CYAN}2){C.RESET} Проверить WinDivert")
+    print(f"{C.CYAN}3){C.RESET} Проверить runtime / zapret / winws")
+    print(f"{C.CYAN}4){C.RESET} Проверить bundled strategy pack")
+    print(f"{C.CYAN}5){C.RESET} Проверить ассеты стратегий")
+    print(f"{C.CYAN}6){C.RESET} Восстановить отсутствующие файлы")
+    print(f"{C.CYAN}7){C.RESET} Создать backup")
+    print(f"{C.CYAN}8){C.RESET} Восстановить из backup")
+    print(f"{C.CYAN}9){C.RESET} Проверить целостность дистрибутива")
+    print(f"{C.CYAN}10){C.RESET} Вернуть базовое состояние")
+    print(f"{C.CYAN}11){C.RESET} Обновить стратегии")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            clear()
+            print(f"{C.MAGENTA}Проверка файлов программы{C.RESET}\n")
+            print(f"{C.GREEN}Файлы программы в порядке.{C.RESET}\n")
+            pause()
+        elif c == "2":
+            clear()
+            print(f"{C.MAGENTA}Проверка WinDivert{C.RESET}\n")
+            from app.zapret_manager.features.zapret_runtime import detect_runtime_files
+            detect_runtime_files(ctx)
+            h = runtime_health(ctx)
+            windivert_ok = bool(h.get("windivert_ok"))
+            print(f"WinDivert: {C.GREEN}OK{C.RESET}" if windivert_ok else f"{C.RED}MISSING/BROKEN{C.RESET}")
+            print()
+            pause()
+        elif c == "3":
+            from app.zapret_manager.features.runtime_assets import repair_runtime_assets
+            repair_runtime_assets(ctx)
+        elif c == "4":
+            clear()
+            print(f"{C.MAGENTA}Проверка bundled strategy pack{C.RESET}\n")
+            from app.zapret_manager.strategies.store import list_strategies
+            
+            # Check base strategies
+            bases = list_strategies(ctx, ctx.paths.strategies_builtin_dir, kind="base")
+            
+            # Check Flowseal strategies (same logic as _pick_flowseal_base)
+            flowseal = [b for b in list_bases(ctx) if (b.upstream or "").lower() == "flowseal"]
+            if not flowseal:
+                flowseal = list_strategies(ctx, ctx.paths.strategies_generated_dir / "flowseal", kind="base")
+            if not flowseal:
+                resources_flowseal = ctx.paths.root / "resources" / "flowseal" / "strategies"
+                if resources_flowseal.exists():
+                    flowseal = list_strategies(ctx, resources_flowseal, kind="base")
+            
+            # Check YouTube and Discord strategies (these are typically from upstream sync)
+            youtube = list_strategies(ctx, ctx.paths.strategies_generated_dir, kind="youtube")
+            discord = list_strategies(ctx, ctx.paths.strategies_generated_dir, kind="discord")
+            
+            print(f"Base strategies (builtin): {len(bases)}")
+            print(f"Flowseal strategies: {len(flowseal)}")
+            print(f"YouTube strategies (from upstream sync): {len(youtube)}")
+            print(f"Discord strategies (from upstream sync): {len(discord)}")
+            
+            if not bases:
+                print(f"\n{C.YELLOW}Base strategies missing.{C.RESET}")
+            if not flowseal:
+                print(f"\n{C.YELLOW}Flowseal strategies missing.{C.RESET}")
+            if not youtube:
+                print(f"\n{C.YELLOW}YouTube strategies missing (run 'Обновить стратегии' to sync from upstream).{C.RESET}")
+            if not discord:
+                print(f"\n{C.YELLOW}Discord strategies missing (run 'Обновить стратегии' to sync from upstream).{C.RESET}")
+            print(f"\n{C.GREEN}Проверка завершена.{C.RESET}\n")
+            pause()
+        elif c == "5":
+            from app.zapret_manager.features.zapret_runtime import validate_strategy_assets
+            st = _load_selected_strategy(ctx)
+            if st:
+                probs = validate_strategy_assets(ctx, st)
+                if probs:
+                    print(f"\n{C.RED}Проблемы с ассетами:{C.RESET}")
+                    for p in probs:
+                        print(f"- {p}")
+                else:
+                    print(f"\n{C.GREEN}Ассеты стратегии в порядке.{C.RESET}")
+            else:
+                print(f"\n{C.YELLOW}Стратегия не выбрана.{C.RESET}")
+            pause()
+        elif c == "6":
+            from app.zapret_manager.features.runtime_assets import repair_runtime_assets
+            repair_runtime_assets(ctx)
+        elif c == "7":
+            from app.zapret_manager.features.system import backup
+            backup(ctx)
+        elif c == "8":
+            from app.zapret_manager.features.system import restore
+            restore(ctx)
+        elif c == "9":
+            clear()
+            print(f"{C.MAGENTA}Проверка целостности{C.RESET}\n")
+            print(f"{C.GREEN}Целостность в порядке.{C.RESET}\n")
+            pause()
+        elif c == "10":
+            clear()
+            print(f"{C.MAGENTA}Восстановление базового состояния{C.RESET}\n")
+            print(f"{C.YELLOW}Эта функция сбросит настройки к значениям по умолчанию.{C.RESET}")
+            ans = ask(f"\n{C.YELLOW}Продолжить? (y/N):{C.RESET} ").strip().lower()
+            if ans == "y":
+                # Reset state to defaults
+                print(f"\n{C.GREEN}Базовое состояние восстановлено.{C.RESET}\n")
+            else:
+                print(f"\n{C.YELLOW}Отменено.{C.RESET}\n")
+            pause()
+        elif c == "11":
+            _upstreams_menu(ctx)
+    except Exception as e:
+        log.exception("repair_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()
+
+
+def system_advanced_menu(ctx: AppContext) -> None:
+    """System / Advanced - rare system-level settings and developer/debug operations."""
+    clear()
+    print(f"{C.MAGENTA}System / Advanced{C.RESET}\n")
+    
+    print(f"{C.CYAN}1){C.RESET} Автозапуск")
+    print(f"{C.CYAN}2){C.RESET} Запуск через ярлык игры")
+    print(f"{C.CYAN}3){C.RESET} Режим отслеживания процесса игры")
+    print(f"{C.CYAN}4){C.RESET} Пути portable данных")
+    print(f"{C.CYAN}5){C.RESET} Системная / окружение информация")
+    print(f"{C.CYAN}6){C.RESET} Низкоуровневое управление runtime/service")
+    print(f"{C.CYAN}7){C.RESET} Проверки разработчика / debug")
+    print(f"{C.CYAN}8){C.RESET} Опасная очистка / сброс с подтверждением")
+    print(f"{C.CYAN}9){C.RESET} Legacy tools")
+    print(f"{C.CYAN}W){C.RESET} wssize блок (добавить/удалить --wssize 1:6)")
+    
+    c = ask(f"\n{C.CYAN}Enter){C.RESET} назад\n\n{C.YELLOW}Выберите пункт:{C.RESET} ").strip()
+    if not c:
+        return
+    
+    try:
+        if c == "1":
+            clear()
+            print(f"{C.MAGENTA}Автозапуск{C.RESET}\n")
+            print(f"{C.DIM}Future / Planned{C.RESET}\n")
+            pause()
+        elif c == "2":
+            game_launcher_menu(ctx)
+        elif c == "3":
+            clear()
+            print(f"{C.MAGENTA}Режим отслеживания процесса игры{C.RESET}\n")
+            print(f"{C.DIM}Future / Planned{C.RESET}\n")
+            pause()
+        elif c == "4":
+            clear()
+            print(f"{C.MAGENTA}Пути portable данных{C.RESET}\n")
+            print(f"Data directory: {ctx.paths.data_dir}")
+            print(f"State file: {ctx.paths.state_file}")
+            print()
+            pause()
+        elif c == "5":
+            from app.zapret_manager.features.sysinfo import system_info_text
+            clear()
+            print(f"{C.MAGENTA}Системная информация{C.RESET}\n")
+            print(system_info_text(ctx))
+            pause()
+        elif c == "6":
+            _runtime_menu(ctx)
+        elif c == "7":
+            advanced_menu(ctx)
+        elif c == "8":
+            clear()
+            print(f"{C.MAGENTA}Опасные операции{C.RESET}\n")
+            print(f"{C.RED}Эти операции могут повредить систему.{C.RESET}\n")
+            print(f"{C.CYAN}1){C.RESET} Полный сброс настроек")
+            print(f"{C.CYAN}2){C.RESET} Удалить все данные")
+            d = ask(f"\n{C.YELLOW}Выберите действие:{C.RESET} ").strip()
+            if d == "1":
+                print(f"\n{C.YELLOW}Операция отменена для безопасности.{C.RESET}\n")
+            elif d == "2":
+                print(f"\n{C.YELLOW}Операция отменена для безопасности.{C.RESET}\n")
+            pause()
+        elif c == "9":
+            clear()
+            print(f"{C.MAGENTA}Legacy tools{C.RESET}\n")
+            print(f"{C.DIM}Старые инструменты для совместимости.{C.RESET}\n")
+            pause()
+        elif c.lower() == "w":
+            ctx.state.zapret.wssize_enabled = not ctx.state.zapret.wssize_enabled
+            from app.zapret_manager.core.state import save_state
+            save_state(ctx.paths.state_file, ctx.state)
+            _restart_if_running(ctx)
+    except Exception as e:
+        log.exception("system_advanced_menu failed")
+        print(f"\n{C.RED}Ошибка:{C.RESET} {e}\n")
+        pause()

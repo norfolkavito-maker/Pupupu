@@ -81,8 +81,10 @@ Main runtime entry points:
 ### UI / GUI
 
 - `app/zapret_manager/ui/` — console menus, colors, tray integration.
-  - `ui/menus.py` — menu routing.
-  - `ui/main_menu.py` — main menu screen.
+  - `ui/main_menu.py` — main menu screen with 10-item grouped structure (dynamic Start/Stop, status-first UI).
+  - `ui/menus.py` — submenu implementations (wizard_menu, base_strategies_menu, testing_menu, lists_menu, games_menu, services_menu, vpn_menu, repair_menu, system_advanced_menu, logs_menu, advanced_menu).
+  - `ui/console.py` — console utilities (clear, ask, pause, colors, safe_print).
+  - `ui/status.py` — status display functions.
   - `ui/tray.py` — tray-related integration.
 - `app/zapret_manager/tray/` — optional system tray layer (lazy `pystray/Pillow`).
   - `tray_app.py` — tray lifecycle + refresh loop
